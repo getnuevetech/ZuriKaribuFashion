@@ -393,12 +393,19 @@ type DesignerSpotlightCard = {
   id: string;
   image: string;
   tag: string;
+  showTag?: boolean;
   countryCode: string;
   country: string;
+  showCountry?: boolean;
+  price?: string;
+  showPrice?: boolean;
   designerName: string;
+  showDesignerName?: boolean;
   title: string;
   specialty: string;
+  showSpecialty?: boolean;
   description: string;
+  showDescription?: boolean;
   ctaText: string;
   ctaLink: string;
   ctaMode: CtaMode;
@@ -411,7 +418,10 @@ type DesignerSpotlightCard = {
 type DesignerSpotlightSettings = {
   rows: number;
   columns: number;
+  overlayEnabled?: boolean;
+  overlayBackgroundColor?: string;
   countryFontSize: number;
+  priceFontSize?: number;
   nameFontSize: number;
   specialtyFontSize: number;
   descriptionFontSize: number;
@@ -1596,7 +1606,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     designerSpotlight: {
       rows: 1,
       columns: 3,
+      overlayEnabled: true,
+      overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
+      priceFontSize: 20,
       nameFontSize: 52,
       specialtyFontSize: 24,
       descriptionFontSize: 24,
@@ -1605,12 +1618,19 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           id: randomUUID(),
           image: '',
           tag: 'Designer Spotlight',
+          showTag: true,
           countryCode: 'NG',
           country: 'Nigeria',
+          showCountry: true,
+          price: '$0.00',
+          showPrice: true,
           designerName: 'Lagos Tailoring House',
+          showDesignerName: true,
           title: 'Meet the Designers',
           specialty: 'Bespoke tailoring',
+          showSpecialty: true,
           description: 'Highlight featured designers.',
+          showDescription: true,
           ctaText: 'View Designer',
           ctaLink: '/cystomtowear',
           ctaMode: 'PAGE',
@@ -1630,7 +1650,10 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     rtwFtb: {
       rows: 1,
       columns: 3,
+      overlayEnabled: true,
+      overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
+      priceFontSize: 20,
       nameFontSize: 52,
       specialtyFontSize: 24,
       descriptionFontSize: 24,
@@ -1639,12 +1662,19 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           id: randomUUID(),
           image: '',
           tag: 'RTW & FTB',
+          showTag: true,
           countryCode: 'NG',
           country: 'Nigeria',
+          showCountry: true,
+          price: '$0.00',
+          showPrice: true,
           designerName: 'RTW & FTB Collection',
+          showDesignerName: true,
           title: 'Ready To Wear & Fabrics',
           specialty: 'Curated product spotlight',
+          showSpecialty: true,
           description: 'Highlight RTW and FTB collections in one dedicated section.',
+          showDescription: true,
           ctaText: 'Shop Collection',
           ctaLink: '/Shop',
           ctaMode: 'PAGE',
@@ -2690,6 +2720,7 @@ const normalizeDesignerSpotlight = (
         id: getString(item.id) || fallbackItem.id || randomUUID(),
         image: (getString(item.image) || fallbackItem.image).slice(0, 2000),
         tag: (getString(item.tag) || fallbackItem.tag).slice(0, 80),
+        showTag: getBoolean(item.showTag) ?? getBoolean((item as Record<string, unknown>).tagEnabled) ?? fallbackItem.showTag ?? true,
         countryCode: (
           getString(item.countryCode) ||
           getString((item as Record<string, unknown>).country_code) ||
@@ -2700,10 +2731,26 @@ const normalizeDesignerSpotlight = (
           .toUpperCase()
           .slice(0, 8),
         country: (getString(item.country) || fallbackItem.country || '').slice(0, 80),
+        showCountry:
+          getBoolean(item.showCountry) ?? getBoolean((item as Record<string, unknown>).countryEnabled) ?? fallbackItem.showCountry ?? true,
+        price: (getString(item.price) || getString((item as Record<string, unknown>).amount) || fallbackItem.price || '').slice(0, 80),
+        showPrice: getBoolean(item.showPrice) ?? getBoolean((item as Record<string, unknown>).priceEnabled) ?? fallbackItem.showPrice ?? true,
         designerName: (getString(item.designerName) || fallbackItem.designerName || '').slice(0, 120),
+        showDesignerName:
+          getBoolean(item.showDesignerName) ??
+          getBoolean((item as Record<string, unknown>).designerNameEnabled) ??
+          fallbackItem.showDesignerName ??
+          true,
         title: (getString(item.title) || fallbackItem.title).slice(0, 140),
         specialty: (getString(item.specialty) || fallbackItem.specialty || '').slice(0, 140),
+        showSpecialty:
+          getBoolean(item.showSpecialty) ?? getBoolean((item as Record<string, unknown>).specialtyEnabled) ?? fallbackItem.showSpecialty ?? true,
         description: (getString(item.description) || fallbackItem.description).slice(0, 320),
+        showDescription:
+          getBoolean(item.showDescription) ??
+          getBoolean((item as Record<string, unknown>).descriptionEnabled) ??
+          fallbackItem.showDescription ??
+          true,
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaMode: normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode),
         ctaPageKey: (getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey) || '').slice(0, 120) || undefined,
@@ -2720,7 +2767,15 @@ const normalizeDesignerSpotlight = (
   return {
     rows: clamp(Math.round(getNumber(row.rows) ?? fallback.rows), 1, 12),
     columns: clamp(Math.round(getNumber(row.columns) ?? fallback.columns), 1, 12),
+    overlayEnabled: getBoolean(row.overlayEnabled) ?? fallback.overlayEnabled ?? true,
+    overlayBackgroundColor:
+      (getString(row.overlayBackgroundColor) ||
+        getString((row as Record<string, unknown>).textBackgroundColor) ||
+        fallback.overlayBackgroundColor ||
+        'rgba(0,0,0,0.36)')
+        .slice(0, 64),
     countryFontSize: clamp(Math.round(getNumber(row.countryFontSize) ?? fallback.countryFontSize), 10, 72),
+    priceFontSize: clamp(Math.round(getNumber(row.priceFontSize) ?? fallback.priceFontSize ?? 20), 10, 96),
     nameFontSize: clamp(
       Math.round(getNumber(row.nameFontSize) ?? getNumber(row.designerNameFontSize) ?? fallback.nameFontSize),
       16,

@@ -183,6 +183,15 @@ type SpotlightRuntime = {
   designerName?: string;
   designerCountry?: string;
   designerSpecialty?: string;
+  price?: string;
+  showCountry: boolean;
+  showDesignerName: boolean;
+  showSpecialty: boolean;
+  showTag: boolean;
+  showDescription: boolean;
+  showPrice: boolean;
+  textBackgroundEnabled: boolean;
+  textBackgroundColor: string;
   cta: string;
   href: string;
   ctaMode: CtaMode;
@@ -196,6 +205,7 @@ type SpotlightTypography = {
   nameFontSize: number;
   specialtyFontSize: number;
   descriptionFontSize: number;
+  priceFontSize: number;
 };
 
 type CustomerReviewCard = {
@@ -2005,6 +2015,7 @@ export default function JenksFrontpageV2() {
         nameFontSize: Math.max(16, Math.min(140, Math.round(asNumber(cfg.designerNameFontSize ?? cfg.nameFontSize, 52)))),
         specialtyFontSize: Math.max(10, Math.min(72, Math.round(asNumber(cfg.specialtyFontSize, 22)))),
         descriptionFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.descriptionFontSize, 24)))),
+        priceFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.priceFontSize, 18)))),
       };
       const colsClass = (() => {
         if (columns <= 1) return 'md:grid-cols-1';
@@ -2048,6 +2059,14 @@ export default function JenksFrontpageV2() {
             entry.country,
             asString(entry.designerCountry, COUNTRY_LABEL_BY_CODE[countryToken] || fallbackCountry)
           );
+          const textBackgroundEnabled = asBoolean(
+            entry.textBackgroundEnabled,
+            asBoolean(cfg.textAreaBackgroundEnabled, true)
+          );
+          const textBackgroundColor = asString(
+            entry.textBackgroundColor,
+            asString(cfg.textAreaBackgroundColor, 'rgba(0,0,0,0.45)')
+          );
           return {
             id: asString(entry.id, `spot-${idx + 1}`),
             image: asString(stripLegacyFallbackImage(entry.image), ''),
@@ -2056,6 +2075,15 @@ export default function JenksFrontpageV2() {
             designerCountry: country,
             designerSpecialty: asString(entry.specialty, fallbackSpecialty),
             description: truncateWords(asString(entry.description, fallbackDescription), 25),
+            price: asString(entry.price, ''),
+            showCountry: asBoolean(entry.showCountry, true),
+            showDesignerName: asBoolean(entry.showDesignerName, true),
+            showSpecialty: asBoolean(entry.showSpecialty, true),
+            showTag: asBoolean(entry.showTag, true),
+            showDescription: asBoolean(entry.showDescription, true),
+            showPrice: asBoolean(entry.showPrice, true),
+            textBackgroundEnabled,
+            textBackgroundColor,
             cta: asString(entry.ctaText, fallbackCta).toUpperCase(),
             href: spotCtaHref(entry, fallbackHref),
             tag: asString(entry.tag, fallbackTag),
@@ -2073,6 +2101,15 @@ export default function JenksFrontpageV2() {
               designerCountry: asString((row as any).country, ''),
               designerSpecialty: asString((row as any).specialty, 'Contemporary African Designer'),
               description: truncateWords(asString((row as any).description, ''), 25),
+              price: '',
+              showCountry: true,
+              showDesignerName: true,
+              showSpecialty: true,
+              showTag: true,
+              showDescription: true,
+              showPrice: true,
+              textBackgroundEnabled: true,
+              textBackgroundColor: 'rgba(0,0,0,0.45)',
               tag: variant === 'RTW_FTB' ? 'RTW & FTB' : asString((row as any).tag, 'DESIGNER SPOTLIGHT'),
               countryCode: resolveDesignerCountryCode('', asString((row as any).country, '')),
             }));
@@ -4198,37 +4235,64 @@ export default function JenksFrontpageV2() {
                 spinnerClassName="h-8 w-8"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
-              <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
-                {spot.tag}
-              </p>
-              <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
-                {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
-              </p>
-              <div className="absolute bottom-6 left-6 right-6 text-white">
-                <p
-                  className="font-medium uppercase tracking-[0.08em] text-white/78"
-                  style={{ fontSize: `${designerSpotlightTypography.countryFontSize}px` }}
-                >
-                  {spot.designerCountry || spot.tag}
+              {spot.showTag ? (
+                <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
+                  {spot.tag}
                 </p>
-                <h3
-                  className="font-['Oswald'] font-bold uppercase leading-[0.95]"
-                  style={{ fontSize: `${designerSpotlightTypography.nameFontSize}px` }}
-                >
-                  {spot.designerName || spot.title}
-                </h3>
-                <p
-                  className="mt-2 leading-[1.25] text-white/78"
-                  style={{ fontSize: `${designerSpotlightTypography.specialtyFontSize}px` }}
-                >
-                  {spot.designerSpecialty || 'Contemporary African Designer'}
+              ) : null}
+              {spot.showCountry ? (
+                <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
+                  {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
                 </p>
-                <p
-                  className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
-                  style={{ fontSize: `${designerSpotlightTypography.descriptionFontSize}px` }}
-                >
-                  {spot.description}
-                </p>
+              ) : null}
+              <div
+                className="absolute bottom-6 left-6 right-6 text-white"
+                style={{
+                  backgroundColor: spot.textBackgroundEnabled ? spot.textBackgroundColor : 'transparent',
+                  padding: spot.textBackgroundEnabled ? '10px 12px' : '0px',
+                  borderRadius: spot.textBackgroundEnabled ? '2px' : '0px',
+                }}
+              >
+                {spot.showPrice ? (
+                  <p
+                    className="font-semibold uppercase tracking-[0.08em] text-white"
+                    style={{ fontSize: `${designerSpotlightTypography.priceFontSize}px` }}
+                  >
+                    {spot.price || ''}
+                  </p>
+                ) : null}
+                {spot.showCountry ? (
+                  <p
+                    className="font-medium uppercase tracking-[0.08em] text-white/78"
+                    style={{ fontSize: `${designerSpotlightTypography.countryFontSize}px` }}
+                  >
+                    {spot.designerCountry || spot.tag}
+                  </p>
+                ) : null}
+                {spot.showDesignerName ? (
+                  <h3
+                    className="font-['Oswald'] font-bold uppercase leading-[0.95]"
+                    style={{ fontSize: `${designerSpotlightTypography.nameFontSize}px` }}
+                  >
+                    {spot.designerName || spot.title}
+                  </h3>
+                ) : null}
+                {spot.showSpecialty ? (
+                  <p
+                    className="mt-2 leading-[1.25] text-white/78"
+                    style={{ fontSize: `${designerSpotlightTypography.specialtyFontSize}px` }}
+                  >
+                    {spot.designerSpecialty || 'Contemporary African Designer'}
+                  </p>
+                ) : null}
+                {spot.showDescription ? (
+                  <p
+                    className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
+                    style={{ fontSize: `${designerSpotlightTypography.descriptionFontSize}px` }}
+                  >
+                    {spot.description}
+                  </p>
+                ) : null}
                 <span
                   className="relative mt-5 inline-flex items-center gap-3 pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-white"
                   style={buildCTAStyle(spot.ctaStyle, {
@@ -4264,37 +4328,64 @@ export default function JenksFrontpageV2() {
                 spinnerClassName="h-8 w-8"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
-              <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
-                {spot.tag}
-              </p>
-              <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
-                {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
-              </p>
-              <div className="absolute bottom-6 left-6 right-6 text-white">
-                <p
-                  className="font-medium uppercase tracking-[0.08em] text-white/78"
-                  style={{ fontSize: `${rtwFtbSpotlightTypography.countryFontSize}px` }}
-                >
-                  {spot.designerCountry || spot.tag}
+              {spot.showTag ? (
+                <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
+                  {spot.tag}
                 </p>
-                <h3
-                  className="font-['Oswald'] font-bold uppercase leading-[0.95]"
-                  style={{ fontSize: `${rtwFtbSpotlightTypography.nameFontSize}px` }}
-                >
-                  {spot.designerName || spot.title}
-                </h3>
-                <p
-                  className="mt-2 leading-[1.25] text-white/78"
-                  style={{ fontSize: `${rtwFtbSpotlightTypography.specialtyFontSize}px` }}
-                >
-                  {spot.designerSpecialty || 'Contemporary African Designer'}
+              ) : null}
+              {spot.showCountry ? (
+                <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
+                  {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
                 </p>
-                <p
-                  className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
-                  style={{ fontSize: `${rtwFtbSpotlightTypography.descriptionFontSize}px` }}
-                >
-                  {spot.description}
-                </p>
+              ) : null}
+              <div
+                className="absolute bottom-6 left-6 right-6 text-white"
+                style={{
+                  backgroundColor: spot.textBackgroundEnabled ? spot.textBackgroundColor : 'transparent',
+                  padding: spot.textBackgroundEnabled ? '10px 12px' : '0px',
+                  borderRadius: spot.textBackgroundEnabled ? '2px' : '0px',
+                }}
+              >
+                {spot.showPrice ? (
+                  <p
+                    className="font-semibold uppercase tracking-[0.08em] text-white"
+                    style={{ fontSize: `${rtwFtbSpotlightTypography.priceFontSize}px` }}
+                  >
+                    {spot.price || ''}
+                  </p>
+                ) : null}
+                {spot.showCountry ? (
+                  <p
+                    className="font-medium uppercase tracking-[0.08em] text-white/78"
+                    style={{ fontSize: `${rtwFtbSpotlightTypography.countryFontSize}px` }}
+                  >
+                    {spot.designerCountry || spot.tag}
+                  </p>
+                ) : null}
+                {spot.showDesignerName ? (
+                  <h3
+                    className="font-['Oswald'] font-bold uppercase leading-[0.95]"
+                    style={{ fontSize: `${rtwFtbSpotlightTypography.nameFontSize}px` }}
+                  >
+                    {spot.designerName || spot.title}
+                  </h3>
+                ) : null}
+                {spot.showSpecialty ? (
+                  <p
+                    className="mt-2 leading-[1.25] text-white/78"
+                    style={{ fontSize: `${rtwFtbSpotlightTypography.specialtyFontSize}px` }}
+                  >
+                    {spot.designerSpecialty || 'Contemporary African Designer'}
+                  </p>
+                ) : null}
+                {spot.showDescription ? (
+                  <p
+                    className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
+                    style={{ fontSize: `${rtwFtbSpotlightTypography.descriptionFontSize}px` }}
+                  >
+                    {spot.description}
+                  </p>
+                ) : null}
                 <span
                   className="relative mt-5 inline-flex items-center gap-3 pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-white"
                   style={buildCTAStyle(spot.ctaStyle, {

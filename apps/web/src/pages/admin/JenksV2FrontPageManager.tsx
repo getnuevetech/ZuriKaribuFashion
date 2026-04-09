@@ -377,6 +377,13 @@ type DesignerSpotlightCard = {
   tag: string;
   countryCode: string;
   country?: string;
+  price: string;
+  showCountry: boolean;
+  showDesignerName: boolean;
+  showSpecialty: boolean;
+  showTag: boolean;
+  showDescription: boolean;
+  showPrice: boolean;
   designerName: string;
   specialty: string;
   title: string;
@@ -409,8 +416,20 @@ type DesignerSpotlight = {
   designerNameFontSize: number;
   specialtyFontSize: number;
   descriptionFontSize: number;
+  priceFontSize: number;
+  textAreaBackgroundEnabled: boolean;
+  textAreaBackgroundColor: string;
   cards: DesignerSpotlightCard[];
 };
+
+const DEFAULT_SPOTLIGHT_VISIBILITY = {
+  showCountry: true,
+  showDesignerName: true,
+  showSpecialty: true,
+  showTag: true,
+  showDescription: true,
+  showPrice: true,
+} as const;
 
 type HeritageStat = {
   id: string;
@@ -1662,12 +1681,23 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     designerNameFontSize: 52,
     specialtyFontSize: 22,
     descriptionFontSize: 24,
+    priceFontSize: 20,
+    textAreaBackgroundEnabled: true,
+    textAreaBackgroundColor: 'rgba(0,0,0,0.45)',
     cards: [
       {
         id: uid(),
         image: '',
         tag: 'Designer Spotlight',
         countryCode: 'NG',
+        country: countryNameFromCode('NG'),
+        price: '$0.00',
+        showCountry: true,
+        showDesignerName: true,
+        showSpecialty: true,
+        showTag: true,
+        showDescription: true,
+        showPrice: true,
         designerName: 'Lagos Tailoring House',
         specialty: 'Tailoring',
         title: 'Meet the Designers',
@@ -1695,12 +1725,23 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     designerNameFontSize: 52,
     specialtyFontSize: 22,
     descriptionFontSize: 24,
+    priceFontSize: 20,
+    textAreaBackgroundEnabled: true,
+    textAreaBackgroundColor: 'rgba(0,0,0,0.45)',
     cards: [
       {
         id: uid(),
         image: '',
         tag: 'RTW & FTB',
         countryCode: 'NG',
+        country: countryNameFromCode('NG'),
+        price: '$0.00',
+        showCountry: true,
+        showDesignerName: true,
+        showSpecialty: true,
+        showTag: true,
+        showDescription: true,
+        showPrice: true,
         designerName: 'RTW & FTB Collection',
         specialty: 'Curated product spotlight',
         title: 'Ready To Wear & Fabrics',
@@ -1917,10 +1958,20 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
   designerSpotlight: {
     ...config.designerSpotlight,
     nameFontSize: config.designerSpotlight.designerNameFontSize,
+    priceFontSize: config.designerSpotlight.priceFontSize,
+    overlayEnabled: config.designerSpotlight.textAreaBackgroundEnabled,
+    overlayBackgroundColor: config.designerSpotlight.textAreaBackgroundColor,
     cards: config.designerSpotlight.cards.map((card) => {
       const countryCode = countryCodeFromToken(card.countryCode || card.country, 'NG');
       return {
         ...card,
+        price: String(card.price || ''),
+        showCountry: toBoolean(card.showCountry, true),
+        showDesignerName: toBoolean(card.showDesignerName, true),
+        showSpecialty: toBoolean(card.showSpecialty, true),
+        showTag: toBoolean(card.showTag, true),
+        showDescription: toBoolean(card.showDescription, true),
+        showPrice: toBoolean(card.showPrice, true),
         countryCode,
         country: countryNameFromCode(countryCode),
       };
@@ -1929,10 +1980,20 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
   rtwFtb: {
     ...config.rtwFtb,
     nameFontSize: config.rtwFtb.designerNameFontSize,
+    priceFontSize: config.rtwFtb.priceFontSize,
+    overlayEnabled: config.rtwFtb.textAreaBackgroundEnabled,
+    overlayBackgroundColor: config.rtwFtb.textAreaBackgroundColor,
     cards: config.rtwFtb.cards.map((card) => {
       const countryCode = countryCodeFromToken(card.countryCode || card.country, 'NG');
       return {
         ...card,
+        price: String(card.price || ''),
+        showCountry: toBoolean(card.showCountry, true),
+        showDesignerName: toBoolean(card.showDesignerName, true),
+        showSpecialty: toBoolean(card.showSpecialty, true),
+        showTag: toBoolean(card.showTag, true),
+        showDescription: toBoolean(card.showDescription, true),
+        showPrice: toBoolean(card.showPrice, true),
         countryCode,
         country: countryNameFromCode(countryCode),
       };
@@ -2861,6 +2922,30 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         10,
         96
       ),
+      priceFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (designerSpotlightRaw as Record<string, unknown>).priceFontSize ??
+                (designerSpotlight as DesignerSpotlight | undefined)?.priceFontSize ??
+                DEFAULT_CONFIG.designerSpotlight.priceFontSize
+            ),
+            DEFAULT_CONFIG.designerSpotlight.priceFontSize
+          )
+        ),
+        10,
+        96
+      ),
+      textAreaBackgroundEnabled: toBoolean(
+        (designerSpotlightRaw as Record<string, unknown>).textAreaBackgroundEnabled ??
+          (designerSpotlightRaw as Record<string, unknown>).overlayEnabled,
+        DEFAULT_CONFIG.designerSpotlight.textAreaBackgroundEnabled
+      ),
+      textAreaBackgroundColor: String(
+        (designerSpotlightRaw as Record<string, unknown>).textAreaBackgroundColor ||
+          (designerSpotlightRaw as Record<string, unknown>).overlayBackgroundColor ||
+          DEFAULT_CONFIG.designerSpotlight.textAreaBackgroundColor
+      ),
       cards: Array.isArray(designerSpotlight.cards)
         ? designerSpotlight.cards.map((card) => ({
             ...fallbackSpotlight,
@@ -2882,6 +2967,19 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
                 ''
             )
               .slice(0, 120),
+            price: String((card as DesignerSpotlightCard)?.price || fallbackSpotlight.price || '').slice(0, 80),
+            showCountry: toBoolean((card as DesignerSpotlightCard)?.showCountry, fallbackSpotlight.showCountry),
+            showDesignerName: toBoolean(
+              (card as DesignerSpotlightCard)?.showDesignerName,
+              fallbackSpotlight.showDesignerName
+            ),
+            showSpecialty: toBoolean((card as DesignerSpotlightCard)?.showSpecialty, fallbackSpotlight.showSpecialty),
+            showTag: toBoolean((card as DesignerSpotlightCard)?.showTag, fallbackSpotlight.showTag),
+            showDescription: toBoolean(
+              (card as DesignerSpotlightCard)?.showDescription,
+              fallbackSpotlight.showDescription
+            ),
+            showPrice: toBoolean((card as DesignerSpotlightCard)?.showPrice, fallbackSpotlight.showPrice),
             specialty: String((card as DesignerSpotlightCard)?.specialty || fallbackSpotlight.specialty || '')
               .slice(0, 120),
             ctaMode: normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackSpotlight.ctaMode),
@@ -2956,6 +3054,30 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         10,
         96
       ),
+      priceFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (rtwFtbRaw as Record<string, unknown>).priceFontSize ??
+                (rtwFtb as DesignerSpotlight | undefined)?.priceFontSize ??
+                DEFAULT_CONFIG.rtwFtb.priceFontSize
+            ),
+            DEFAULT_CONFIG.rtwFtb.priceFontSize
+          )
+        ),
+        10,
+        96
+      ),
+      textAreaBackgroundEnabled: toBoolean(
+        (rtwFtbRaw as Record<string, unknown>).textAreaBackgroundEnabled ??
+          (rtwFtbRaw as Record<string, unknown>).overlayEnabled,
+        DEFAULT_CONFIG.rtwFtb.textAreaBackgroundEnabled
+      ),
+      textAreaBackgroundColor: String(
+        (rtwFtbRaw as Record<string, unknown>).textAreaBackgroundColor ||
+          (rtwFtbRaw as Record<string, unknown>).overlayBackgroundColor ||
+          DEFAULT_CONFIG.rtwFtb.textAreaBackgroundColor
+      ),
       cards: Array.isArray(rtwFtb.cards)
         ? rtwFtb.cards.map((card) => ({
             ...fallbackRtwFtbSpotlight,
@@ -2976,6 +3098,22 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
                 fallbackRtwFtbSpotlight.designerName ||
                 ''
             ).slice(0, 120),
+            price: String((card as DesignerSpotlightCard)?.price || fallbackRtwFtbSpotlight.price || '').slice(0, 80),
+            showCountry: toBoolean((card as DesignerSpotlightCard)?.showCountry, fallbackRtwFtbSpotlight.showCountry),
+            showDesignerName: toBoolean(
+              (card as DesignerSpotlightCard)?.showDesignerName,
+              fallbackRtwFtbSpotlight.showDesignerName
+            ),
+            showSpecialty: toBoolean(
+              (card as DesignerSpotlightCard)?.showSpecialty,
+              fallbackRtwFtbSpotlight.showSpecialty
+            ),
+            showTag: toBoolean((card as DesignerSpotlightCard)?.showTag, fallbackRtwFtbSpotlight.showTag),
+            showDescription: toBoolean(
+              (card as DesignerSpotlightCard)?.showDescription,
+              fallbackRtwFtbSpotlight.showDescription
+            ),
+            showPrice: toBoolean((card as DesignerSpotlightCard)?.showPrice, fallbackRtwFtbSpotlight.showPrice),
             specialty: String((card as DesignerSpotlightCard)?.specialty || fallbackRtwFtbSpotlight.specialty || '').slice(
               0,
               120
@@ -9810,6 +9948,13 @@ export default function JenksV2FrontPageManager() {
                       tag: isRtwFtbTab ? 'RTW & FTB' : '',
                       countryCode: 'NG',
                       country: countryNameFromCode('NG'),
+                      price: '',
+                      showCountry: true,
+                      showDesignerName: true,
+                      showSpecialty: true,
+                      showTag: true,
+                      showDescription: true,
+                      showPrice: true,
                       designerName: '',
                       specialty: '',
                       title: 'New Spotlight Card',
@@ -9921,6 +10066,46 @@ export default function JenksV2FrontPageManager() {
                 }
               />
             </label>
+            <label className="text-xs">
+              Price Text Size (px)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={spotlightConfig.priceFontSize}
+                onChange={(event) =>
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    priceFontSize: clamp(toNumber(event.target.value, current.priceFontSize), 10, 96),
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs md:col-span-2">
+              Text Background Color (rgba/hex)
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={spotlightConfig.textAreaBackgroundColor}
+                onChange={(event) =>
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    textAreaBackgroundColor: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={spotlightConfig.textAreaBackgroundEnabled}
+                onChange={(event) =>
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    textAreaBackgroundEnabled: event.target.checked,
+                  }))
+                }
+              />
+              Show Text Background
+            </label>
           </div>
           {spotlightConfig.cards.map((card, index) => (
             <div key={card.id} className="rounded border p-3 space-y-2">
@@ -9955,6 +10140,61 @@ export default function JenksV2FrontPageManager() {
                     ))}
                   </select>
                 </label>
+                <label className="md:col-span-1 flex items-end gap-2 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={toBoolean(card.showCountry, DEFAULT_SPOTLIGHT_VISIBILITY.showCountry)}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, showCountry: event.target.checked } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                  Show Country
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Price
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.price || ''}
+                    placeholder="$0.00"
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, price: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-1 flex items-end gap-2 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={toBoolean(card.showPrice, DEFAULT_SPOTLIGHT_VISIBILITY.showPrice)}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, showPrice: event.target.checked } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                  Show Price
+                </label>
                 <label className="md:col-span-2 text-[11px]">
                   Designer Name
                   <input
@@ -9972,6 +10212,24 @@ export default function JenksV2FrontPageManager() {
                       }))
                     }
                   />
+                </label>
+                <label className="md:col-span-1 flex items-end gap-2 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={toBoolean(card.showDesignerName, DEFAULT_SPOTLIGHT_VISIBILITY.showDesignerName)}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, showDesignerName: event.target.checked } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                  Show Designer Name
                 </label>
                 <label className="md:col-span-2 text-[11px]">
                   Specialty
@@ -9991,6 +10249,24 @@ export default function JenksV2FrontPageManager() {
                     }
                   />
                 </label>
+                <label className="md:col-span-1 flex items-end gap-2 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={toBoolean(card.showSpecialty, DEFAULT_SPOTLIGHT_VISIBILITY.showSpecialty)}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, showSpecialty: event.target.checked } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                  Show Specialty
+                </label>
                 <label className="md:col-span-2 text-[11px]">
                   Tag
                   <input
@@ -10008,6 +10284,24 @@ export default function JenksV2FrontPageManager() {
                       }))
                     }
                   />
+                </label>
+                <label className="md:col-span-1 flex items-end gap-2 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={toBoolean(card.showTag, DEFAULT_SPOTLIGHT_VISIBILITY.showTag)}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, showTag: event.target.checked } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                  Show Tag
                 </label>
                 <label className="md:col-span-2 text-[11px]">
                   Internal Title
@@ -10044,6 +10338,24 @@ export default function JenksV2FrontPageManager() {
                       }))
                     }
                   />
+                </label>
+                <label className="md:col-span-1 flex items-end gap-2 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={toBoolean(card.showDescription, DEFAULT_SPOTLIGHT_VISIBILITY.showDescription)}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        [spotlightConfigKey]: {
+                          ...prev[spotlightConfigKey],
+                          cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, showDescription: event.target.checked } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                  Show Description
                 </label>
                 <label className="md:col-span-1 text-[11px]">
                   CTA Text
