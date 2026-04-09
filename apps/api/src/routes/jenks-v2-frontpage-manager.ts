@@ -24,6 +24,7 @@ const TEMPLATE_KEYS = [
   'FEATURED_CTW',
   'FEATURED_FTB',
   'FEATURED',
+  'INSTANT_BUY',
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
   'HERITAGE',
@@ -344,6 +345,49 @@ type FreshDropsSettings = {
   description: string;
 };
 
+type InstantBuyCategoryKey = 'RTW' | 'FTB';
+type InstantBuyFeatureCard = {
+  id: string;
+  categoryKey: InstantBuyCategoryKey;
+  tag: string;
+  title: string;
+  description: string;
+  ctaText: string;
+  ctaLink: string;
+  ctaMode: CtaMode;
+  ctaPageKey?: string;
+  ctaStyle: CtaStyle;
+  image: string;
+  showBadge: boolean;
+  badgeText: string;
+  enabled: boolean;
+  displayOrder: number;
+};
+type InstantBuyProductSlot = {
+  id: string;
+  categoryKey: InstantBuyCategoryKey;
+  sourceMode: 'AUTO_RANDOM' | 'MANUAL';
+  manualProductType: 'READY_TO_WEAR' | 'FABRIC';
+  manualProductId: string;
+  manualTitle: string;
+  manualSubtitle: string;
+  manualPrice: string;
+  manualImage: string;
+  manualHref: string;
+  randomPoolSize: number;
+  slideIntervalMs: number;
+  showBadge: boolean;
+  badgeText: string;
+  enabled: boolean;
+  displayOrder: number;
+};
+type InstantBuySettings = {
+  rows: number;
+  columns: number;
+  featureCards: InstantBuyFeatureCard[];
+  productSlots: InstantBuyProductSlot[];
+};
+
 type DesignerSpotlightCard = {
   id: string;
   image: string;
@@ -514,6 +558,7 @@ type JenksV2FrontpageManagerSettings = {
     layoutByKey: Record<FeaturedCategoryKey, FeaturedLayout>;
     cards: FeaturedCard[];
   };
+  instantBuy: InstantBuySettings;
   freshDrops: FreshDropsSettings;
   designerSpotlight: DesignerSpotlightSettings;
   heritage: HeritageSettings;
@@ -535,6 +580,7 @@ const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string
   { templateKey: 'FEATURED_RTW', key: 'featured-rtw', name: 'Featured RTW' },
   { templateKey: 'FEATURED_CTW', key: 'featured-ctw', name: 'Featured CTW' },
   { templateKey: 'FEATURED_FTB', key: 'featured-ftb', name: 'Featured FTB' },
+  { templateKey: 'INSTANT_BUY', key: 'instant-buy', name: 'Instant Buy' },
   { templateKey: 'FRESH_DROPS', key: 'fresh-drops', name: 'Fresh Drops' },
   { templateKey: 'DESIGNER_SPOTLIGHT', key: 'designer-spotlight', name: 'Designer Spotlight' },
   { templateKey: 'HERITAGE', key: 'heritage', name: 'Heritage' },
@@ -552,6 +598,12 @@ const FEATURED_TEMPLATE_BY_KEY: Record<FeaturedCategoryKey, TemplateKey> = {
   RTW: 'FEATURED_RTW',
   CTW: 'FEATURED_CTW',
   FTB: 'FEATURED_FTB',
+};
+
+const INSTANT_BUY_CATEGORY_KEYS: InstantBuyCategoryKey[] = ['FTB', 'RTW'];
+const INSTANT_BUY_CATEGORY_LABEL: Record<InstantBuyCategoryKey, string> = {
+  FTB: 'Fabrics To Buy',
+  RTW: 'Ready To Wear',
 };
 
 const featuredCategoryKeyFromValue = (value: unknown): FeaturedCategoryKey | null => {
@@ -585,6 +637,7 @@ const updateSchema = z.object({
   categoryManage: z.unknown().optional(),
   textIconCards: z.unknown().optional(),
   featured: z.unknown().optional(),
+  instantBuy: z.unknown().optional(),
   freshDrops: z.unknown().optional(),
   designerSpotlight: z.unknown().optional(),
   heritage: z.unknown().optional(),
@@ -1413,6 +1466,96 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           }),
           enabled: true,
           displayOrder: 3,
+        },
+      ],
+    },
+    instantBuy: {
+      rows: 1,
+      columns: 4,
+      featureCards: [
+        {
+          id: randomUUID(),
+          categoryKey: 'FTB',
+          tag: 'Ready To Wear',
+          title: 'Fabrics To Buy',
+          description: 'The vibe: the raw DNA of African creativity, premium artisan fabrics sourced directly.',
+          ctaText: 'Explore African Fabrics',
+          ctaLink: '/fabricstobuy',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'FABRICS',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 12,
+          }),
+          image: '',
+          showBadge: false,
+          badgeText: 'NEW',
+          enabled: true,
+          displayOrder: 1,
+        },
+        {
+          id: randomUUID(),
+          categoryKey: 'RTW',
+          tag: 'Ready To Wear',
+          title: 'Ready To Wear',
+          description: 'Modern convenience meets ancestral elegance for everyday wardrobes.',
+          ctaText: 'Shop Your Style',
+          ctaLink: '/readytowear',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'READY_TO_WEAR',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 12,
+          }),
+          image: '',
+          showBadge: false,
+          badgeText: 'NEW',
+          enabled: true,
+          displayOrder: 3,
+        },
+      ],
+      productSlots: [
+        {
+          id: randomUUID(),
+          categoryKey: 'FTB',
+          sourceMode: 'AUTO_RANDOM',
+          manualProductType: 'FABRIC',
+          manualProductId: '',
+          manualTitle: '',
+          manualSubtitle: '',
+          manualPrice: '',
+          manualImage: '',
+          manualHref: '',
+          randomPoolSize: 8,
+          slideIntervalMs: 5000,
+          showBadge: true,
+          badgeText: 'NEW',
+          enabled: true,
+          displayOrder: 2,
+        },
+        {
+          id: randomUUID(),
+          categoryKey: 'RTW',
+          sourceMode: 'AUTO_RANDOM',
+          manualProductType: 'READY_TO_WEAR',
+          manualProductId: '',
+          manualTitle: '',
+          manualSubtitle: '',
+          manualPrice: '',
+          manualImage: '',
+          manualHref: '',
+          randomPoolSize: 8,
+          slideIntervalMs: 5000,
+          showBadge: false,
+          badgeText: '',
+          enabled: true,
+          displayOrder: 4,
         },
       ],
     },
@@ -2294,6 +2437,119 @@ const normalizeFeatured = (
   return { columns, layoutByKey, cards };
 };
 
+const normalizeInstantBuy = (raw: unknown, fallback: InstantBuySettings): InstantBuySettings => {
+  const row = asRecord(raw);
+  const rows = clamp(Math.round(getNumber(row.rows) ?? fallback.rows), 1, 1);
+  const columns = clamp(Math.round(getNumber(row.columns) ?? fallback.columns), 4, 4);
+
+  const featureRows = Array.isArray(row.featureCards) ? row.featureCards : fallback.featureCards;
+  const featureCards = featureRows
+    .map((entry, index) => {
+      const item = asRecord(entry);
+      const fallbackItem = fallback.featureCards[index] || fallback.featureCards[0];
+      const fallbackCategory = fallbackItem?.categoryKey || (index % 2 === 0 ? 'FTB' : 'RTW');
+      const categoryKey = normalizeCategoryKey(item.categoryKey, fallbackCategory);
+      const ctaMode = normalizeCtaMode(item.ctaMode, fallbackItem?.ctaMode || 'PAGE');
+      const fallbackHref = categoryKey === 'FTB' ? '/fabricstobuy' : '/readytowear';
+      const fallbackPageKey = categoryKey === 'FTB' ? 'FABRICS' : 'READY_TO_WEAR';
+      return {
+        id: getString(item.id) || fallbackItem?.id || randomUUID(),
+        categoryKey,
+        tag: (getString(item.tag) || fallbackItem?.tag || INSTANT_BUY_CATEGORY_LABEL[categoryKey]).slice(0, 80),
+        title: (getString(item.title) || fallbackItem?.title || INSTANT_BUY_CATEGORY_LABEL[categoryKey]).slice(0, 140),
+        description: (getString(item.description) || fallbackItem?.description || '').slice(0, 420),
+        ctaText: (getString(item.ctaText) || fallbackItem?.ctaText || 'Shop Now').slice(0, 80),
+        ctaMode,
+        ctaPageKey: (getString(item.ctaPageKey) || getString(fallbackItem?.ctaPageKey) || fallbackPageKey).slice(0, 120) || undefined,
+        ctaLink:
+          ctaMode === 'PAGE'
+            ? resolveCtaPageHref(getString(item.ctaPageKey) || getString(fallbackItem?.ctaPageKey) || fallbackPageKey, fallbackHref)
+            : normalizeHref(item.ctaLink, getString(fallbackItem?.ctaLink) || fallbackHref),
+        ctaStyle: normalizeCtaStyle(item.ctaStyle, fallbackItem?.ctaStyle || defaultCtaStyle()),
+        image: normalizeHref(item.image, getString(fallbackItem?.image) || ''),
+        showBadge: getBoolean(item.showBadge) ?? fallbackItem?.showBadge ?? false,
+        badgeText: (getString(item.badgeText) || fallbackItem?.badgeText || 'NEW').slice(0, 24),
+        enabled: getBoolean(item.enabled) ?? fallbackItem?.enabled ?? true,
+        displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem?.displayOrder ?? index + 1), 1, 99),
+      } as InstantBuyFeatureCard;
+    })
+    .slice(0, 12);
+
+  const slotRows = Array.isArray(row.productSlots) ? row.productSlots : fallback.productSlots;
+  const productSlots = slotRows
+    .map((entry, index) => {
+      const item = asRecord(entry);
+      const fallbackItem = fallback.productSlots[index] || fallback.productSlots[0];
+      const fallbackCategory = fallbackItem?.categoryKey || (index % 2 === 0 ? 'FTB' : 'RTW');
+      const categoryKey = normalizeCategoryKey(item.categoryKey, fallbackCategory);
+      const sourceToken = String(item.sourceMode || fallbackItem?.sourceMode || 'AUTO_RANDOM').trim().toUpperCase();
+      const sourceMode: InstantBuyProductSlot['sourceMode'] = sourceToken === 'MANUAL' ? 'MANUAL' : 'AUTO_RANDOM';
+      const productTypeToken = String(
+        item.manualProductType || fallbackItem?.manualProductType || (categoryKey === 'FTB' ? 'FABRIC' : 'READY_TO_WEAR')
+      )
+        .trim()
+        .toUpperCase();
+      const manualProductType: InstantBuyProductSlot['manualProductType'] =
+        productTypeToken === 'FABRIC' ? 'FABRIC' : 'READY_TO_WEAR';
+      const defaultHref = categoryKey === 'FTB' ? '/fabricstobuy' : '/readytowear';
+      return {
+        id: getString(item.id) || fallbackItem?.id || randomUUID(),
+        categoryKey,
+        sourceMode,
+        manualProductType,
+        manualProductId: (getString(item.manualProductId) || fallbackItem?.manualProductId || '').slice(0, 120),
+        manualTitle: (getString(item.manualTitle) || fallbackItem?.manualTitle || '').slice(0, 180),
+        manualSubtitle: (getString(item.manualSubtitle) || fallbackItem?.manualSubtitle || '').slice(0, 180),
+        manualPrice: (getString(item.manualPrice) || fallbackItem?.manualPrice || '').slice(0, 40),
+        manualImage: normalizeHref(item.manualImage, getString(fallbackItem?.manualImage) || ''),
+        manualHref: normalizeHref(item.manualHref, getString(fallbackItem?.manualHref) || defaultHref),
+        randomPoolSize: clamp(Math.round(getNumber(item.randomPoolSize) ?? fallbackItem?.randomPoolSize ?? 8), 1, 60),
+        slideIntervalMs: clamp(Math.round(getNumber(item.slideIntervalMs) ?? fallbackItem?.slideIntervalMs ?? 5000), 1000, 30000),
+        showBadge: getBoolean(item.showBadge) ?? fallbackItem?.showBadge ?? false,
+        badgeText: (getString(item.badgeText) || fallbackItem?.badgeText || 'NEW').slice(0, 24),
+        enabled: getBoolean(item.enabled) ?? fallbackItem?.enabled ?? true,
+        displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem?.displayOrder ?? index + 1), 1, 99),
+      } as InstantBuyProductSlot;
+    })
+    .slice(0, 12);
+
+  const normalizedFeatures = INSTANT_BUY_CATEGORY_KEYS.map((categoryKey, idx) => {
+    const existing = featureCards.find((card) => card.categoryKey === categoryKey);
+    if (existing) return existing;
+    const fallbackCard =
+      fallback.featureCards.find((card) => card.categoryKey === categoryKey) ||
+      fallback.featureCards[idx] ||
+      fallback.featureCards[0];
+    return {
+      ...(fallbackCard as InstantBuyFeatureCard),
+      id: randomUUID(),
+      categoryKey,
+      displayOrder: categoryKey === 'FTB' ? 1 : 3,
+    };
+  });
+  const normalizedSlots = INSTANT_BUY_CATEGORY_KEYS.map((categoryKey, idx) => {
+    const existing = productSlots.find((slot) => slot.categoryKey === categoryKey);
+    if (existing) return existing;
+    const fallbackSlot =
+      fallback.productSlots.find((slot) => slot.categoryKey === categoryKey) ||
+      fallback.productSlots[idx] ||
+      fallback.productSlots[0];
+    return {
+      ...(fallbackSlot as InstantBuyProductSlot),
+      id: randomUUID(),
+      categoryKey,
+      displayOrder: categoryKey === 'FTB' ? 2 : 4,
+    };
+  });
+
+  return {
+    rows,
+    columns,
+    featureCards: normalizedFeatures,
+    productSlots: normalizedSlots,
+  };
+};
+
 const normalizeCustomerReviews = (
   raw: unknown,
   fallback: CustomerReviewsSettings
@@ -2632,6 +2888,8 @@ const buildTemplateSnapshot = (
     }
     case 'FEATURED':
       return cloneJson(asRecord(settings.featured));
+    case 'INSTANT_BUY':
+      return cloneJson(asRecord(settings.instantBuy));
     case 'FRESH_DROPS':
       return cloneJson(asRecord(settings.freshDrops));
     case 'DESIGNER_SPOTLIGHT':
@@ -2957,6 +3215,9 @@ const applyTemplateSnapshotToSettings = (
     case 'FEATURED':
       next.featured = normalizeFeatured(snapshotRecord, next.featured);
       break;
+    case 'INSTANT_BUY':
+      next.instantBuy = normalizeInstantBuy(snapshotRecord, next.instantBuy);
+      break;
     case 'FRESH_DROPS':
       next.freshDrops = normalizeFreshDrops(snapshotRecord, next.freshDrops);
       break;
@@ -2995,6 +3256,7 @@ const normalizeSettings = (
   const categoryManage = normalizeCategoryManage(row.categoryManage, fallback.categoryManage);
   const textIconCards = normalizeTextIconCards(row.textIconCards, fallback.textIconCards);
   const featured = normalizeFeatured(row.featured, fallback.featured);
+  const instantBuy = normalizeInstantBuy(row.instantBuy, fallback.instantBuy);
   const freshDrops = normalizeFreshDrops(row.freshDrops, fallback.freshDrops);
   const designerSpotlight = normalizeDesignerSpotlight(row.designerSpotlight, fallback.designerSpotlight);
   const heritage = normalizeHeritage(row.heritage, fallback.heritage);
@@ -3008,6 +3270,7 @@ const normalizeSettings = (
     categoryManage,
     textIconCards,
     featured,
+    instantBuy,
     freshDrops,
     designerSpotlight,
     heritage,
@@ -3087,6 +3350,10 @@ const saveSettings = async (next: Partial<JenksV2FrontpageManagerSettings>) => {
       featured: {
         ...existing.settings.featured,
         ...asRecord(next.featured),
+      },
+      instantBuy: {
+        ...existing.settings.instantBuy,
+        ...asRecord(next.instantBuy),
       },
       freshDrops: {
         ...existing.settings.freshDrops,

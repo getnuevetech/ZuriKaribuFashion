@@ -74,6 +74,52 @@ type HeroSlide = {
   tertiaryCtaStyle?: CTAStyle;
   tertiaryCtaEnabled: boolean;
 };
+type InstantBuyCategoryKey = 'RTW' | 'FTB';
+type InstantBuyFeatureTile = {
+  id: string;
+  categoryKey: InstantBuyCategoryKey;
+  tag: string;
+  title: string;
+  description: string;
+  ctaText: string;
+  ctaLink: string;
+  ctaMode: CtaMode;
+  ctaPageKey?: string;
+  ctaStyle?: CTAStyle;
+  image: string;
+  showBadge: boolean;
+  badgeText: string;
+  enabled: boolean;
+  displayOrder: number;
+};
+type InstantBuyProductTile = {
+  id: string;
+  categoryKey: InstantBuyCategoryKey;
+  sourceMode: 'AUTO_RANDOM' | 'MANUAL';
+  manualProductType: 'READY_TO_WEAR' | 'FABRIC';
+  manualProductId: string;
+  manualTitle: string;
+  manualSubtitle: string;
+  manualPrice: string;
+  manualImage: string;
+  manualHref: string;
+  randomPoolSize: number;
+  slideIntervalMs: number;
+  showBadge: boolean;
+  badgeText: string;
+  enabled: boolean;
+  displayOrder: number;
+};
+type InstantBuyAutoProduct = {
+  id: string;
+  categoryKey: InstantBuyCategoryKey;
+  image: string;
+  title: string;
+  subtitle: string;
+  price: string;
+  href: string;
+  createdAtTs: number;
+};
 type FeaturedTile = {
   id: string;
   image: string;
@@ -197,6 +243,7 @@ type TemplateKey =
   | 'FEATURED_CTW'
   | 'FEATURED_FTB'
   | 'FEATURED'
+  | 'INSTANT_BUY'
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
   | 'HERITAGE'
@@ -224,6 +271,7 @@ const TEMPLATE_KEYS: TemplateKey[] = [
   'FEATURED_CTW',
   'FEATURED_FTB',
   'FEATURED',
+  'INSTANT_BUY',
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
   'HERITAGE',
@@ -706,6 +754,13 @@ const toSafeInternalHref = (href: string) =>
 const toSafeBackgroundImage = (value: unknown) => {
   const safe = stripLegacyFallbackImage(value);
   return safe ? `url(${safe})` : 'none';
+};
+
+const formatMoneyLabel = (value: unknown, fallback = '$0.00') => {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return `$${Math.max(0, numeric).toFixed(2)}`;
+  const text = String(value || '').trim();
+  return text || fallback;
 };
 
 const buildCTAStyle = (raw: unknown, fallback: CTAStyle): CSSProperties => {
@@ -1200,6 +1255,11 @@ const resolveDesignerCountryCode = (countryCodeValue: unknown, countryValue: unk
   return COUNTRY_CODE_BY_LABEL[labelToken] || 'NG';
 };
 
+const normalizeInstantBuyCategoryKey = (value: unknown): InstantBuyCategoryKey => {
+  const token = String(value || '').trim().toUpperCase();
+  return token === 'FTB' ? 'FTB' : 'RTW';
+};
+
 export default function JenksFrontpageV2() {
   const [managerConfig, setManagerConfig] = useState<JenksV2ManagerPayload | null>(null);
   const [index, setIndex] = useState(0);
@@ -1213,6 +1273,14 @@ export default function JenksFrontpageV2() {
   const [freshDropsProducts, setFreshDropsProducts] = useState<
     Array<{ id: string; image: string; name: string; brand: string; price: string; href: string; createdAtTs: number }>
   >([]);
+  const [instantBuyAutoProducts, setInstantBuyAutoProducts] = useState<Record<'RTW' | 'FTB', InstantBuyAutoProduct[]>>({
+    RTW: [],
+    FTB: [],
+  });
+  const [instantBuySlotIndices, setInstantBuySlotIndices] = useState<Record<'RTW' | 'FTB', number>>({
+    RTW: 0,
+    FTB: 0,
+  });
   const [productReviewCards, setProductReviewCards] = useState<CustomerReviewCard[]>([]);
   const [customerReviewIndex, setCustomerReviewIndex] = useState(0);
   const [customerReviewsHovered, setCustomerReviewsHovered] = useState(false);
@@ -2334,6 +2402,281 @@ export default function JenksFrontpageV2() {
     Math.min(1, Math.round(asNumber(footerMapCfg.overlayOpacity, 55)) / 100)
   );
   const footerMapHeight = Math.max(80, Math.min(900, Math.round(asNumber(footerMapCfg.minHeight, 320))));
+  const instantBuyCfg = useMemo(() => asRecord(asRecord(managerConfig).instantBuy), [managerConfig]);
+  const instantBuyRows = Math.max(1, Math.min(4, Math.round(asNumber(instantBuyCfg.rows, 1))));
+  const instantBuyColumns = Math.max(1, Math.min(4, Math.round(asNumber(instantBuyCfg.columns, 4))));
+  const instantBuyFeatureTiles = useMemo<InstantBuyFeatureTile[]>(() => {
+    const entries = asArray(instantBuyCfg.featureCards)
+      .map((entry) => asRecord(entry))
+      .filter((entry) => asBoolean(entry.enabled, true))
+      .map((entry, index) => {
+        const categoryToken = asString(entry.categoryKey, index === 0 ? 'FTB' : 'RTW').toUpperCase();
+        const categoryKey: InstantBuyCategoryKey = categoryToken === 'RTW' ? 'RTW' : 'FTB';
+        const modeToken = asString(entry.ctaMode, 'PAGE').toUpperCase();
+        const ctaMode: CtaMode = modeToken === 'URL' ? 'URL' : 'PAGE';
+        const pageToken = asString(entry.ctaPageKey, '').toUpperCase();
+        const categoryFallbackHref = categoryKey === 'RTW' ? '/readytowear' : '/fabricstobuy';
+        const ctaHref =
+          ctaMode === 'PAGE'
+            ? toSafeInternalHref(PAGE_HREF_BY_KEY[pageToken] || normalizeHref(entry.ctaLink, categoryFallbackHref))
+            : toSafeInternalHref(normalizeHref(entry.ctaLink, categoryFallbackHref));
+        return {
+          id: asString(entry.id, `instant-feature-${index + 1}`),
+          categoryKey,
+          tag: asString(entry.tag, categoryKey === 'RTW' ? 'READY TO WEAR' : 'FABRICS TO BUY').toUpperCase(),
+          title: asString(entry.title, categoryKey === 'RTW' ? 'READY TO WEAR' : 'FABRICS TO BUY').toUpperCase(),
+          description: asString(entry.description, ''),
+          ctaText: asString(entry.ctaText, categoryKey === 'RTW' ? 'SHOP YOUR STYLE' : 'EXPLORE AFRICAN FABRICS').toUpperCase(),
+          ctaLink: ctaHref,
+          ctaMode,
+          ctaPageKey: pageToken || undefined,
+          ctaStyle: asRecord(entry.ctaStyle),
+          image: resolveManagerImage(entry.image, ''),
+          showBadge: asBoolean(entry.showBadge, false),
+          badgeText: asString(entry.badgeText, 'NEW').toUpperCase(),
+          enabled: true,
+          displayOrder: Math.max(1, Math.round(asNumber(entry.displayOrder, index * 2 + 1))),
+        };
+      })
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+    if (entries.length > 0) return entries;
+    return [
+      {
+        id: 'instant-feature-ftb-fallback',
+        categoryKey: 'FTB',
+        tag: 'READY TO WEAR',
+        title: 'FABRICS TO BUY',
+        description: 'The Vibe: The raw DNA of African creativity, premium artisan fabrics sourced directly.',
+        ctaText: 'EXPLORE AFRICAN FABRICS',
+        ctaLink: '/fabricstobuy',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'FABRICS',
+        ctaStyle: DEFAULT_INLINE_CTA_STYLE,
+        image: `${ASSET_BASE}/fabrics_full.jpg`,
+        showBadge: false,
+        badgeText: 'NEW',
+        enabled: true,
+        displayOrder: 1,
+      },
+      {
+        id: 'instant-feature-rtw-fallback',
+        categoryKey: 'RTW',
+        tag: 'READY TO WEAR',
+        title: 'READY TO WEAR',
+        description: 'The Vibe: Modern convenience meets ancestral elegance.',
+        ctaText: 'SHOP YOUR STYLE',
+        ctaLink: '/readytowear',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'READY_TO_WEAR',
+        ctaStyle: DEFAULT_INLINE_CTA_STYLE,
+        image: `${ASSET_BASE}/rw_full.jpg`,
+        showBadge: false,
+        badgeText: 'NEW',
+        enabled: true,
+        displayOrder: 3,
+      },
+    ];
+  }, [instantBuyCfg.featureCards]);
+  const instantBuyProductTiles = useMemo<InstantBuyProductTile[]>(() => {
+    const entries = asArray(instantBuyCfg.productSlots)
+      .map((entry) => asRecord(entry))
+      .filter((entry) => asBoolean(entry.enabled, true))
+      .map((entry, index) => {
+        const categoryToken = asString(entry.categoryKey, index === 0 ? 'FTB' : 'RTW').toUpperCase();
+        const categoryKey: InstantBuyCategoryKey = categoryToken === 'RTW' ? 'RTW' : 'FTB';
+        const sourceModeToken = asString(entry.sourceMode, 'AUTO_RANDOM').toUpperCase();
+        const sourceMode: InstantBuyProductTile['sourceMode'] = sourceModeToken === 'MANUAL' ? 'MANUAL' : 'AUTO_RANDOM';
+        const manualTypeToken = asString(entry.manualProductType, categoryKey === 'RTW' ? 'READY_TO_WEAR' : 'FABRIC').toUpperCase();
+        const manualProductType: InstantBuyProductTile['manualProductType'] =
+          manualTypeToken === 'FABRIC' ? 'FABRIC' : 'READY_TO_WEAR';
+        return {
+          id: asString(entry.id, `instant-product-${index + 1}`),
+          categoryKey,
+          sourceMode,
+          manualProductType,
+          manualProductId: asString(entry.manualProductId, '').trim(),
+          manualTitle: asString(entry.manualTitle, ''),
+          manualSubtitle: asString(entry.manualSubtitle, ''),
+          manualPrice: asString(entry.manualPrice, ''),
+          manualImage: resolveManagerImage(entry.manualImage, ''),
+          manualHref: toSafeInternalHref(normalizeHref(entry.manualHref, categoryKey === 'RTW' ? '/readytowear' : '/fabricstobuy')),
+          randomPoolSize: Math.max(1, Math.min(36, Math.round(asNumber(entry.randomPoolSize, 8)))),
+          slideIntervalMs: Math.max(1500, Math.min(30000, Math.round(asNumber(entry.slideIntervalMs, 5000)))),
+          showBadge: asBoolean(entry.showBadge, false),
+          badgeText: asString(entry.badgeText, 'NEW').toUpperCase(),
+          enabled: true,
+          displayOrder: Math.max(1, Math.round(asNumber(entry.displayOrder, index * 2 + 2))),
+        };
+      })
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+    if (entries.length > 0) return entries;
+    return [
+      {
+        id: 'instant-product-ftb-fallback',
+        categoryKey: 'FTB',
+        sourceMode: 'AUTO_RANDOM',
+        manualProductType: 'FABRIC',
+        manualProductId: '',
+        manualTitle: '',
+        manualSubtitle: '',
+        manualPrice: '',
+        manualImage: '',
+        manualHref: '/fabricstobuy',
+        randomPoolSize: 8,
+        slideIntervalMs: 5000,
+        showBadge: true,
+        badgeText: 'NEW',
+        enabled: true,
+        displayOrder: 2,
+      },
+      {
+        id: 'instant-product-rtw-fallback',
+        categoryKey: 'RTW',
+        sourceMode: 'AUTO_RANDOM',
+        manualProductType: 'READY_TO_WEAR',
+        manualProductId: '',
+        manualTitle: '',
+        manualSubtitle: '',
+        manualPrice: '',
+        manualImage: '',
+        manualHref: '/readytowear',
+        randomPoolSize: 8,
+        slideIntervalMs: 5000,
+        showBadge: false,
+        badgeText: '',
+        enabled: true,
+        displayOrder: 4,
+      },
+    ];
+  }, [instantBuyCfg.productSlots]);
+  const instantBuyManualByCategory = useMemo<Record<'RTW' | 'FTB', InstantBuyProductTile | null>>(
+    () => ({
+      RTW:
+        instantBuyProductTiles.find((slot) => slot.categoryKey === 'RTW' && slot.sourceMode === 'MANUAL') || null,
+      FTB:
+        instantBuyProductTiles.find((slot) => slot.categoryKey === 'FTB' && slot.sourceMode === 'MANUAL') || null,
+    }),
+    [instantBuyProductTiles]
+  );
+  const instantBuyResolvedProducts = useMemo<Record<'RTW' | 'FTB', InstantBuyResolvedProductCard>>(() => {
+    const resolve = (categoryKey: 'RTW' | 'FTB'): InstantBuyResolvedProductCard => {
+      const manual = instantBuyManualByCategory[categoryKey];
+      const autoPool = instantBuyAutoProducts[categoryKey] || [];
+      const activeIndex = instantBuySlotIndices[categoryKey] || 0;
+      if (manual && manual.sourceMode === 'MANUAL') {
+        return {
+          id: manual.id,
+          image: manual.manualImage,
+          title: manual.manualTitle || (categoryKey === 'RTW' ? 'Ready To Wear' : 'Fabrics'),
+          subtitle: manual.manualSubtitle || '',
+          price: manual.manualPrice || '',
+          href: manual.manualHref || (categoryKey === 'RTW' ? '/readytowear' : '/fabricstobuy'),
+          showBadge: manual.showBadge,
+          badgeText: manual.badgeText,
+          sourceMode: 'MANUAL',
+        };
+      }
+      if (autoPool.length > 0) {
+        const entry = autoPool[(activeIndex + autoPool.length) % autoPool.length];
+        return {
+          id: entry.id,
+          image: entry.image,
+          title: entry.title,
+          subtitle: entry.subtitle,
+          price: entry.price,
+          href: entry.href,
+          showBadge: false,
+          badgeText: '',
+          sourceMode: 'AUTO_RANDOM',
+        };
+      }
+      return {
+        id: `instant-fallback-${categoryKey.toLowerCase()}`,
+        image: categoryKey === 'RTW' ? `${ASSET_BASE}/featured_rw_right.jpg` : `${ASSET_BASE}/fabrics_full.jpg`,
+        title: categoryKey === 'RTW' ? 'Kente Jacket' : 'Awon Da',
+        subtitle: categoryKey === 'RTW' ? 'Asante Designs' : 'Diallo Fabrics',
+        price: categoryKey === 'RTW' ? '$174.89' : '$230.00',
+        href: categoryKey === 'RTW' ? '/readytowear' : '/fabricstobuy',
+        showBadge: categoryKey === 'FTB',
+        badgeText: 'NEW',
+        sourceMode: 'AUTO_RANDOM',
+      };
+    };
+    return {
+      RTW: resolve('RTW'),
+      FTB: resolve('FTB'),
+    };
+  }, [instantBuyAutoProducts, instantBuyManualByCategory, instantBuySlotIndices]);
+  const instantBuyFeatureByCategory = useMemo<Record<'RTW' | 'FTB', InstantBuyFeatureTile>>(() => {
+    const fallback = (categoryKey: 'RTW' | 'FTB'): InstantBuyFeatureTile => ({
+      id: `instant-feature-fallback-${categoryKey.toLowerCase()}`,
+      categoryKey,
+      tag: 'READY TO WEAR',
+      title: categoryKey === 'RTW' ? 'READY TO WEAR' : 'FABRICS TO BUY',
+      description:
+        categoryKey === 'RTW'
+          ? 'The Vibe: Modern convenience meets ancestral elegance.'
+          : 'The Vibe: The raw DNA of African creativity, premium artisan fabrics sourced directly.',
+      ctaText: categoryKey === 'RTW' ? 'SHOP YOUR STYLE' : 'EXPLORE AFRICAN FABRICS',
+      ctaLink: categoryKey === 'RTW' ? '/readytowear' : '/fabricstobuy',
+      ctaMode: 'PAGE',
+      ctaPageKey: categoryKey === 'RTW' ? 'READY_TO_WEAR' : 'FABRICS',
+      ctaStyle: DEFAULT_INLINE_CTA_STYLE,
+      image: categoryKey === 'RTW' ? `${ASSET_BASE}/rw_full.jpg` : `${ASSET_BASE}/fabrics_full.jpg`,
+      showBadge: false,
+      badgeText: 'NEW',
+      enabled: true,
+      displayOrder: categoryKey === 'RTW' ? 3 : 1,
+    });
+    return {
+      RTW: instantBuyFeatureTiles.find((item) => item.categoryKey === 'RTW') || fallback('RTW'),
+      FTB: instantBuyFeatureTiles.find((item) => item.categoryKey === 'FTB') || fallback('FTB'),
+    };
+  }, [instantBuyFeatureTiles]);
+  const instantBuyOrderedTiles = useMemo(() => {
+    const slotsByCategory: Record<'RTW' | 'FTB', InstantBuyProductTile | null> = {
+      RTW: instantBuyProductTiles.find((slot) => slot.categoryKey === 'RTW') || null,
+      FTB: instantBuyProductTiles.find((slot) => slot.categoryKey === 'FTB') || null,
+    };
+    const rows = [
+      {
+        id: instantBuyFeatureByCategory.FTB.id,
+        order: Math.max(1, Math.round(asNumber(instantBuyFeatureByCategory.FTB.displayOrder, 1))),
+        type: 'feature' as const,
+        feature: instantBuyFeatureByCategory.FTB,
+      },
+      {
+        id: slotsByCategory.FTB?.id || 'instant-product-ftb',
+        order: Math.max(1, Math.round(asNumber(slotsByCategory.FTB?.displayOrder, 2))),
+        type: 'product' as const,
+        slot: slotsByCategory.FTB || instantBuyProductTiles[0],
+        product: instantBuyResolvedProducts.FTB,
+      },
+      {
+        id: instantBuyFeatureByCategory.RTW.id,
+        order: Math.max(1, Math.round(asNumber(instantBuyFeatureByCategory.RTW.displayOrder, 3))),
+        type: 'feature' as const,
+        feature: instantBuyFeatureByCategory.RTW,
+      },
+      {
+        id: slotsByCategory.RTW?.id || 'instant-product-rtw',
+        order: Math.max(1, Math.round(asNumber(slotsByCategory.RTW?.displayOrder, 4))),
+        type: 'product' as const,
+        slot: slotsByCategory.RTW || instantBuyProductTiles[0],
+        product: instantBuyResolvedProducts.RTW,
+      },
+    ];
+    return rows
+      .sort((a, b) => a.order - b.order)
+      .slice(0, instantBuyRows * instantBuyColumns);
+  }, [
+    instantBuyColumns,
+    instantBuyFeatureByCategory,
+    instantBuyProductTiles,
+    instantBuyResolvedProducts,
+    instantBuyRows,
+  ]);
+  const showInstantBuySection = isSectionVisible('INSTANT_BUY') && instantBuyOrderedTiles.length > 0;
   const shopByTabs = useMemo(
     () => SHOP_BY_TAB_META.filter((tab) => enabledShopByTabs.includes(tab.key)),
     [enabledShopByTabs]
@@ -2612,7 +2955,7 @@ export default function JenksFrontpageV2() {
         cancelled = true;
       };
     }
-    const loadProductReviews = async () => {
+  const loadProductReviews = async () => {
       try {
         const [ready, designs, fabrics] = await Promise.all([
           api.products.getReadyToWear({ page: 1, limit: 8 }).catch(() => null),
@@ -2672,6 +3015,7 @@ export default function JenksFrontpageV2() {
       cancelled = true;
     };
   }, [customerReviewsCfg.enabled, customerReviewsMaxItems, customerReviewsSourceMode]);
+
   useEffect(() => {
     let cancelled = false;
     const loadFreshDropsProducts = async () => {
@@ -2767,6 +3111,29 @@ export default function JenksFrontpageV2() {
     freshDropsCategoryFilterTokens,
     freshDropsCountryFilterTokens,
   ]);
+  useEffect(() => {
+    if (!showInstantBuySection) return;
+    const timers: number[] = [];
+    (['RTW', 'FTB'] as const).forEach((categoryKey) => {
+      const slot = instantBuyProductTiles.find(
+        (entry) => entry.categoryKey === categoryKey && entry.sourceMode === 'AUTO_RANDOM'
+      );
+      if (!slot) return;
+      const pool = instantBuyAutoProducts[categoryKey] || [];
+      if (pool.length <= 1) return;
+      const intervalMs = Math.max(1500, Math.min(30000, Math.round(asNumber(slot.slideIntervalMs, 5000))));
+      const timer = window.setInterval(() => {
+        setInstantBuySlotIndices((prev) => ({
+          ...prev,
+          [categoryKey]: (prev[categoryKey] + 1) % pool.length,
+        }));
+      }, intervalMs);
+      timers.push(timer);
+    });
+    return () => {
+      timers.forEach((timer) => window.clearInterval(timer));
+    };
+  }, [instantBuyAutoProducts, instantBuyProductTiles, showInstantBuySection]);
   useEffect(() => {
     if (customerReviewCards.length === 0) {
       setCustomerReviewIndex(0);
@@ -3657,6 +4024,76 @@ export default function JenksFrontpageV2() {
           </section>
         );
       })}
+
+      {/* INSTANT BUY */}
+      {showInstantBuySection ? (
+        <section className="bg-[#f5f5f3] py-0" data-kimi-anim="fade-up" style={{ order: getSectionOrder('INSTANT_BUY') }}>
+          <div className="grid grid-cols-1 gap-0 md:grid-cols-4">
+            {instantBuyOrderedTiles.map((tile) => {
+              if (tile.type === 'feature') {
+                const card = tile.feature;
+                return (
+                  <Link key={tile.id} to={toSafeInternalHref(card.ctaLink)} className="group relative block min-h-[68vh] overflow-hidden">
+                    <BrandImageWithFallback
+                      src={card.image}
+                      alt={card.title}
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                      spinnerClassName="h-6 w-6"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/42 to-transparent" />
+                    <p className="absolute left-5 top-5 text-[12px] font-semibold uppercase tracking-[0.18em] text-black/95">
+                      {card.tag}
+                    </p>
+                    {card.showBadge && card.badgeText ? (
+                      <span className="absolute right-5 top-5 bg-[#e66045] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
+                        {card.badgeText}
+                      </span>
+                    ) : null}
+                    <div className="absolute bottom-5 left-5 right-5">
+                      <div className="inline-block bg-black px-3 py-2">
+                        <p className="font-['Oswald'] text-5xl font-bold uppercase leading-[0.9] text-white">{card.title}</p>
+                      </div>
+                      {card.description ? <p className="mt-3 max-w-[95%] text-sm leading-relaxed text-white/90">{card.description}</p> : null}
+                      <span
+                        className="mt-4 inline-flex items-center text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                        style={buildCTAStyle(card.ctaStyle, DEFAULT_INLINE_CTA_STYLE)}
+                      >
+                        {card.ctaText}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              }
+
+              const slot = tile.slot;
+              const product = tile.product;
+              const cardHref = toSafeInternalHref(product.href || productGroupHref(slot.categoryKey));
+              return (
+                <Link key={tile.id} to={cardHref} className="group block min-h-[68vh] overflow-hidden bg-white">
+                  <div className="relative h-[78%] overflow-hidden bg-[#111]">
+                    <BrandImageWithFallback
+                      src={product.image}
+                      alt={product.title || 'Instant Buy product'}
+                      className="h-full w-full object-cover transition-opacity duration-500"
+                      spinnerClassName="h-5 w-5"
+                    />
+                    {slot.showBadge && slot.badgeText ? (
+                      <span className="absolute left-4 top-4 bg-[#e66045] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+                        {slot.badgeText}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="h-[22%] p-4">
+                    <p className="text-[40px] font-semibold leading-[1.02] tracking-[-0.01em] text-black">{product.title}</p>
+                    {product.subtitle ? <p className="mt-1 text-xl text-black/65">{product.subtitle}</p> : null}
+                    {product.price ? <p className="mt-2 text-[30px] font-semibold text-[#e66045]">{product.price}</p> : null}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {/* FRESH DROPS */}
       {isSectionVisible('FRESH_DROPS') ? (

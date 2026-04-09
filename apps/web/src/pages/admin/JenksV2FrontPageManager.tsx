@@ -21,6 +21,7 @@ type TemplateKey =
   | 'FEATURED_CTW'
   | 'FEATURED_FTB'
   | 'FEATURED'
+  | 'INSTANT_BUY'
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
   | 'HERITAGE'
@@ -323,6 +324,52 @@ type FreshDrops = {
   description: string;
 };
 
+type InstantBuyCategoryKey = 'RTW' | 'FTB';
+
+type InstantBuyFeatureCard = {
+  id: string;
+  categoryKey: InstantBuyCategoryKey;
+  tag: string;
+  title: string;
+  description: string;
+  ctaText: string;
+  ctaLink: string;
+  ctaMode: 'URL' | 'PAGE';
+  ctaPageKey?: string;
+  ctaStyle: CTAStyle;
+  image: string;
+  showBadge: boolean;
+  badgeText: string;
+  enabled: boolean;
+  displayOrder: number;
+};
+
+type InstantBuyProductSlot = {
+  id: string;
+  categoryKey: InstantBuyCategoryKey;
+  sourceMode: 'AUTO_RANDOM' | 'MANUAL';
+  manualProductType: 'READY_TO_WEAR' | 'FABRIC';
+  manualProductId: string;
+  manualTitle: string;
+  manualSubtitle: string;
+  manualPrice: string;
+  manualImage: string;
+  manualHref: string;
+  randomPoolSize: number;
+  slideIntervalMs: number;
+  showBadge: boolean;
+  badgeText: string;
+  enabled: boolean;
+  displayOrder: number;
+};
+
+type InstantBuy = {
+  rows: number;
+  columns: number;
+  featureCards: InstantBuyFeatureCard[];
+  productSlots: InstantBuyProductSlot[];
+};
+
 type DesignerSpotlightCard = {
   id: string;
   image: string;
@@ -504,6 +551,7 @@ type JenksV2FrontpageConfig = {
     layoutByKey: Record<FeaturedCategoryKey, FeaturedLayout>;
     cards: FeaturedCard[];
   };
+  instantBuy: InstantBuy;
   freshDrops: FreshDrops;
   designerSpotlight: DesignerSpotlight;
   heritage: Heritage;
@@ -537,6 +585,7 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'FEATURED_RTW', label: 'Featured RTW' },
   { key: 'FEATURED_CTW', label: 'Featured CTW' },
   { key: 'FEATURED_FTB', label: 'Featured FTB' },
+  { key: 'INSTANT_BUY', label: 'Instant Buy' },
   { key: 'FRESH_DROPS', label: 'Fresh Drops' },
   { key: 'DESIGNER_SPOTLIGHT', label: 'Designer Spotlight' },
   { key: 'HERITAGE', label: 'Heritage' },
@@ -1502,6 +1551,96 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       },
     ],
   },
+  instantBuy: {
+    rows: 1,
+    columns: 4,
+    featureCards: [
+      {
+        id: uid(),
+        categoryKey: 'FTB',
+        tag: 'READY TO WEAR',
+        title: 'FABRICS TO BUY',
+        description: 'The vibe: the raw DNA of African creativity, premium artisan fabrics sourced directly.',
+        ctaText: 'EXPLORE AFRICAN FABRICS',
+        ctaLink: '/fabricstobuy',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'FABRICS',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 12,
+        }),
+        image: '',
+        showBadge: false,
+        badgeText: 'NEW',
+        enabled: true,
+        displayOrder: 1,
+      },
+      {
+        id: uid(),
+        categoryKey: 'RTW',
+        tag: 'READY TO WEAR',
+        title: 'READY TO WEAR',
+        description: 'Modern convenience meets ancestral elegance for everyday wardrobes.',
+        ctaText: 'SHOP YOUR STYLE',
+        ctaLink: '/readytowear',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'READY_TO_WEAR',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 12,
+        }),
+        image: '',
+        showBadge: false,
+        badgeText: '',
+        enabled: true,
+        displayOrder: 3,
+      },
+    ],
+    productSlots: [
+      {
+        id: uid(),
+        categoryKey: 'FTB',
+        sourceMode: 'AUTO_RANDOM',
+        manualProductType: 'FABRIC',
+        manualProductId: '',
+        manualTitle: '',
+        manualSubtitle: '',
+        manualPrice: '',
+        manualImage: '',
+        manualHref: '',
+        randomPoolSize: 8,
+        slideIntervalMs: 5000,
+        showBadge: true,
+        badgeText: 'NEW',
+        enabled: true,
+        displayOrder: 2,
+      },
+      {
+        id: uid(),
+        categoryKey: 'RTW',
+        sourceMode: 'AUTO_RANDOM',
+        manualProductType: 'READY_TO_WEAR',
+        manualProductId: '',
+        manualTitle: '',
+        manualSubtitle: '',
+        manualPrice: '',
+        manualImage: '',
+        manualHref: '',
+        randomPoolSize: 8,
+        slideIntervalMs: 5000,
+        showBadge: false,
+        badgeText: '',
+        enabled: true,
+        displayOrder: 4,
+      },
+    ],
+  },
   freshDrops: {
     sourceMode: 'NEWLY_LISTED',
     listingAgeDays: 14,
@@ -1672,6 +1811,7 @@ type TabKey =
   | 'categoryManage'
   | 'textIconCards'
   | 'featured'
+  | 'instantBuy'
   | 'freshDrops'
   | 'designerSpotlight'
   | 'heritage'
@@ -1686,6 +1826,7 @@ const TAB_META: Array<{ key: TabKey; label: string }> = [
   { key: 'categoryManage', label: 'Category Manage' },
   { key: 'textIconCards', label: 'Text & Icon Cards' },
   { key: 'featured', label: 'Featured' },
+  { key: 'instantBuy', label: 'Instant Buy' },
   { key: 'freshDrops', label: 'Fresh Drops' },
   { key: 'designerSpotlight', label: 'Designer Spotlight' },
   { key: 'heritage', label: 'Heritage' },
@@ -1700,6 +1841,7 @@ const SUBMENU_TO_TAB: Record<string, TabKey> = {
   'category-manage': 'categoryManage',
   'text-icon-cards': 'textIconCards',
   featured: 'featured',
+  'instant-buy': 'instantBuy',
   'fresh-drops': 'freshDrops',
   'designer-spotlight': 'designerSpotlight',
   heritage: 'heritage',
@@ -1714,6 +1856,7 @@ const TAB_TO_SUBMENU: Record<TabKey, string> = {
   categoryManage: 'category-manage',
   textIconCards: 'text-icon-cards',
   featured: 'featured',
+  instantBuy: 'instant-buy',
   freshDrops: 'fresh-drops',
   designerSpotlight: 'designer-spotlight',
   heritage: 'heritage',
@@ -1729,6 +1872,7 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
   categoryManage: config.categoryManage,
   textIconCards: config.textIconCards,
   featured: config.featured,
+  instantBuy: config.instantBuy,
   freshDrops: config.freshDrops,
   designerSpotlight: {
     ...config.designerSpotlight,
@@ -1915,6 +2059,31 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
             ? 'PRODUCT_GROUP'
             : 'URL',
       ctaPageKey: String((item as FeaturedCard).ctaPageKey || ''),
+    })),
+  };
+  next.instantBuy = {
+    ...next.instantBuy,
+    rows: clamp(toNumber(String(next.instantBuy.rows || 1), 1), 1, 4),
+    columns: clamp(toNumber(String(next.instantBuy.columns || 4), 4), 1, 4),
+    featureCards: (Array.isArray(next.instantBuy.featureCards) ? next.instantBuy.featureCards : []).map((item) => ({
+      ...item,
+      categoryKey: String(item.categoryKey || '').trim().toUpperCase() === 'RTW' ? 'RTW' : 'FTB',
+      ctaMode: normalizeCtaMode(item.ctaMode, 'PAGE'),
+      ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
+      ctaLink:
+        normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
+          ? resolvePageHrefForKey(item.ctaPageKey, String(item.categoryKey || '').trim().toUpperCase() === 'RTW' ? '/readytowear' : '/fabricstobuy')
+          : normalizeManagerHref(item.ctaLink, String(item.categoryKey || '').trim().toUpperCase() === 'RTW' ? '/readytowear' : '/fabricstobuy'),
+      ctaStyle: normalizeCtaStyle(item.ctaStyle, createCtaStyle({ backgroundColor: 'transparent', textColor: '#ffffff', borderColor: 'transparent', borderWidth: 0, fontSize: 12 })),
+    })),
+    productSlots: (Array.isArray(next.instantBuy.productSlots) ? next.instantBuy.productSlots : []).map((item) => ({
+      ...item,
+      categoryKey: String(item.categoryKey || '').trim().toUpperCase() === 'RTW' ? 'RTW' : 'FTB',
+      sourceMode: String(item.sourceMode || '').trim().toUpperCase() === 'MANUAL' ? 'MANUAL' : 'AUTO_RANDOM',
+      manualProductType: String(item.manualProductType || '').trim().toUpperCase() === 'READY_TO_WEAR' ? 'READY_TO_WEAR' : 'FABRIC',
+      manualHref: normalizeManagerHref(item.manualHref, String(item.categoryKey || '').trim().toUpperCase() === 'RTW' ? '/readytowear' : '/fabricstobuy'),
+      randomPoolSize: clamp(toNumber(String(item.randomPoolSize || 8), 8), 1, 40),
+      slideIntervalMs: clamp(toNumber(String(item.slideIntervalMs || 5000), 5000), 1500, 30000),
     })),
   };
   next.heritage = {
@@ -2116,6 +2285,10 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     ...DEFAULT_CONFIG.featured,
     ...(data.featured || {}),
   };
+  const instantBuy = {
+    ...DEFAULT_CONFIG.instantBuy,
+    ...((data as any).instantBuy || {}),
+  };
   const designerSpotlight = {
     ...DEFAULT_CONFIG.designerSpotlight,
     ...(data.designerSpotlight || {}),
@@ -2123,6 +2296,8 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
   const fallbackHero = DEFAULT_CONFIG.topNavigations.heroBanners[0];
   const fallbackCategory = DEFAULT_CONFIG.categoryManage.sections[0];
   const fallbackFeatured = DEFAULT_CONFIG.featured.cards[0];
+  const fallbackInstantBuyFeatureCard = DEFAULT_CONFIG.instantBuy.featureCards[0];
+  const fallbackInstantBuyProductSlot = DEFAULT_CONFIG.instantBuy.productSlots[0];
   const fallbackSpotlight = DEFAULT_CONFIG.designerSpotlight.cards[0];
   const textIconCards = data.textIconCards as Partial<JenksV2FrontpageConfig['textIconCards']> | undefined;
   return {
@@ -2465,6 +2640,90 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             ctaStyle: normalizeCtaStyle((card as FeaturedCard)?.ctaStyle, fallbackFeatured.ctaStyle),
           }))
         : DEFAULT_CONFIG.featured.cards,
+    },
+    instantBuy: {
+      ...instantBuy,
+      rows: clamp(
+        Math.round(toNumber(String((instantBuy as InstantBuy | undefined)?.rows ?? DEFAULT_CONFIG.instantBuy.rows), DEFAULT_CONFIG.instantBuy.rows)),
+        1,
+        4
+      ),
+      columns: clamp(
+        Math.round(
+          toNumber(String((instantBuy as InstantBuy | undefined)?.columns ?? DEFAULT_CONFIG.instantBuy.columns), DEFAULT_CONFIG.instantBuy.columns)
+        ),
+        1,
+        4
+      ),
+      featureCards: Array.isArray((instantBuy as InstantBuy | undefined)?.featureCards)
+        ? (instantBuy as InstantBuy).featureCards
+            .map((card) => ({
+              ...fallbackInstantBuyFeatureCard,
+              ...card,
+              categoryKey: String((card as InstantBuyFeatureCard)?.categoryKey || '').trim().toUpperCase() === 'RTW' ? 'RTW' : 'FTB',
+              ctaMode: normalizeCtaMode((card as InstantBuyFeatureCard)?.ctaMode, fallbackInstantBuyFeatureCard.ctaMode),
+              ctaPageKey: ((): string => {
+                const explicit = String((card as InstantBuyFeatureCard)?.ctaPageKey || fallbackInstantBuyFeatureCard.ctaPageKey || '')
+                  .trim()
+                  .toUpperCase();
+                if (explicit) return explicit;
+                return String((card as InstantBuyFeatureCard)?.categoryKey || '').trim().toUpperCase() === 'RTW'
+                  ? 'READY_TO_WEAR'
+                  : 'FABRICS';
+              })(),
+              ctaLink:
+                normalizeCtaMode((card as InstantBuyFeatureCard)?.ctaMode, fallbackInstantBuyFeatureCard.ctaMode) === 'PAGE'
+                  ? resolvePageHrefForKey(
+                      (card as InstantBuyFeatureCard)?.ctaPageKey,
+                      String((card as InstantBuyFeatureCard)?.categoryKey || '').trim().toUpperCase() === 'RTW' ? '/readytowear' : '/fabricstobuy'
+                    )
+                  : normalizeManagerHref(
+                      (card as InstantBuyFeatureCard)?.ctaLink,
+                      String((card as InstantBuyFeatureCard)?.categoryKey || '').trim().toUpperCase() === 'RTW' ? '/readytowear' : '/fabricstobuy'
+                    ),
+              ctaStyle: normalizeCtaStyle((card as InstantBuyFeatureCard)?.ctaStyle, fallbackInstantBuyFeatureCard.ctaStyle),
+              showBadge: toBoolean((card as InstantBuyFeatureCard)?.showBadge, fallbackInstantBuyFeatureCard.showBadge),
+              enabled: toBoolean((card as InstantBuyFeatureCard)?.enabled, true),
+              displayOrder: clamp(toNumber(String((card as InstantBuyFeatureCard)?.displayOrder ?? 1), 1), 0, 999),
+            }))
+            .slice(0, 2)
+        : DEFAULT_CONFIG.instantBuy.featureCards,
+      productSlots: Array.isArray((instantBuy as InstantBuy | undefined)?.productSlots)
+        ? (instantBuy as InstantBuy).productSlots
+            .map((slot) => ({
+              ...fallbackInstantBuyProductSlot,
+              ...slot,
+              categoryKey: String((slot as InstantBuyProductSlot)?.categoryKey || '').trim().toUpperCase() === 'RTW' ? 'RTW' : 'FTB',
+              sourceMode: String((slot as InstantBuyProductSlot)?.sourceMode || '').trim().toUpperCase() === 'MANUAL' ? 'MANUAL' : 'AUTO_RANDOM',
+              manualProductType:
+                String((slot as InstantBuyProductSlot)?.manualProductType || '').trim().toUpperCase() === 'READY_TO_WEAR'
+                  ? 'READY_TO_WEAR'
+                  : 'FABRIC',
+              manualProductId: String((slot as InstantBuyProductSlot)?.manualProductId || ''),
+              manualTitle: String((slot as InstantBuyProductSlot)?.manualTitle || ''),
+              manualSubtitle: String((slot as InstantBuyProductSlot)?.manualSubtitle || ''),
+              manualPrice: String((slot as InstantBuyProductSlot)?.manualPrice || ''),
+              manualImage: String((slot as InstantBuyProductSlot)?.manualImage || ''),
+              manualHref: normalizeManagerHref(
+                (slot as InstantBuyProductSlot)?.manualHref,
+                String((slot as InstantBuyProductSlot)?.categoryKey || '').trim().toUpperCase() === 'RTW' ? '/readytowear' : '/fabricstobuy'
+              ),
+              randomPoolSize: clamp(
+                toNumber(String((slot as InstantBuyProductSlot)?.randomPoolSize ?? fallbackInstantBuyProductSlot.randomPoolSize), fallbackInstantBuyProductSlot.randomPoolSize),
+                1,
+                40
+              ),
+              slideIntervalMs: clamp(
+                toNumber(String((slot as InstantBuyProductSlot)?.slideIntervalMs ?? fallbackInstantBuyProductSlot.slideIntervalMs), fallbackInstantBuyProductSlot.slideIntervalMs),
+                1500,
+                30000
+              ),
+              showBadge: toBoolean((slot as InstantBuyProductSlot)?.showBadge, fallbackInstantBuyProductSlot.showBadge),
+              enabled: toBoolean((slot as InstantBuyProductSlot)?.enabled, true),
+              displayOrder: clamp(toNumber(String((slot as InstantBuyProductSlot)?.displayOrder ?? 1), 1), 0, 999),
+            }))
+            .slice(0, 2)
+        : DEFAULT_CONFIG.instantBuy.productSlots,
     },
     designerSpotlight: {
       ...designerSpotlight,
@@ -3061,6 +3320,8 @@ export default function JenksV2FrontPageManager() {
   const shopByCategoryImageUploadRef = useRef<HTMLInputElement | null>(null);
   const categoryManageImageUploadRef = useRef<HTMLInputElement | null>(null);
   const featuredImageUploadRef = useRef<HTMLInputElement | null>(null);
+  const instantBuyFeatureImageUploadRef = useRef<HTMLInputElement | null>(null);
+  const instantBuyProductImageUploadRef = useRef<HTMLInputElement | null>(null);
   const heritageImageUploadRef = useRef<HTMLInputElement | null>(null);
   const spotlightImageUploadRef = useRef<HTMLInputElement | null>(null);
 
@@ -3068,6 +3329,8 @@ export default function JenksV2FrontPageManager() {
   const [shopByCategoryUploadIndex, setShopByCategoryUploadIndex] = useState<number | null>(null);
   const [categoryManageUploadIndex, setCategoryManageUploadIndex] = useState<number | null>(null);
   const [featuredUploadIndex, setFeaturedUploadIndex] = useState<number | null>(null);
+  const [instantBuyFeatureUploadIndex, setInstantBuyFeatureUploadIndex] = useState<number | null>(null);
+  const [instantBuyProductUploadIndex, setInstantBuyProductUploadIndex] = useState<number | null>(null);
   const [spotlightUploadIndex, setSpotlightUploadIndex] = useState<number | null>(null);
 
   const updatedAtLabel = useMemo(() => {
@@ -3329,6 +3592,56 @@ export default function JenksV2FrontPageManager() {
       setError(uploadError?.message || 'Failed to upload featured image.');
     } finally {
       setFeaturedUploadIndex(null);
+      setUploadingTarget(null);
+      event.target.value = '';
+    }
+  };
+
+  const handleInstantBuyFeatureImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || instantBuyFeatureUploadIndex === null) return;
+    triggerUpload('instant-buy-feature');
+    try {
+      const url = await uploadImage(file);
+      setConfig((prev) => ({
+        ...prev,
+        instantBuy: {
+          ...prev.instantBuy,
+          featureCards: prev.instantBuy.featureCards.map((card, index) =>
+            index === instantBuyFeatureUploadIndex ? { ...card, image: url } : card
+          ),
+        },
+      }));
+      setSuccess('Instant Buy feature image uploaded.');
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload instant buy feature image.');
+    } finally {
+      setInstantBuyFeatureUploadIndex(null);
+      setUploadingTarget(null);
+      event.target.value = '';
+    }
+  };
+
+  const handleInstantBuyProductImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || instantBuyProductUploadIndex === null) return;
+    triggerUpload('instant-buy-product');
+    try {
+      const url = await uploadImage(file);
+      setConfig((prev) => ({
+        ...prev,
+        instantBuy: {
+          ...prev.instantBuy,
+          productSlots: prev.instantBuy.productSlots.map((slot, index) =>
+            index === instantBuyProductUploadIndex ? { ...slot, manualImage: url } : slot
+          ),
+        },
+      }));
+      setSuccess('Instant Buy manual product image uploaded.');
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload instant buy manual image.');
+    } finally {
+      setInstantBuyProductUploadIndex(null);
       setUploadingTarget(null);
       event.target.value = '';
     }
@@ -8375,6 +8688,727 @@ export default function JenksV2FrontPageManager() {
         </section>
       ) : null}
 
+      {activeTab === 'instantBuy' ? (
+        <section className="rounded-lg border bg-white p-5 space-y-4">
+          <h2 className="text-xl font-semibold">Instant Buy</h2>
+          <p className="text-sm text-gray-600">
+            Configure the 1x4 Instant Buy lane: two editorial feature cards and two product cards with random or manual product sources.
+          </p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <label className="text-xs">
+              Rows
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.instantBuy.rows}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    instantBuy: {
+                      ...prev.instantBuy,
+                      rows: clamp(toNumber(event.target.value, prev.instantBuy.rows), 1, 4),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Columns
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={config.instantBuy.columns}
+                onChange={(event) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    instantBuy: {
+                      ...prev.instantBuy,
+                      columns: clamp(toNumber(event.target.value, prev.instantBuy.columns), 1, 4),
+                    },
+                  }))
+                }
+              />
+            </label>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-gray-700">Feature Cards (Text + Image)</h3>
+            {config.instantBuy.featureCards.map((card, index) => (
+              <div key={card.id} className="space-y-3 rounded border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-gray-700">Feature Card #{index + 1}</p>
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={card.enabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Enabled
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <label className="text-xs">
+                    Category
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={card.categoryKey}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? {
+                                    ...entry,
+                                    categoryKey: event.target.value === 'RTW' ? 'RTW' : 'FTB',
+                                  }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <option value="FTB">FTB</option>
+                      <option value="RTW">RTW</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Display Order
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={card.displayOrder}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, displayOrder: clamp(toNumber(event.target.value, entry.displayOrder), 0, 999) }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <div className="text-xs">
+                    Image
+                    <div className="mt-1 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        isLoading={uploadingTarget === 'instant-buy-feature'}
+                        onClick={() => {
+                          setInstantBuyFeatureUploadIndex(index);
+                          instantBuyFeatureImageUploadRef.current?.click();
+                        }}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            instantBuy: {
+                              ...prev.instantBuy,
+                              featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, image: '' } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                  <label className="text-xs md:col-span-3">
+                    Tag
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={card.tag}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, tag: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs md:col-span-3">
+                    Title
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={card.title}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, title: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs md:col-span-3">
+                    Description
+                    <textarea
+                      rows={3}
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={card.description}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, description: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    CTA Mode
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={card.ctaMode}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, ctaMode: event.target.value === 'URL' ? 'URL' : 'PAGE' } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <option value="PAGE">PAGE</option>
+                      <option value="URL">URL</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    CTA Text
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={card.ctaText}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, ctaText: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  {card.ctaMode === 'PAGE' ? (
+                    <label className="text-xs">
+                      CTA Page
+                      <select
+                        className="mt-1 w-full rounded border px-2 py-1.5"
+                        value={String(card.ctaPageKey || '')}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            instantBuy: {
+                              ...prev.instantBuy,
+                              featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, ctaPageKey: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      >
+                        {pageRouteOptions.map((option) => (
+                          <option key={option.key} value={option.key}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <label className="text-xs">
+                      CTA URL
+                      <input
+                        className="mt-1 w-full rounded border px-2 py-1.5"
+                        value={card.ctaLink}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            instantBuy: {
+                              ...prev.instantBuy,
+                              featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, ctaLink: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                  )}
+                  <label className="text-xs md:col-span-3 inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={card.showBadge}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, showBadge: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Show Badge
+                  </label>
+                  {card.showBadge ? (
+                    <label className="text-xs md:col-span-3">
+                      Badge Text
+                      <input
+                        className="mt-1 w-full rounded border px-2 py-1.5"
+                        value={card.badgeText}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            instantBuy: {
+                              ...prev.instantBuy,
+                              featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, badgeText: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                  ) : null}
+                  <div className="md:col-span-3">
+                    {renderCtaStyleEditor(
+                      'CTA Style',
+                      card.ctaStyle,
+                      (nextStyle) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            featureCards: prev.instantBuy.featureCards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, ctaStyle: nextStyle } : entry
+                            ),
+                          },
+                        }))
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-500 break-all">Image: {card.image || 'No image uploaded'}</p>
+                <div className="rounded-md border bg-white p-2">
+                  {card.image ? (
+                    <img
+                      src={resolvePreviewUrl(card.image)}
+                      alt={`Instant Buy feature image preview ${index + 1}`}
+                      className="h-24 w-full rounded object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-24 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                      No feature image uploaded
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            <input
+              ref={instantBuyFeatureImageUploadRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleInstantBuyFeatureImageUpload}
+            />
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-gray-700">Product Slots (Auto Random or Manual)</h3>
+            {config.instantBuy.productSlots.map((slot, index) => (
+              <div key={slot.id} className="space-y-3 rounded border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-gray-700">Product Slot #{index + 1}</p>
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={slot.enabled}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, enabled: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Enabled
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <label className="text-xs">
+                    Category
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.categoryKey}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, categoryKey: event.target.value === 'RTW' ? 'RTW' : 'FTB' } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <option value="FTB">FTB</option>
+                      <option value="RTW">RTW</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Source Mode
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.sourceMode}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, sourceMode: event.target.value === 'MANUAL' ? 'MANUAL' : 'AUTO_RANDOM' }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <option value="AUTO_RANDOM">AUTO_RANDOM</option>
+                      <option value="MANUAL">MANUAL</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Display Order
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.displayOrder}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, displayOrder: clamp(toNumber(event.target.value, entry.displayOrder), 0, 999) }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Random Pool Size
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.randomPoolSize}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, randomPoolSize: clamp(toNumber(event.target.value, entry.randomPoolSize), 1, 40) }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Slide Interval (ms)
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.slideIntervalMs}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, slideIntervalMs: clamp(toNumber(event.target.value, entry.slideIntervalMs), 1500, 30000) }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Manual Product Type
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.manualProductType}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, manualProductType: event.target.value === 'READY_TO_WEAR' ? 'READY_TO_WEAR' : 'FABRIC' }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      <option value="FABRIC">FABRIC</option>
+                      <option value="READY_TO_WEAR">READY_TO_WEAR</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Manual Product ID
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.manualProductId}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, manualProductId: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs md:col-span-2">
+                    Manual Title
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.manualTitle}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, manualTitle: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs md:col-span-2">
+                    Manual Subtitle
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.manualSubtitle}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, manualSubtitle: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs">
+                    Manual Price
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.manualPrice}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, manualPrice: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs md:col-span-2">
+                    Manual Product Link
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1.5"
+                      value={slot.manualHref}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, manualHref: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                  <div className="text-xs">
+                    Manual Image
+                    <div className="mt-1 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        isLoading={uploadingTarget === 'instant-buy-product'}
+                        onClick={() => {
+                          setInstantBuyProductUploadIndex(index);
+                          instantBuyProductImageUploadRef.current?.click();
+                        }}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            instantBuy: {
+                              ...prev.instantBuy,
+                              productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, manualImage: '' } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                  <label className="text-xs md:col-span-4 inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={slot.showBadge}
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          instantBuy: {
+                            ...prev.instantBuy,
+                            productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, showBadge: event.target.checked } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                    Show Badge
+                  </label>
+                  {slot.showBadge ? (
+                    <label className="text-xs md:col-span-4">
+                      Badge Text
+                      <input
+                        className="mt-1 w-full rounded border px-2 py-1.5"
+                        value={slot.badgeText}
+                        onChange={(event) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            instantBuy: {
+                              ...prev.instantBuy,
+                              productSlots: prev.instantBuy.productSlots.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, badgeText: event.target.value } : entry
+                              ),
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                  ) : null}
+                </div>
+                <p className="text-[11px] text-gray-500 break-all">Manual Image: {slot.manualImage || 'No manual image uploaded'}</p>
+                <div className="rounded-md border bg-white p-2">
+                  {slot.manualImage ? (
+                    <img
+                      src={resolvePreviewUrl(slot.manualImage)}
+                      alt={`Instant Buy manual product preview ${index + 1}`}
+                      className="h-24 w-full rounded object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-24 items-center justify-center rounded border border-dashed text-xs text-gray-500">
+                      No manual image uploaded
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            <input
+              ref={instantBuyProductImageUploadRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleInstantBuyProductImageUpload}
+            />
+          </div>
+        </section>
+      ) : null}
+
       {activeTab === 'freshDrops' ? (
         <section className="rounded-lg border bg-white p-5 space-y-4">
           <h2 className="text-xl font-semibold">Fresh Drops</h2>
@@ -11065,6 +12099,7 @@ export default function JenksV2FrontPageManager() {
       activeTab === 'categoryManage' ||
       activeTab === 'textIconCards' ||
       activeTab === 'featured' ||
+      activeTab === 'instantBuy' ||
       activeTab === 'freshDrops' ||
       activeTab === 'designerSpotlight' ||
       activeTab === 'heritage' ||
