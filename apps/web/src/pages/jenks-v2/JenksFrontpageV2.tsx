@@ -3447,7 +3447,7 @@ export default function JenksFrontpageV2() {
         heroSlides.length > 0 && active ? (
           active.layoutMode === 'FULL' ? (
             <section
-              className={`relative flex ${HERO_HEIGHT_CLASS} items-end px-5 py-10 sm:px-8 lg:px-12 xl:px-16`}
+              className={`relative flex ${HERO_HEIGHT_CLASS} ${heroTextAlignClass} px-5 py-10 sm:px-8 lg:px-12 xl:px-16`}
               style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}
             >
               <BrandImageWithFallback
