@@ -449,6 +449,8 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/currency': ['currency:manage'],
       '/admin/products': ['products:manage'],
       '/admin/products/configuration': ['products:manage'],
+      '/admin/products/configuration/product-cards': ['products:manage'],
+      '/admin/products/configuration/detailed-product-view': ['products:manage'],
       '/admin/products/stock-list': ['products:manage'],
       '/admin/products/price-compare': ['products:manage'],
       '/admin/products/failed-ai-approvals': ['products:manage'],
@@ -646,7 +648,12 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Stock Level Analysis', href: '/admin/products/stock-list', icon: ChevronRight },
     { label: 'Product Price Compare', href: '/admin/products/price-compare', icon: ChevronRight },
     { label: 'Failed AI Approval', href: '/admin/products/failed-ai-approvals', icon: ChevronRight },
-    { label: 'Product Configuration', href: '/admin/products/configuration', icon: ChevronRight },
+    { label: 'Product Cards', href: '/admin/products/configuration/product-cards', icon: ChevronRight },
+    {
+      label: 'Detailed Product View',
+      href: '/admin/products/configuration/detailed-product-view',
+      icon: ChevronRight,
+    },
     { label: 'Product Labels', href: '/admin/product-labels', icon: ChevronRight },
     { label: 'Product Change Request', href: '/admin/product-change-requests', icon: ChevronRight },
   ];
@@ -959,18 +966,28 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
         entries,
         [
           {
+            label: 'Product Cards',
+            href: '/admin/products/configuration/product-cards',
+            keywords: ['product card', 'card manager', 'frontpage card', 'category card', 'ads card'],
+          },
+          {
+            label: 'Detailed Product View',
+            href: '/admin/products/configuration/detailed-product-view',
+            keywords: ['detailed product view', 'product detail page', 'detail typography', 'detail tabs'],
+          },
+          {
             label: 'Taxonomy Management',
-            href: '/admin/products/configuration',
+            href: '/admin/products/configuration/product-cards',
             keywords: ['product taxonomy', 'style', 'material type', 'category'],
           },
           {
             label: 'Designer Fabric Country Access',
-            href: '/admin/products/configuration',
+            href: '/admin/products/configuration/product-cards',
             keywords: ['designer fabric country access', 'country access', 'fabric access'],
           },
           {
             label: 'Designer Country Access Requests',
-            href: '/admin/products/configuration',
+            href: '/admin/products/configuration/product-cards',
             keywords: ['country access requests', 'approve designer country'],
           },
         ],
@@ -1472,6 +1489,8 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                 const productMenuActive =
                   location.pathname === '/admin/products' ||
                   location.pathname === '/admin/products/configuration' ||
+                  location.pathname === '/admin/products/configuration/product-cards' ||
+                  location.pathname === '/admin/products/configuration/detailed-product-view' ||
                   location.pathname === '/admin/products/stock-list' ||
                   location.pathname === '/admin/products/price-compare' ||
                   location.pathname === '/admin/products/failed-ai-approvals' ||

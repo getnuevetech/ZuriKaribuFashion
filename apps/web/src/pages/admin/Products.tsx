@@ -94,6 +94,261 @@ interface DesignerFabricCountryAccessRequestRow {
   homeCountry?: string;
 }
 
+type ProductViewPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+type ProductCardFieldKey = 'DESIGNER_NAME' | 'PRODUCT_NAME' | 'SHORT_DESCRIPTION' | 'PRICE';
+type DetailTabKey = 'DETAILS' | 'SPECS' | 'REVIEWS';
+type ProductConfigurationSubview = 'PRODUCT_CARDS' | 'DETAILED_PRODUCT_VIEW';
+
+type ProductCardManagerSettings = {
+  imageEnabled: boolean;
+  fieldOrder: ProductCardFieldKey[];
+  imageAspectRatio: '3:4' | '1:1';
+  textGap: number;
+  contentPaddingX: number;
+  contentPaddingY: number;
+  designerNameEnabled: boolean;
+  designerNameFontSize: number;
+  designerNameColor: string;
+  productNameEnabled: boolean;
+  productNameFontSize: number;
+  productNameColor: string;
+  shortDescriptionEnabled: boolean;
+  shortDescriptionFontSize: number;
+  shortDescriptionColor: string;
+  shortDescriptionWordLimit: number;
+  priceEnabled: boolean;
+  priceFontSize: number;
+  priceColor: string;
+  labelEnabled: boolean;
+  labelFontSize: number;
+  labelTextColor: string;
+  labelBackgroundColor: string;
+  likesEnabled: boolean;
+  likesSize: number;
+  likesColor: string;
+  likesActiveColor: string;
+  countryIconEnabled: boolean;
+  countryIconSize: number;
+};
+
+type DetailViewManagerSettings = {
+  titleFontSize: number;
+  titleColor: string;
+  ownerFontSize: number;
+  ownerColor: string;
+  priceLabelColor: string;
+  priceValueFontSize: number;
+  priceValueColor: string;
+  descriptionFontSize: number;
+  descriptionColor: string;
+  specLabelColor: string;
+  specValueColor: string;
+  tabOrder: DetailTabKey[];
+  defaultTab: DetailTabKey;
+  reviewsEnabled: boolean;
+  discoverEnabled: boolean;
+  likesEnabled: boolean;
+};
+
+type ProductViewManagerSettings = {
+  productCard: ProductCardManagerSettings;
+  detailView: DetailViewManagerSettings;
+};
+
+const PRODUCT_VIEW_PAGE_TABS: Array<{ key: ProductViewPageType; label: string; hint: string }> = [
+  { key: 'READY_TO_WEAR', label: 'RTW', hint: 'Ready To Wear product card/detail settings' },
+  { key: 'FABRIC_TO_BUY', label: 'FTB', hint: 'Fabrics To Buy product card/detail settings' },
+  { key: 'CUSTOM_TO_WEAR', label: 'CTW', hint: 'Custom To Wear product card/detail settings' },
+];
+
+const PRODUCT_CONFIGURATION_SUBMENU: Array<{
+  key: ProductConfigurationSubview;
+  label: string;
+  href: string;
+  hint: string;
+}> = [
+  {
+    key: 'PRODUCT_CARDS',
+    label: 'Product Cards',
+    href: '/admin/products/configuration/product-cards',
+    hint: 'Manage minimal product card fields and overlays',
+  },
+  {
+    key: 'DETAILED_PRODUCT_VIEW',
+    label: 'Detailed Product View',
+    href: '/admin/products/configuration/detailed-product-view',
+    hint: 'Manage full product detail page typography and visibility',
+  },
+];
+
+const PRODUCT_CARD_FIELDS: Array<{ key: ProductCardFieldKey; label: string }> = [
+  { key: 'DESIGNER_NAME', label: 'Designer Name' },
+  { key: 'PRODUCT_NAME', label: 'Product Name' },
+  { key: 'SHORT_DESCRIPTION', label: 'Short Description' },
+  { key: 'PRICE', label: 'Price' },
+];
+
+const DETAIL_TABS: DetailTabKey[] = ['DETAILS', 'SPECS', 'REVIEWS'];
+
+const DEFAULT_PRODUCT_CARD_MANAGER_SETTINGS: ProductCardManagerSettings = {
+  imageEnabled: true,
+  fieldOrder: ['DESIGNER_NAME', 'PRODUCT_NAME', 'SHORT_DESCRIPTION', 'PRICE'],
+  imageAspectRatio: '3:4',
+  textGap: 6,
+  contentPaddingX: 16,
+  contentPaddingY: 16,
+  designerNameEnabled: true,
+  designerNameFontSize: 14,
+  designerNameColor: '#6b7280',
+  productNameEnabled: true,
+  productNameFontSize: 16,
+  productNameColor: '#111827',
+  shortDescriptionEnabled: true,
+  shortDescriptionFontSize: 13,
+  shortDescriptionColor: '#4b5563',
+  shortDescriptionWordLimit: 10,
+  priceEnabled: true,
+  priceFontSize: 14,
+  priceColor: '#e66045',
+  labelEnabled: true,
+  labelFontSize: 11,
+  labelTextColor: '#ffffff',
+  labelBackgroundColor: 'rgba(17, 17, 17, 0.75)',
+  likesEnabled: true,
+  likesSize: 18,
+  likesColor: '#ffffff',
+  likesActiveColor: '#ef4444',
+  countryIconEnabled: true,
+  countryIconSize: 24,
+};
+
+const DEFAULT_DETAIL_VIEW_MANAGER_SETTINGS: DetailViewManagerSettings = {
+  titleFontSize: 64,
+  titleColor: '#1A1A1A',
+  ownerFontSize: 16,
+  ownerColor: '#6B6B6B',
+  priceLabelColor: '#6B6B6B',
+  priceValueFontSize: 36,
+  priceValueColor: '#E85A3C',
+  descriptionFontSize: 14,
+  descriptionColor: '#2f2d29',
+  specLabelColor: '#6B6B6B',
+  specValueColor: '#1A1A1A',
+  tabOrder: ['DETAILS', 'SPECS', 'REVIEWS'],
+  defaultTab: 'DETAILS',
+  reviewsEnabled: true,
+  discoverEnabled: true,
+  likesEnabled: true,
+};
+
+const DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS: ProductViewManagerSettings = {
+  productCard: { ...DEFAULT_PRODUCT_CARD_MANAGER_SETTINGS },
+  detailView: { ...DEFAULT_DETAIL_VIEW_MANAGER_SETTINGS },
+};
+
+const cloneDefaultProductViewManagerSettings = (): ProductViewManagerSettings => ({
+  productCard: { ...DEFAULT_PRODUCT_CARD_MANAGER_SETTINGS },
+  detailView: { ...DEFAULT_DETAIL_VIEW_MANAGER_SETTINGS },
+});
+
+const createInitialProductViewSettingsByType = (): Record<ProductViewPageType, ProductViewManagerSettings> => ({
+  READY_TO_WEAR: cloneDefaultProductViewManagerSettings(),
+  FABRIC_TO_BUY: cloneDefaultProductViewManagerSettings(),
+  CUSTOM_TO_WEAR: cloneDefaultProductViewManagerSettings(),
+});
+
+const clamp = (value: unknown, fallback: number, min: number, max: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
+};
+
+const normalizeCardFieldOrder = (value: unknown): ProductCardFieldKey[] => {
+  const source = Array.isArray(value)
+    ? value.map((entry) => String(typeof entry === 'string' ? entry : (entry as any)?.key || '').trim().toUpperCase())
+    : [];
+  const next: ProductCardFieldKey[] = [];
+  source.forEach((entry) => {
+    if (!PRODUCT_CARD_FIELDS.some((row) => row.key === entry)) return;
+    if (!next.includes(entry as ProductCardFieldKey)) next.push(entry as ProductCardFieldKey);
+  });
+  PRODUCT_CARD_FIELDS.forEach((row) => {
+    if (!next.includes(row.key)) next.push(row.key);
+  });
+  return next;
+};
+
+const normalizeDetailTabOrder = (value: unknown): DetailTabKey[] => {
+  const source = Array.isArray(value) ? value.map((entry) => String(entry || '').trim().toUpperCase()) : [];
+  const next: DetailTabKey[] = [];
+  source.forEach((entry) => {
+    if (!DETAIL_TABS.includes(entry as DetailTabKey)) return;
+    if (!next.includes(entry as DetailTabKey)) next.push(entry as DetailTabKey);
+  });
+  DETAIL_TABS.forEach((tab) => {
+    if (!next.includes(tab)) next.push(tab);
+  });
+  return next;
+};
+
+const normalizeProductViewManagerSettings = (raw: any): ProductViewManagerSettings => {
+  const productCardRaw = raw?.productCard || {};
+  const detailRaw = raw?.detailView || {};
+  const tabOrder = normalizeDetailTabOrder(detailRaw?.tabOrder);
+  const defaultTabRaw = String(detailRaw?.defaultTab || '').trim().toUpperCase() as DetailTabKey;
+  return {
+    productCard: {
+      imageEnabled: productCardRaw?.imageEnabled !== false,
+      fieldOrder: normalizeCardFieldOrder(productCardRaw?.fieldOrder),
+      imageAspectRatio: String(productCardRaw?.imageAspectRatio || '3:4') === '1:1' ? '1:1' : '3:4',
+      textGap: clamp(productCardRaw?.textGap, 6, 0, 24),
+      contentPaddingX: clamp(productCardRaw?.contentPaddingX, 16, 0, 40),
+      contentPaddingY: clamp(productCardRaw?.contentPaddingY, 16, 0, 40),
+      designerNameEnabled: productCardRaw?.designerNameEnabled !== false,
+      designerNameFontSize: clamp(productCardRaw?.designerNameFontSize, 14, 8, 72),
+      designerNameColor: String(productCardRaw?.designerNameColor || '#6b7280'),
+      productNameEnabled: productCardRaw?.productNameEnabled !== false,
+      productNameFontSize: clamp(productCardRaw?.productNameFontSize, 16, 8, 72),
+      productNameColor: String(productCardRaw?.productNameColor || '#111827'),
+      shortDescriptionEnabled: productCardRaw?.shortDescriptionEnabled !== false,
+      shortDescriptionFontSize: clamp(productCardRaw?.shortDescriptionFontSize, 13, 8, 72),
+      shortDescriptionColor: String(productCardRaw?.shortDescriptionColor || '#4b5563'),
+      shortDescriptionWordLimit: clamp(productCardRaw?.shortDescriptionWordLimit, 10, 4, 24),
+      priceEnabled: productCardRaw?.priceEnabled !== false,
+      priceFontSize: clamp(productCardRaw?.priceFontSize, 14, 8, 72),
+      priceColor: String(productCardRaw?.priceColor || '#e66045'),
+      labelEnabled: productCardRaw?.labelEnabled !== false,
+      labelFontSize: clamp(productCardRaw?.labelFontSize, 11, 8, 72),
+      labelTextColor: String(productCardRaw?.labelTextColor || '#ffffff'),
+      labelBackgroundColor: String(productCardRaw?.labelBackgroundColor || 'rgba(17, 17, 17, 0.75)'),
+      likesEnabled: productCardRaw?.likesEnabled !== false,
+      likesSize: clamp(productCardRaw?.likesSize, 18, 8, 72),
+      likesColor: String(productCardRaw?.likesColor || '#ffffff'),
+      likesActiveColor: String(productCardRaw?.likesActiveColor || '#ef4444'),
+      countryIconEnabled: productCardRaw?.countryIconEnabled !== false,
+      countryIconSize: clamp(productCardRaw?.countryIconSize, 24, 8, 96),
+    },
+    detailView: {
+      titleFontSize: clamp(detailRaw?.titleFontSize, 64, 18, 96),
+      titleColor: String(detailRaw?.titleColor || '#1A1A1A'),
+      ownerFontSize: clamp(detailRaw?.ownerFontSize, 16, 10, 42),
+      ownerColor: String(detailRaw?.ownerColor || '#6B6B6B'),
+      priceLabelColor: String(detailRaw?.priceLabelColor || '#6B6B6B'),
+      priceValueFontSize: clamp(detailRaw?.priceValueFontSize, 36, 18, 96),
+      priceValueColor: String(detailRaw?.priceValueColor || '#E85A3C'),
+      descriptionFontSize: clamp(detailRaw?.descriptionFontSize, 14, 12, 36),
+      descriptionColor: String(detailRaw?.descriptionColor || '#2f2d29'),
+      specLabelColor: String(detailRaw?.specLabelColor || '#6B6B6B'),
+      specValueColor: String(detailRaw?.specValueColor || '#1A1A1A'),
+      tabOrder,
+      defaultTab: tabOrder.includes(defaultTabRaw) ? defaultTabRaw : tabOrder[0],
+      reviewsEnabled: detailRaw?.reviewsEnabled !== false,
+      discoverEnabled: detailRaw?.discoverEnabled !== false,
+      likesEnabled: detailRaw?.likesEnabled !== false,
+    },
+  };
+};
+
 const STATIC_COUNTRIES = getCountryOptions().map((entry) => String(entry.name || '').trim()).filter(Boolean);
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
 const LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS = [' / ', '/', '|'] as const;
@@ -139,7 +394,12 @@ const normalizeImageUrlList = (input: unknown): string[] =>
 
 export default function AdminProducts() {
   const location = useLocation();
-  const isConfigurationView = location.pathname === '/admin/products/configuration';
+  const isConfigurationView = location.pathname.startsWith('/admin/products/configuration');
+  const activeProductConfigurationSubview: ProductConfigurationSubview = location.pathname.includes(
+    '/admin/products/configuration/detailed-product-view'
+  )
+    ? 'DETAILED_PRODUCT_VIEW'
+    : 'PRODUCT_CARDS';
   const [products, setProducts] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(40);
@@ -195,6 +455,18 @@ export default function AdminProducts() {
   const [designerFabricAccessRequestLimit] = useState(20);
   const [designerFabricAccessRequestTotalPages, setDesignerFabricAccessRequestTotalPages] = useState(1);
   const [designerFabricAccessRequestTotal, setDesignerFabricAccessRequestTotal] = useState(0);
+  const [activeProductViewPage, setActiveProductViewPage] = useState<ProductViewPageType>('READY_TO_WEAR');
+  const [productViewSettingsByType, setProductViewSettingsByType] = useState<
+    Record<ProductViewPageType, ProductViewManagerSettings>
+  >({
+    READY_TO_WEAR: normalizeProductViewManagerSettings(DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS),
+    FABRIC_TO_BUY: normalizeProductViewManagerSettings(DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS),
+    CUSTOM_TO_WEAR: normalizeProductViewManagerSettings(DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS),
+  });
+  const [productViewLoading, setProductViewLoading] = useState(false);
+  const [productViewSaving, setProductViewSaving] = useState(false);
+  const [productViewMessage, setProductViewMessage] = useState('');
+  const [productViewMessageType, setProductViewMessageType] = useState<'success' | 'error'>('success');
   const [minReadyVariantStock, setMinReadyVariantStock] = useState(2);
   const [form, setForm] = useState({
     type: 'FABRIC' as 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR',
@@ -282,7 +554,16 @@ export default function AdminProducts() {
   useEffect(() => {
     void fetchOptions();
     void fetchDesignerFabricAccess();
+    if (isConfigurationView) {
+      void fetchProductViewManagerSettings(activeProductViewPage);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isConfigurationView) return;
+    void fetchProductViewManagerSettings(activeProductViewPage);
+  }, [activeProductViewPage, isConfigurationView]);
 
   useEffect(() => {
     void fetchDesignerFabricAccessRequests();
@@ -570,6 +851,461 @@ export default function AdminProducts() {
     if (readySizesSettingsResult.status === 'fulfilled' && readySizesSettingsResult.value.success) {
       setMinReadyVariantStock(Math.max(2, Math.floor(Number(readySizesSettingsResult.value.data?.minVariantStock || 2))));
     }
+  };
+
+  const fetchProductViewManagerSettings = async (pageType: ProductViewPageType) => {
+    try {
+      setProductViewLoading(true);
+      const response = await api.admin.getCategoryPageSettings(pageType);
+      const runtime = response?.data || {};
+      const normalized = normalizeProductViewManagerSettings(runtime?.settings || {});
+      setProductViewSettingsByType((prev) => ({
+        ...prev,
+        [pageType]: normalized,
+      }));
+      setProductViewMessage('');
+    } catch (loadError) {
+      console.error('Failed to load product view manager settings:', loadError);
+      setProductViewMessageType('error');
+      setProductViewMessage('Unable to load Product Card/Detailed Product View settings.');
+      setProductViewSettingsByType((prev) => ({
+        ...prev,
+        [pageType]: normalizeProductViewManagerSettings(DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS),
+      }));
+    } finally {
+      setProductViewLoading(false);
+    }
+  };
+
+  const saveProductViewManager = async () => {
+    const payload = productViewSettingsByType[activeProductViewPage] || DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS;
+    const normalized = normalizeProductViewManagerSettings(payload);
+    const fieldOrderWithFallback = normalizeCardFieldOrder(normalized.productCard.fieldOrder);
+    const detailTabOrderWithFallback = normalizeDetailTabOrder(normalized.detailView.tabOrder);
+    try {
+      setProductViewSaving(true);
+      setProductViewMessage('');
+      await api.admin.updateCategoryPageSettings(activeProductViewPage, {
+        productCard: {
+          imageEnabled: normalized.productCard.imageEnabled !== false,
+          fieldOrder: fieldOrderWithFallback,
+          imageAspectRatio: normalized.productCard.imageAspectRatio === '1:1' ? '1:1' : '3:4',
+          textGap: clamp(normalized.productCard.textGap, 6, 0, 24),
+          contentPaddingX: clamp(normalized.productCard.contentPaddingX, 16, 0, 40),
+          contentPaddingY: clamp(normalized.productCard.contentPaddingY, 16, 0, 40),
+          designerNameEnabled: normalized.productCard.designerNameEnabled !== false,
+          designerNameFontSize: clamp(normalized.productCard.designerNameFontSize, 14, 8, 72),
+          designerNameColor: String(normalized.productCard.designerNameColor || '#6b7280'),
+          productNameEnabled: normalized.productCard.productNameEnabled !== false,
+          productNameFontSize: clamp(normalized.productCard.productNameFontSize, 16, 8, 72),
+          productNameColor: String(normalized.productCard.productNameColor || '#111827'),
+          shortDescriptionEnabled: normalized.productCard.shortDescriptionEnabled !== false,
+          shortDescriptionFontSize: clamp(normalized.productCard.shortDescriptionFontSize, 13, 8, 72),
+          shortDescriptionColor: String(normalized.productCard.shortDescriptionColor || '#4b5563'),
+          shortDescriptionWordLimit: clamp(normalized.productCard.shortDescriptionWordLimit, 10, 4, 24),
+          priceEnabled: normalized.productCard.priceEnabled !== false,
+          priceFontSize: clamp(normalized.productCard.priceFontSize, 14, 8, 72),
+          priceColor: String(normalized.productCard.priceColor || '#e66045'),
+          labelEnabled: normalized.productCard.labelEnabled !== false,
+          labelFontSize: clamp(normalized.productCard.labelFontSize, 11, 8, 72),
+          labelTextColor: String(normalized.productCard.labelTextColor || '#ffffff'),
+          labelBackgroundColor: String(normalized.productCard.labelBackgroundColor || 'rgba(17, 17, 17, 0.75)'),
+          labelPosition: 'TOP_LEFT',
+          likesEnabled: normalized.productCard.likesEnabled !== false,
+          likesSize: clamp(normalized.productCard.likesSize, 18, 8, 72),
+          likesColor: String(normalized.productCard.likesColor || '#ffffff'),
+          likesActiveColor: String(normalized.productCard.likesActiveColor || '#ef4444'),
+          likesPosition: 'TOP_RIGHT',
+          countryIconEnabled: normalized.productCard.countryIconEnabled !== false,
+          countryIconSize: clamp(normalized.productCard.countryIconSize, 24, 8, 96),
+          countryIconPosition: 'BOTTOM_RIGHT',
+        },
+        detailView: {
+          titleFontSize: clamp(normalized.detailView.titleFontSize, 64, 18, 96),
+          titleColor: String(normalized.detailView.titleColor || '#1A1A1A'),
+          ownerFontSize: clamp(normalized.detailView.ownerFontSize, 16, 10, 42),
+          ownerColor: String(normalized.detailView.ownerColor || '#6B6B6B'),
+          priceLabelColor: String(normalized.detailView.priceLabelColor || '#6B6B6B'),
+          priceValueFontSize: clamp(normalized.detailView.priceValueFontSize, 36, 18, 96),
+          priceValueColor: String(normalized.detailView.priceValueColor || '#E85A3C'),
+          descriptionFontSize: clamp(normalized.detailView.descriptionFontSize, 14, 12, 36),
+          descriptionColor: String(normalized.detailView.descriptionColor || '#2f2d29'),
+          specLabelColor: String(normalized.detailView.specLabelColor || '#6B6B6B'),
+          specValueColor: String(normalized.detailView.specValueColor || '#1A1A1A'),
+          tabOrder: detailTabOrderWithFallback,
+          defaultTab: detailTabOrderWithFallback.includes(normalized.detailView.defaultTab)
+            ? normalized.detailView.defaultTab
+            : detailTabOrderWithFallback[0],
+          reviewsEnabled: normalized.detailView.reviewsEnabled !== false,
+          discoverEnabled: normalized.detailView.discoverEnabled !== false,
+          likesEnabled: normalized.detailView.likesEnabled !== false,
+        },
+      });
+      setProductViewSettingsByType((prev) => ({
+        ...prev,
+        [activeProductViewPage]: normalized,
+      }));
+      setProductViewMessageType('success');
+      setProductViewMessage('Product Card and Detailed Product View settings saved.');
+    } catch (saveError) {
+      console.error('Failed to save product view manager settings:', saveError);
+      setProductViewMessageType('error');
+      setProductViewMessage(formatApiError(saveError, 'Unable to save Product Card/Detailed Product View settings.'));
+    } finally {
+      setProductViewSaving(false);
+    }
+  };
+
+  const renderProductViewManager = (activeSubview: ProductConfigurationSubview) => {
+    const runtime = productViewSettingsByType[activeProductViewPage] || DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS;
+    const card = runtime.productCard;
+    const detail = runtime.detailView;
+    const showProductCardManager = activeSubview === 'PRODUCT_CARDS';
+    const showDetailViewManager = activeSubview === 'DETAILED_PRODUCT_VIEW';
+
+    const setProductCardPatch = (patch: Partial<ProductCardManagerSettings>) => {
+      setProductViewSettingsByType((prev) => {
+        const current = prev[activeProductViewPage] || DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS;
+        return {
+          ...prev,
+          [activeProductViewPage]: {
+            ...current,
+            productCard: {
+              ...current.productCard,
+              ...patch,
+            },
+          },
+        };
+      });
+    };
+
+    const setDetailPatch = (patch: Partial<DetailViewManagerSettings>) => {
+      setProductViewSettingsByType((prev) => {
+        const current = prev[activeProductViewPage] || DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS;
+        return {
+          ...prev,
+          [activeProductViewPage]: {
+            ...current,
+            detailView: {
+              ...current.detailView,
+              ...patch,
+            },
+          },
+        };
+      });
+    };
+
+    return (
+      <div className="space-y-4">
+        {showProductCardManager ? (
+        <div className="rounded-lg border p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-900">Product Card Manager</p>
+            {productViewLoading ? <span className="text-xs text-gray-500">Loading...</span> : null}
+          </div>
+          <p className="mb-3 text-xs text-gray-500">
+            Controls Product Card display for frontpage/category/smaller placements and ads.
+          </p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={card.imageEnabled !== false}
+                onChange={(event) => setProductCardPatch({ imageEnabled: event.target.checked })}
+              />
+              Product image enabled
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={card.labelEnabled !== false}
+                onChange={(event) => setProductCardPatch({ labelEnabled: event.target.checked })}
+              />
+              Product label enabled (top-left)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={card.likesEnabled !== false}
+                onChange={(event) => setProductCardPatch({ likesEnabled: event.target.checked })}
+              />
+              Likes icon enabled (top-right)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={card.countryIconEnabled !== false}
+                onChange={(event) => setProductCardPatch({ countryIconEnabled: event.target.checked })}
+              />
+              Country icon enabled (bottom-right)
+            </label>
+            <label className="text-xs text-gray-700">
+              Image aspect ratio
+              <select
+                value={card.imageAspectRatio}
+                onChange={(event) =>
+                  setProductCardPatch({
+                    imageAspectRatio: event.target.value === '1:1' ? '1:1' : '3:4',
+                  })
+                }
+                className="mt-1 w-full rounded border px-2 py-1.5 text-xs"
+              >
+                <option value="3:4">3:4</option>
+                <option value="1:1">1:1</option>
+              </select>
+            </label>
+            <label className="text-xs text-gray-700">
+              Short description word limit
+              <input
+                type="number"
+                min={4}
+                max={24}
+                value={card.shortDescriptionWordLimit}
+                onChange={(event) =>
+                  setProductCardPatch({
+                    shortDescriptionWordLimit: clamp(event.target.value, card.shortDescriptionWordLimit, 4, 24),
+                  })
+                }
+                className="mt-1 w-full rounded border px-2 py-1.5 text-xs"
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+            {PRODUCT_CARD_FIELDS.map((field) => {
+              const fieldEnabledKey =
+                field.key === 'DESIGNER_NAME'
+                  ? 'designerNameEnabled'
+                  : field.key === 'PRODUCT_NAME'
+                    ? 'productNameEnabled'
+                    : field.key === 'SHORT_DESCRIPTION'
+                      ? 'shortDescriptionEnabled'
+                      : 'priceEnabled';
+              const fieldFontSizeKey =
+                field.key === 'DESIGNER_NAME'
+                  ? 'designerNameFontSize'
+                  : field.key === 'PRODUCT_NAME'
+                    ? 'productNameFontSize'
+                    : field.key === 'SHORT_DESCRIPTION'
+                      ? 'shortDescriptionFontSize'
+                      : 'priceFontSize';
+              const fieldColorKey =
+                field.key === 'DESIGNER_NAME'
+                  ? 'designerNameColor'
+                  : field.key === 'PRODUCT_NAME'
+                    ? 'productNameColor'
+                    : field.key === 'SHORT_DESCRIPTION'
+                      ? 'shortDescriptionColor'
+                      : 'priceColor';
+              const order = Math.max(1, card.fieldOrder.indexOf(field.key) + 1);
+              return (
+                <div key={field.key} className="rounded border p-2">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-xs font-medium text-gray-800">{field.label}</p>
+                    <label className="flex items-center gap-1 text-[11px] text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={Boolean((card as any)[fieldEnabledKey])}
+                        onChange={(event) => setProductCardPatch({ [fieldEnabledKey]: event.target.checked } as any)}
+                      />
+                      enabled
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-[11px] text-gray-700">
+                      Order
+                      <input
+                        type="number"
+                        min={1}
+                        max={4}
+                        value={order}
+                        onChange={(event) => {
+                          const target = clamp(event.target.value, order, 1, PRODUCT_CARD_FIELDS.length);
+                          const ordered = [...normalizeCardFieldOrder(card.fieldOrder)];
+                          const currentIndex = ordered.indexOf(field.key);
+                          if (currentIndex < 0) return;
+                          ordered.splice(currentIndex, 1);
+                          ordered.splice(target - 1, 0, field.key);
+                          setProductCardPatch({ fieldOrder: normalizeCardFieldOrder(ordered) });
+                        }}
+                        className="mt-1 w-full rounded border px-2 py-1 text-[11px]"
+                      />
+                    </label>
+                    <label className="text-[11px] text-gray-700">
+                      Size
+                      <input
+                        type="number"
+                        min={8}
+                        max={72}
+                        value={Number((card as any)[fieldFontSizeKey] || 14)}
+                        onChange={(event) =>
+                          setProductCardPatch({
+                            [fieldFontSizeKey]: clamp(event.target.value, Number((card as any)[fieldFontSizeKey] || 14), 8, 72),
+                          } as any)
+                        }
+                        className="mt-1 w-full rounded border px-2 py-1 text-[11px]"
+                      />
+                    </label>
+                    <label className="text-[11px] text-gray-700">
+                      Color
+                      <input
+                        value={String((card as any)[fieldColorKey] || '')}
+                        onChange={(event) => setProductCardPatch({ [fieldColorKey]: event.target.value } as any)}
+                        className="mt-1 w-full rounded border px-2 py-1 text-[11px]"
+                      />
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        ) : null}
+
+        {showDetailViewManager ? (
+        <div className="rounded-lg border p-3">
+          <p className="mb-2 text-sm font-semibold text-gray-900">Detailed Product View Manager</p>
+          <p className="mb-3 text-xs text-gray-500">
+            Controls full product details page typography, tab ordering, and visibility.
+          </p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <label className="text-xs text-gray-700">
+              Title font size
+              <input
+                type="number"
+                min={18}
+                max={96}
+                value={detail.titleFontSize}
+                onChange={(event) => setDetailPatch({ titleFontSize: clamp(event.target.value, detail.titleFontSize, 18, 96) })}
+                className="mt-1 w-full rounded border px-2 py-1.5 text-xs"
+              />
+            </label>
+            <label className="text-xs text-gray-700">
+              Title color
+              <input
+                value={detail.titleColor}
+                onChange={(event) => setDetailPatch({ titleColor: event.target.value })}
+                className="mt-1 w-full rounded border px-2 py-1.5 text-xs"
+              />
+            </label>
+            <label className="text-xs text-gray-700">
+              Price value font size
+              <input
+                type="number"
+                min={18}
+                max={96}
+                value={detail.priceValueFontSize}
+                onChange={(event) =>
+                  setDetailPatch({ priceValueFontSize: clamp(event.target.value, detail.priceValueFontSize, 18, 96) })
+                }
+                className="mt-1 w-full rounded border px-2 py-1.5 text-xs"
+              />
+            </label>
+            <label className="text-xs text-gray-700">
+              Price value color
+              <input
+                value={detail.priceValueColor}
+                onChange={(event) => setDetailPatch({ priceValueColor: event.target.value })}
+                className="mt-1 w-full rounded border px-2 py-1.5 text-xs"
+              />
+            </label>
+            <label className="text-xs text-gray-700">
+              Description size
+              <input
+                type="number"
+                min={12}
+                max={36}
+                value={detail.descriptionFontSize}
+                onChange={(event) =>
+                  setDetailPatch({ descriptionFontSize: clamp(event.target.value, detail.descriptionFontSize, 12, 36) })
+                }
+                className="mt-1 w-full rounded border px-2 py-1.5 text-xs"
+              />
+            </label>
+            <label className="text-xs text-gray-700">
+              Description color
+              <input
+                value={detail.descriptionColor}
+                onChange={(event) => setDetailPatch({ descriptionColor: event.target.value })}
+                className="mt-1 w-full rounded border px-2 py-1.5 text-xs"
+              />
+            </label>
+            <label className="text-xs text-gray-700">
+              Default tab
+              <select
+                value={detail.defaultTab}
+                onChange={(event) => {
+                  const tab = String(event.target.value || 'DETAILS').trim().toUpperCase() as DetailTabKey;
+                  setDetailPatch({ defaultTab: DETAIL_TABS.includes(tab) ? tab : 'DETAILS' });
+                }}
+                className="mt-1 w-full rounded border px-2 py-1.5 text-xs"
+              >
+                {DETAIL_TABS.map((tab) => (
+                  <option key={tab} value={tab}>
+                    {tab}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={detail.reviewsEnabled !== false}
+                onChange={(event) => setDetailPatch({ reviewsEnabled: event.target.checked })}
+              />
+              Reviews enabled
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={detail.discoverEnabled !== false}
+                onChange={(event) => setDetailPatch({ discoverEnabled: event.target.checked })}
+              />
+              Discover products enabled
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={detail.likesEnabled !== false}
+                onChange={(event) => setDetailPatch({ likesEnabled: event.target.checked })}
+              />
+              Likes controls enabled
+            </label>
+          </div>
+
+          <div className="mt-3 rounded border p-2">
+            <p className="mb-2 text-xs font-medium text-gray-700">Tab order numbering (DETAILS / SPECS / REVIEWS)</p>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              {DETAIL_TABS.map((tab) => {
+                const order = Math.max(1, detail.tabOrder.indexOf(tab) + 1);
+                return (
+                  <label key={tab} className="text-[11px] text-gray-700">
+                    {tab} order
+                    <input
+                      type="number"
+                      min={1}
+                      max={DETAIL_TABS.length}
+                      value={order}
+                      onChange={(event) => {
+                        const target = clamp(event.target.value, order, 1, DETAIL_TABS.length);
+                        const ordered = [...normalizeDetailTabOrder(detail.tabOrder)];
+                        const currentIndex = ordered.indexOf(tab);
+                        if (currentIndex < 0) return;
+                        ordered.splice(currentIndex, 1);
+                        ordered.splice(target - 1, 0, tab);
+                        setDetailPatch({ tabOrder: normalizeDetailTabOrder(ordered) });
+                      }}
+                      className="mt-1 w-full rounded border px-2 py-1 text-[11px]"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        ) : null}
+      </div>
+    );
   };
 
   const fetchDesignerFabricAccess = async () => {
@@ -1432,9 +2168,7 @@ export default function AdminProducts() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {isConfigurationView ? 'Product Configuration' : 'Product Management'}
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900">Product Management</h1>
         {!isConfigurationView ? (
           <Button onClick={openCreateModal}>
             <Plus className="w-4 h-4 mr-2" />
@@ -1454,7 +2188,7 @@ export default function AdminProducts() {
           Product
         </Link>
         <Link
-          to="/admin/products/configuration"
+          to="/admin/products/configuration/product-cards"
           className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
             isConfigurationView
               ? 'border-amber-300 bg-amber-50 text-amber-800'
@@ -1467,6 +2201,71 @@ export default function AdminProducts() {
 
       {isConfigurationView ? (
       <>
+      <div className="rounded-xl border bg-white p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Product Configuration</h2>
+            <p className="text-xs text-gray-500">
+              Manage Product Card and Detailed Product View from Product Management. RTW & FTB can be alike with different
+              fields from each product type, while CTW can be configured independently for its ordering flow.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void saveProductViewManager()}
+            disabled={productViewSaving}
+          >
+            {productViewSaving ? 'Saving...' : 'Save Product View Settings'}
+          </Button>
+        </div>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {PRODUCT_VIEW_PAGE_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveProductViewPage(tab.key)}
+              className={`rounded-lg border px-3 py-1.5 text-sm ${
+                activeProductViewPage === tab.key
+                  ? 'border-amber-300 bg-amber-50 text-amber-800'
+                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+              title={tab.hint}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {PRODUCT_CONFIGURATION_SUBMENU.map((submenu) => (
+            <Link
+              key={submenu.key}
+              to={submenu.href}
+              className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                activeProductConfigurationSubview === submenu.key
+                  ? 'border-amber-300 bg-amber-50 text-amber-800'
+                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+              title={submenu.hint}
+            >
+              {submenu.label}
+            </Link>
+          ))}
+        </div>
+        {productViewMessage ? (
+          <div
+            className={`mb-3 rounded border px-3 py-2 text-xs ${
+              productViewMessageType === 'success'
+                ? 'border-green-200 bg-green-50 text-green-800'
+                : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}
+          >
+            {productViewMessage}
+          </div>
+        ) : null}
+        {renderProductViewManager(activeProductConfigurationSubview)}
+      </div>
+
       <div className="rounded-xl border bg-white p-4">
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-gray-900">Product Taxonomy Management</h2>

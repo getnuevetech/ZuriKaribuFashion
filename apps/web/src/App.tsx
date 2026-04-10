@@ -440,6 +440,22 @@ function App() {
                   }
                 />
                 <Route
+                  path="/admin/products/configuration/product-cards"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProducts />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
+                  path="/admin/products/configuration/detailed-product-view"
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProducts />
+                    </AdminPermissionGuard>
+                  }
+                />
+                <Route
                   path="/admin/product-labels"
                   element={
                     <AdminPermissionGuard required={['products:manage']}>
