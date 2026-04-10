@@ -204,6 +204,38 @@ type SpotlightTypography = {
   specialtyFontSize: number;
   descriptionFontSize: number;
 };
+type ProductCardFieldKey = 'DESIGNER_NAME' | 'PRODUCT_NAME' | 'SHORT_DESCRIPTION' | 'PRICE';
+type ProductCardStyle = {
+  imageEnabled: boolean;
+  fieldOrder: ProductCardFieldKey[];
+  imageAspectRatio: '3:4' | '1:1';
+  textGap: number;
+  contentPaddingX: number;
+  contentPaddingY: number;
+  designerNameEnabled: boolean;
+  designerNameFontSize: number;
+  designerNameColor: string;
+  productNameEnabled: boolean;
+  productNameFontSize: number;
+  productNameColor: string;
+  shortDescriptionEnabled: boolean;
+  shortDescriptionFontSize: number;
+  shortDescriptionColor: string;
+  shortDescriptionWordLimit: number;
+  priceEnabled: boolean;
+  priceFontSize: number;
+  priceColor: string;
+  labelEnabled: boolean;
+  labelFontSize: number;
+  labelTextColor: string;
+  labelBackgroundColor: string;
+  likesEnabled: boolean;
+  likesSize: number;
+  likesColor: string;
+  likesActiveColor: string;
+  countryIconEnabled: boolean;
+  countryIconSize: number;
+};
 
 type CustomerReviewCard = {
   id: string;
@@ -260,6 +292,8 @@ type TemplateKey =
 
 type JenksV2ManagerPayload = Record<string, unknown>;
 type IconComponent = ComponentType<{ className?: string }>;
+type ProductCardPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+type FrontpageProductCardCategory = 'RTW' | 'FTB' | 'CTW';
 
 const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
 const HERO_HEIGHT_CLASS = 'min-h-[106vh]';
@@ -292,6 +326,42 @@ const CATEGORY_SECTION_TEMPLATE_BY_KEY: Record<'RTW' | 'FTB' | 'CTW', TemplateKe
   RTW: 'CATEGORY_MANAGE_RTW',
   FTB: 'CATEGORY_MANAGE_FTB',
   CTW: 'CATEGORY_MANAGE_CTW',
+};
+const PRODUCT_PAGE_BY_SECTION_KEY: Record<'RTW' | 'FTB' | 'CTW', ProductCardPageType> = {
+  RTW: 'READY_TO_WEAR',
+  FTB: 'FABRIC_TO_BUY',
+  CTW: 'CUSTOM_TO_WEAR',
+};
+const PRODUCT_CARD_FALLBACK_STYLE: ProductCardStyle = {
+  imageEnabled: true,
+  fieldOrder: ['DESIGNER_NAME', 'PRODUCT_NAME', 'SHORT_DESCRIPTION', 'PRICE'],
+  imageAspectRatio: '3:4',
+  textGap: 6,
+  contentPaddingX: 16,
+  contentPaddingY: 16,
+  designerNameEnabled: true,
+  designerNameFontSize: 14,
+  designerNameColor: '#6b7280',
+  productNameEnabled: true,
+  productNameFontSize: 16,
+  productNameColor: '#111111',
+  shortDescriptionEnabled: true,
+  shortDescriptionFontSize: 13,
+  shortDescriptionColor: '#4b5563',
+  shortDescriptionWordLimit: 10,
+  priceEnabled: true,
+  priceFontSize: 14,
+  priceColor: '#e66045',
+  labelEnabled: true,
+  labelFontSize: 11,
+  labelTextColor: '#ffffff',
+  labelBackgroundColor: 'rgba(17, 17, 17, 0.75)',
+  likesEnabled: true,
+  likesSize: 18,
+  likesColor: '#ffffff',
+  likesActiveColor: '#ef4444',
+  countryIconEnabled: true,
+  countryIconSize: 24,
 };
 
 const FEATURED_SECTION_TEMPLATE_BY_KEY: Record<'RTW' | 'CTW' | 'FTB', TemplateKey> = {
@@ -606,6 +676,59 @@ const truncateWords = (value: unknown, maxWords: number) => {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length <= maxWords) return text;
   return `${words.slice(0, maxWords).join(' ')}…`;
+};
+const normalizeProductCardFieldOrder = (value: unknown): ProductCardFieldKey[] => {
+  const source = Array.isArray(value) ? value : [];
+  const next: ProductCardFieldKey[] = [];
+  source.forEach((entry) => {
+    const key = asString(entry, '').trim().toUpperCase() as ProductCardFieldKey;
+    if (!['DESIGNER_NAME', 'PRODUCT_NAME', 'SHORT_DESCRIPTION', 'PRICE'].includes(key)) return;
+    if (!next.includes(key)) next.push(key);
+  });
+  (['DESIGNER_NAME', 'PRODUCT_NAME', 'SHORT_DESCRIPTION', 'PRICE'] as ProductCardFieldKey[]).forEach((key) => {
+    if (!next.includes(key)) next.push(key);
+  });
+  return next;
+};
+const normalizeProductCardStyle = (value: unknown): ProductCardStyle => {
+  const row = asRecord(value);
+  return {
+    imageEnabled: asBoolean(row.imageEnabled, PRODUCT_CARD_FALLBACK_STYLE.imageEnabled),
+    fieldOrder: normalizeProductCardFieldOrder(row.fieldOrder),
+    imageAspectRatio: asString(row.imageAspectRatio, '3:4') === '1:1' ? '1:1' : '3:4',
+    textGap: Math.max(0, Math.min(24, Math.round(asNumber(row.textGap, PRODUCT_CARD_FALLBACK_STYLE.textGap)))),
+    contentPaddingX: Math.max(0, Math.min(40, Math.round(asNumber(row.contentPaddingX, PRODUCT_CARD_FALLBACK_STYLE.contentPaddingX)))),
+    contentPaddingY: Math.max(0, Math.min(40, Math.round(asNumber(row.contentPaddingY, PRODUCT_CARD_FALLBACK_STYLE.contentPaddingY)))),
+    designerNameEnabled: asBoolean(row.designerNameEnabled, PRODUCT_CARD_FALLBACK_STYLE.designerNameEnabled),
+    designerNameFontSize: Math.max(8, Math.min(72, Math.round(asNumber(row.designerNameFontSize, PRODUCT_CARD_FALLBACK_STYLE.designerNameFontSize)))),
+    designerNameColor: asString(row.designerNameColor, PRODUCT_CARD_FALLBACK_STYLE.designerNameColor),
+    productNameEnabled: asBoolean(row.productNameEnabled, PRODUCT_CARD_FALLBACK_STYLE.productNameEnabled),
+    productNameFontSize: Math.max(8, Math.min(72, Math.round(asNumber(row.productNameFontSize, PRODUCT_CARD_FALLBACK_STYLE.productNameFontSize)))),
+    productNameColor: asString(row.productNameColor, PRODUCT_CARD_FALLBACK_STYLE.productNameColor),
+    shortDescriptionEnabled: asBoolean(row.shortDescriptionEnabled, PRODUCT_CARD_FALLBACK_STYLE.shortDescriptionEnabled),
+    shortDescriptionFontSize: Math.max(
+      8,
+      Math.min(72, Math.round(asNumber(row.shortDescriptionFontSize, PRODUCT_CARD_FALLBACK_STYLE.shortDescriptionFontSize)))
+    ),
+    shortDescriptionColor: asString(row.shortDescriptionColor, PRODUCT_CARD_FALLBACK_STYLE.shortDescriptionColor),
+    shortDescriptionWordLimit: Math.max(
+      4,
+      Math.min(24, Math.round(asNumber(row.shortDescriptionWordLimit, PRODUCT_CARD_FALLBACK_STYLE.shortDescriptionWordLimit)))
+    ),
+    priceEnabled: asBoolean(row.priceEnabled, PRODUCT_CARD_FALLBACK_STYLE.priceEnabled),
+    priceFontSize: Math.max(8, Math.min(72, Math.round(asNumber(row.priceFontSize, PRODUCT_CARD_FALLBACK_STYLE.priceFontSize)))),
+    priceColor: asString(row.priceColor, PRODUCT_CARD_FALLBACK_STYLE.priceColor),
+    labelEnabled: asBoolean(row.labelEnabled, PRODUCT_CARD_FALLBACK_STYLE.labelEnabled),
+    labelFontSize: Math.max(8, Math.min(72, Math.round(asNumber(row.labelFontSize, PRODUCT_CARD_FALLBACK_STYLE.labelFontSize)))),
+    labelTextColor: asString(row.labelTextColor, PRODUCT_CARD_FALLBACK_STYLE.labelTextColor),
+    labelBackgroundColor: asString(row.labelBackgroundColor, PRODUCT_CARD_FALLBACK_STYLE.labelBackgroundColor),
+    likesEnabled: asBoolean(row.likesEnabled, PRODUCT_CARD_FALLBACK_STYLE.likesEnabled),
+    likesSize: Math.max(8, Math.min(72, Math.round(asNumber(row.likesSize, PRODUCT_CARD_FALLBACK_STYLE.likesSize)))),
+    likesColor: asString(row.likesColor, PRODUCT_CARD_FALLBACK_STYLE.likesColor),
+    likesActiveColor: asString(row.likesActiveColor, PRODUCT_CARD_FALLBACK_STYLE.likesActiveColor),
+    countryIconEnabled: asBoolean(row.countryIconEnabled, PRODUCT_CARD_FALLBACK_STYLE.countryIconEnabled),
+    countryIconSize: Math.max(8, Math.min(96, Math.round(asNumber(row.countryIconSize, PRODUCT_CARD_FALLBACK_STYLE.countryIconSize)))),
+  };
 };
 
 const normalizeDesignerSpotlightTag = (value: unknown) => {
@@ -1316,8 +1439,25 @@ export default function JenksFrontpageV2() {
   const [searchQuery, setSearchQuery] = useState('');
   const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
   const [freshDropsProducts, setFreshDropsProducts] = useState<
-    Array<{ id: string; image: string; name: string; brand: string; price: string; href: string; createdAtTs: number }>
+    Array<{
+      id: string;
+      image: string;
+      name: string;
+      description: string;
+      brand: string;
+      priceUsd: number;
+      href: string;
+      createdAtTs: number;
+      category: 'RTW' | 'CTW' | 'FTB';
+      countryCode: string;
+      label: string;
+    }>
   >([]);
+  const [frontpageProductCardByType, setFrontpageProductCardByType] = useState<Record<ProductCardPageType, ProductCardStyle>>({
+    READY_TO_WEAR: PRODUCT_CARD_FALLBACK_STYLE,
+    FABRIC_TO_BUY: PRODUCT_CARD_FALLBACK_STYLE,
+    CUSTOM_TO_WEAR: PRODUCT_CARD_FALLBACK_STYLE,
+  });
   const [instantBuyAutoProducts, setInstantBuyAutoProducts] = useState<Record<'RTW' | 'FTB', InstantBuyAutoProduct[]>>({
     RTW: [],
     FTB: [],
@@ -2021,12 +2161,23 @@ export default function JenksFrontpageV2() {
       id: entry.id,
       image: entry.image,
       name: entry.name,
+      description: entry.description,
       brand: entry.brand,
-      price: entry.price,
+      priceUsd: entry.priceUsd,
       href: entry.href,
+      category: entry.category,
+      countryCode: entry.countryCode,
+      label: entry.label,
     }));
     if (dynamicRows.length > 0) return dynamicRows.slice(0, maxItems);
-    return FRESH_DROPS.slice(0, maxItems);
+    return FRESH_DROPS.slice(0, maxItems).map((entry) => ({
+      ...entry,
+      description: '',
+      priceUsd: Number(String(entry.price || '').replace(/[^0-9.]/g, '')) || 0,
+      category: 'RTW' as const,
+      countryCode: 'NG',
+      label: 'READY TO WEAR',
+    }));
   }, [freshDropsCfg.columns, freshDropsCfg.rows, freshDropsProducts]);
 
   const spotCtaHref = (entry: Record<string, unknown>, fallbackHref: string) => {
@@ -3125,6 +3276,35 @@ export default function JenksFrontpageV2() {
 
   useEffect(() => {
     let cancelled = false;
+    const loadFrontpageProductCardSettings = async () => {
+      try {
+        const [rtw, ftb, ctw] = await Promise.all([
+          api.products.getCategoryPageSettings('READY_TO_WEAR').catch(() => null),
+          api.products.getCategoryPageSettings('FABRIC_TO_BUY').catch(() => null),
+          api.products.getCategoryPageSettings('CUSTOM_TO_WEAR').catch(() => null),
+        ]);
+        if (cancelled) return;
+        setFrontpageProductCardByType({
+          READY_TO_WEAR: normalizeProductCardStyle(asRecord(asRecord(rtw).data).settings?.productCard),
+          FABRIC_TO_BUY: normalizeProductCardStyle(asRecord(asRecord(ftb).data).settings?.productCard),
+          CUSTOM_TO_WEAR: normalizeProductCardStyle(asRecord(asRecord(ctw).data).settings?.productCard),
+        });
+      } catch {
+        if (cancelled) return;
+        setFrontpageProductCardByType({
+          READY_TO_WEAR: PRODUCT_CARD_FALLBACK_STYLE,
+          FABRIC_TO_BUY: PRODUCT_CARD_FALLBACK_STYLE,
+          CUSTOM_TO_WEAR: PRODUCT_CARD_FALLBACK_STYLE,
+        });
+      }
+    };
+    void loadFrontpageProductCardSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
     const loadFreshDropsProducts = async () => {
       try {
         const sourceMode = asString(freshDropsCfg.sourceMode, 'NEWLY_LISTED').toUpperCase();
@@ -3159,7 +3339,17 @@ export default function JenksFrontpageV2() {
         const listingAgeCutoff = Date.now() - listingAgeDays * 24 * 60 * 60 * 1000;
         const includeOnlyFresh = sourceMode === 'NEWLY_LISTED';
 
-        const rows: Array<{ id: string; image: string; name: string; brand: string; price: string; createdAtTs: number; category: 'RTW' | 'CTW' | 'FTB' }> = [];
+        const rows: Array<{
+          id: string;
+          image: string;
+          name: string;
+          description: string;
+          brand: string;
+          priceUsd: number;
+          createdAtTs: number;
+          category: 'RTW' | 'CTW' | 'FTB';
+          countryCode: string;
+        }> = [];
         const pushRows = (sourceRows: unknown[], category: 'RTW' | 'CTW' | 'FTB') => {
           sourceRows.forEach((raw, index) => {
             const row = asRecord(raw);
@@ -3178,16 +3368,17 @@ export default function JenksFrontpageV2() {
               ''
             );
             const priceValue = asNumber(row.price, asNumber(row.basePrice, asNumber(row.finalPrice, 0)));
-            const formattedPrice = `$${Math.max(0, priceValue).toFixed(2)}`;
             rows.push({
               id: `${category}-${id}`,
               image,
               name: asString(row.name, category === 'FTB' ? 'Fabric' : 'Product'),
+              description: asString(row.description, ''),
               brand: asString(row.designerName, asString(row.sellerName, asString(row.ownerName, 'Jenks'))),
-              price: formattedPrice,
+              priceUsd: Math.max(0, priceValue),
               href: category === 'RTW' ? `/readytowear/${id}` : category === 'CTW' ? `/customtowear/${id}` : `/fabricstobuy/${id}`,
               createdAtTs,
               category,
+              countryCode: countryToken || 'NG',
             });
           });
         };
@@ -3198,9 +3389,19 @@ export default function JenksFrontpageV2() {
         rows.sort((left, right) => right.createdAtTs - left.createdAtTs);
 
         if (!cancelled) {
-          setFreshDropsProducts(
-            rows.map(({ createdAtTs: _createdAtTs, category: _category, ...entry }) => entry)
-          );
+          setFreshDropsProducts(rows.map((entry) => ({
+            id: entry.id,
+            image: entry.image,
+            name: entry.name,
+            description: entry.description,
+            brand: entry.brand,
+            priceUsd: entry.priceUsd,
+            href: entry.href,
+            createdAtTs: entry.createdAtTs,
+            category: entry.category,
+            countryCode: entry.countryCode,
+            label: entry.category === 'FTB' ? 'FABRICS' : entry.category === 'CTW' ? 'CUSTOM TO WEAR' : 'READY TO WEAR',
+          })));
         }
       } catch {
         if (!cancelled) setFreshDropsProducts([]);
@@ -4234,35 +4435,112 @@ export default function JenksFrontpageV2() {
             ref={freshDropsStripRef}
             className="mt-8 flex gap-4 overflow-x-auto pb-1 scrollbar-hide"
           >
-            {freshDropsCards.map((drop) => (
+            {freshDropsCards.map((drop) => {
+              const productPageType = PRODUCT_PAGE_BY_SECTION_KEY[drop.category || 'RTW'];
+              const cardCfg = frontpageProductCardByType[productPageType] || PRODUCT_CARD_FALLBACK_STYLE;
+              const fieldRenderers: Record<ProductCardFieldKey, () => JSX.Element | null> = {
+                DESIGNER_NAME: () =>
+                  cardCfg.designerNameEnabled ? (
+                    <p
+                      className="leading-tight"
+                      style={{ fontSize: `${cardCfg.designerNameFontSize}px`, color: cardCfg.designerNameColor }}
+                    >
+                      {drop.brand}
+                    </p>
+                  ) : null,
+                PRODUCT_NAME: () =>
+                  cardCfg.productNameEnabled ? (
+                    <h3
+                      className="line-clamp-1 leading-tight"
+                      style={{ fontSize: `${cardCfg.productNameFontSize}px`, color: cardCfg.productNameColor, fontWeight: 500 }}
+                    >
+                      {drop.name}
+                    </h3>
+                  ) : null,
+                SHORT_DESCRIPTION: () =>
+                  cardCfg.shortDescriptionEnabled ? (
+                    <p
+                      className="line-clamp-2 leading-snug"
+                      style={{ fontSize: `${cardCfg.shortDescriptionFontSize}px`, color: cardCfg.shortDescriptionColor }}
+                    >
+                      {truncateWords(drop.description || '', cardCfg.shortDescriptionWordLimit)}
+                    </p>
+                  ) : null,
+                PRICE: () =>
+                  cardCfg.priceEnabled ? (
+                    <p className="leading-tight" style={{ fontSize: `${cardCfg.priceFontSize}px`, color: cardCfg.priceColor }}>
+                      ${Number(drop.priceUsd || 0).toFixed(2)}
+                    </p>
+                  ) : null,
+              };
+              return (
               <Link
                 key={drop.id}
                 to={toSafeInternalHref(drop.href)}
                 aria-label={`Open ${drop.name} quick view`}
                 className="group min-w-[312px] flex-1 overflow-hidden border border-black/10 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_18px_46px_rgba(0,0,0,0.2)] md:min-w-[calc((100%-24px)/4)]"
               >
-                <div className="relative">
-                  <BrandImageWithFallback
-                    src={drop.image}
-                    alt={drop.name}
-                    className="h-[63vh] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                    spinnerClassName="h-6 w-6"
-                  />
-                  <span className="absolute left-4 top-4 bg-[#e66045] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
-                    NEW
-                  </span>
-                  <span className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-2 border border-white/70 bg-black/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    Quick View
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </span>
-                </div>
-                <div className="p-4">
-                  <p className="text-xl font-semibold">{drop.name}</p>
-                  <p className="mt-1 text-sm text-black/60">{drop.brand}</p>
-                  <p className="mt-2 text-base font-semibold text-[#e66045]">{drop.price}</p>
+                {cardCfg.imageEnabled ? (
+                  <div
+                    className="relative overflow-hidden"
+                    style={{ aspectRatio: cardCfg.imageAspectRatio === '1:1' ? '1 / 1' : '3 / 4' }}
+                  >
+                    <BrandImageWithFallback
+                      src={drop.image}
+                      alt={drop.name}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                      spinnerClassName="h-6 w-6"
+                    />
+                    {cardCfg.labelEnabled ? (
+                      <span
+                        className="absolute left-3 top-3 rounded px-2 py-1 uppercase tracking-[0.06em]"
+                        style={{
+                          fontSize: `${cardCfg.labelFontSize}px`,
+                          color: cardCfg.labelTextColor,
+                          backgroundColor: cardCfg.labelBackgroundColor,
+                        }}
+                      >
+                        {drop.label}
+                      </span>
+                    ) : null}
+                    {cardCfg.likesEnabled ? (
+                      <span className="absolute right-3 top-3">
+                        <Heart
+                          className="drop-shadow"
+                          style={{
+                            width: `${cardCfg.likesSize}px`,
+                            height: `${cardCfg.likesSize}px`,
+                            color: cardCfg.likesColor,
+                          }}
+                        />
+                      </span>
+                    ) : null}
+                    {cardCfg.countryIconEnabled ? (
+                      <span className="absolute bottom-3 right-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-white/90 text-lg shadow">
+                        {countryCodeToFlagEmoji(drop.countryCode)}
+                      </span>
+                    ) : null}
+                    <span className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-2 border border-white/70 bg-black/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white opacity-0 transition-all duration-300 group-hover:opacity-100">
+                      Quick View
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    paddingLeft: `${cardCfg.contentPaddingX}px`,
+                    paddingRight: `${cardCfg.contentPaddingX}px`,
+                    paddingTop: `${cardCfg.contentPaddingY}px`,
+                    paddingBottom: `${cardCfg.contentPaddingY}px`,
+                    display: 'grid',
+                    gap: `${cardCfg.textGap}px`,
+                  }}
+                >
+                  {cardCfg.fieldOrder.map((fieldKey) => fieldRenderers[fieldKey]?.() || null)}
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>

@@ -84,6 +84,16 @@ export const publicApi = {
       }>('/jenks-v2-frontpage/config'),
   },
   products: {
+    getCategoryPageSettings: (pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR' | 'COUNTRY' | 'SHOP') =>
+      apiService.get<{
+        success: boolean;
+        data: {
+          pageType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR' | 'COUNTRY' | 'SHOP';
+          settings?: {
+            productCard?: Record<string, unknown>;
+          };
+        };
+      }>(`/category-pages-v2/${pageType}`, { params: { _r: Date.now() } }),
     getReadyToWear: (params?: Record<string, unknown>) =>
       apiService.get<{
         success: boolean;
