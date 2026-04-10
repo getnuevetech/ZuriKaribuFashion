@@ -161,26 +161,6 @@ const PRODUCT_VIEW_PAGE_TABS: Array<{ key: ProductViewPageType; label: string; h
   { key: 'CUSTOM_TO_WEAR', label: 'CTW', hint: 'Custom To Wear product card/detail settings' },
 ];
 
-const PRODUCT_CONFIGURATION_SUBMENU: Array<{
-  key: ProductConfigurationSubview;
-  label: string;
-  href: string;
-  hint: string;
-}> = [
-  {
-    key: 'PRODUCT_CARDS',
-    label: 'Product Card',
-    href: '/admin/products/configuration/product-cards',
-    hint: 'Manage minimal product card fields and overlays',
-  },
-  {
-    key: 'DETAILED_PRODUCT_VIEW',
-    label: 'Detailed Product View',
-    href: '/admin/products/configuration/detailed-product-view',
-    hint: 'Manage full product detail page typography and visibility',
-  },
-];
-
 const PRODUCT_CARD_FIELDS: Array<{ key: ProductCardFieldKey; label: string }> = [
   { key: 'DESIGNER_NAME', label: 'Designer Name' },
   { key: 'PRODUCT_NAME', label: 'Product Name' },
@@ -396,11 +376,6 @@ export default function AdminProducts() {
   const location = useLocation();
   const isProductCardStandaloneView = location.pathname.startsWith('/admin/products/product-card');
   const isConfigurationView = location.pathname.startsWith('/admin/products/configuration');
-  const activeProductConfigurationSubview: ProductConfigurationSubview = location.pathname.includes(
-    '/admin/products/configuration/detailed-product-view'
-  )
-    ? 'DETAILED_PRODUCT_VIEW'
-    : 'PRODUCT_CARDS';
   const [products, setProducts] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(40);
@@ -2189,7 +2164,7 @@ export default function AdminProducts() {
           Product
         </Link>
         <Link
-          to="/admin/products/configuration/product-cards"
+          to="/admin/products/configuration/detailed-product-view"
           className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
             isConfigurationView
               ? 'border-amber-300 bg-amber-50 text-amber-800'
@@ -2217,8 +2192,8 @@ export default function AdminProducts() {
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Product Configuration</h2>
             <p className="text-xs text-gray-500">
-              Manage Product Card and Detailed Product View from Product Management. RTW & FTB can be alike with different
-              fields from each product type, while CTW can be configured independently for its ordering flow.
+              Manage Detailed Product View from Product Configuration. Product Card settings are managed in the standalone
+              Product Card tab.
             </p>
           </div>
           <Button
@@ -2247,22 +2222,6 @@ export default function AdminProducts() {
             </button>
           ))}
         </div>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {PRODUCT_CONFIGURATION_SUBMENU.map((submenu) => (
-            <Link
-              key={submenu.key}
-              to={submenu.href}
-              className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                activeProductConfigurationSubview === submenu.key
-                  ? 'border-amber-300 bg-amber-50 text-amber-800'
-                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-              }`}
-              title={submenu.hint}
-            >
-              {submenu.label}
-            </Link>
-          ))}
-        </div>
         {productViewMessage ? (
           <div
             className={`mb-3 rounded border px-3 py-2 text-xs ${
@@ -2274,7 +2233,7 @@ export default function AdminProducts() {
             {productViewMessage}
           </div>
         ) : null}
-        {renderProductViewManager(activeProductConfigurationSubview)}
+        {renderProductViewManager('DETAILED_PRODUCT_VIEW')}
       </div>
 
       <div className="rounded-xl border bg-white p-4">
