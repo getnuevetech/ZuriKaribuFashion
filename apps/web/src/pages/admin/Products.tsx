@@ -97,7 +97,6 @@ interface DesignerFabricCountryAccessRequestRow {
 type ProductViewPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
 type ProductCardFieldKey = 'DESIGNER_NAME' | 'PRODUCT_NAME' | 'SHORT_DESCRIPTION' | 'PRICE';
 type DetailTabKey = 'DETAILS' | 'SPECS' | 'REVIEWS';
-type ProductConfigurationSubview = 'PRODUCT_CARDS' | 'DETAILED_PRODUCT_VIEW';
 
 type ProductCardManagerSettings = {
   imageEnabled: boolean;
@@ -159,26 +158,6 @@ const PRODUCT_VIEW_PAGE_TABS: Array<{ key: ProductViewPageType; label: string; h
   { key: 'READY_TO_WEAR', label: 'RTW', hint: 'Ready To Wear product card/detail settings' },
   { key: 'FABRIC_TO_BUY', label: 'FTB', hint: 'Fabrics To Buy product card/detail settings' },
   { key: 'CUSTOM_TO_WEAR', label: 'CTW', hint: 'Custom To Wear product card/detail settings' },
-];
-
-const PRODUCT_CONFIGURATION_SUBMENU: Array<{
-  key: ProductConfigurationSubview;
-  label: string;
-  href: string;
-  hint: string;
-}> = [
-  {
-    key: 'PRODUCT_CARDS',
-    label: 'Product Card',
-    href: '/admin/products/configuration/product-cards',
-    hint: 'Manage minimal product card fields and overlays',
-  },
-  {
-    key: 'DETAILED_PRODUCT_VIEW',
-    label: 'Detailed Product View',
-    href: '/admin/products/configuration/detailed-product-view',
-    hint: 'Manage full product detail page typography and visibility',
-  },
 ];
 
 const PRODUCT_CARD_FIELDS: Array<{ key: ProductCardFieldKey; label: string }> = [
@@ -394,12 +373,7 @@ const normalizeImageUrlList = (input: unknown): string[] =>
 
 export default function AdminProducts() {
   const location = useLocation();
-  const isConfigurationView = location.pathname.startsWith('/admin/products/configuration');
-  const activeProductConfigurationSubview: ProductConfigurationSubview = location.pathname.includes(
-    '/admin/products/configuration/detailed-product-view'
-  )
-    ? 'DETAILED_PRODUCT_VIEW'
-    : 'PRODUCT_CARDS';
+  const isProductCardView = location.pathname.startsWith('/admin/products/product-card');
   const [products, setProducts] = useState<Product[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(40);
@@ -554,16 +528,16 @@ export default function AdminProducts() {
   useEffect(() => {
     void fetchOptions();
     void fetchDesignerFabricAccess();
-    if (isConfigurationView) {
+    if (isProductCardView) {
       void fetchProductViewManagerSettings(activeProductViewPage);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!isConfigurationView) return;
+    if (!isProductCardView) return;
     void fetchProductViewManagerSettings(activeProductViewPage);
-  }, [activeProductViewPage, isConfigurationView]);
+  }, [activeProductViewPage, isProductCardView]);
 
   useEffect(() => {
     void fetchDesignerFabricAccessRequests();
@@ -956,12 +930,10 @@ export default function AdminProducts() {
     }
   };
 
-  const renderProductViewManager = (activeSubview: ProductConfigurationSubview) => {
+  const renderProductViewManager = () => {
     const runtime = productViewSettingsByType[activeProductViewPage] || DEFAULT_PRODUCT_VIEW_MANAGER_SETTINGS;
     const card = runtime.productCard;
     const detail = runtime.detailView;
-    const showProductCardManager = activeSubview === 'PRODUCT_CARDS';
-    const showDetailViewManager = activeSubview === 'DETAILED_PRODUCT_VIEW';
 
     const setProductCardPatch = (patch: Partial<ProductCardManagerSettings>) => {
       setProductViewSettingsByType((prev) => {
@@ -997,7 +969,6 @@ export default function AdminProducts() {
 
     return (
       <div className="space-y-4">
-        {showProductCardManager ? (
         <div className="rounded-lg border p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold text-gray-900">Product Card</p>
@@ -1160,9 +1131,6 @@ export default function AdminProducts() {
             })}
           </div>
         </div>
-        ) : null}
-
-        {showDetailViewManager ? (
         <div className="rounded-lg border p-3">
           <p className="mb-2 text-sm font-semibold text-gray-900">Detailed Product View Manager</p>
           <p className="mb-3 text-xs text-gray-500">
@@ -1303,7 +1271,6 @@ export default function AdminProducts() {
             </div>
           </div>
         </div>
-        ) : null}
       </div>
     );
   };
@@ -2169,7 +2136,7 @@ export default function AdminProducts() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Product Management</h1>
-        {!isConfigurationView ? (
+        {!isProductCardView ? (
           <Button onClick={openCreateModal}>
             <Plus className="w-4 h-4 mr-2" />
             Add Product
@@ -2180,7 +2147,7 @@ export default function AdminProducts() {
         <Link
           to="/admin/products"
           className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-            !isConfigurationView
+            !isProductCardView
               ? 'border-amber-300 bg-amber-50 text-amber-800'
               : 'border-gray-300 text-gray-600 hover:bg-gray-50'
           }`}
@@ -2188,23 +2155,23 @@ export default function AdminProducts() {
           Product
         </Link>
         <Link
-          to="/admin/products/configuration/product-cards"
+          to="/admin/products/product-card"
           className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-            isConfigurationView
+            isProductCardView
               ? 'border-amber-300 bg-amber-50 text-amber-800'
               : 'border-gray-300 text-gray-600 hover:bg-gray-50'
           }`}
         >
-          Product Configuration
+          Product Card
         </Link>
       </div>
 
-      {isConfigurationView ? (
+      {isProductCardView ? (
       <>
       <div className="rounded-xl border bg-white p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900">Product Configuration</h2>
+            <h2 className="text-sm font-semibold text-gray-900">Product Card</h2>
             <p className="text-xs text-gray-500">
               Manage Product Card and Detailed Product View from Product Management. RTW & FTB can be alike with different
               fields from each product type, while CTW can be configured independently for its ordering flow.
@@ -2236,22 +2203,6 @@ export default function AdminProducts() {
             </button>
           ))}
         </div>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {PRODUCT_CONFIGURATION_SUBMENU.map((submenu) => (
-            <Link
-              key={submenu.key}
-              to={submenu.href}
-              className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                activeProductConfigurationSubview === submenu.key
-                  ? 'border-amber-300 bg-amber-50 text-amber-800'
-                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-              }`}
-              title={submenu.hint}
-            >
-              {submenu.label}
-            </Link>
-          ))}
-        </div>
         {productViewMessage ? (
           <div
             className={`mb-3 rounded border px-3 py-2 text-xs ${
@@ -2263,7 +2214,7 @@ export default function AdminProducts() {
             {productViewMessage}
           </div>
         ) : null}
-        {renderProductViewManager(activeProductConfigurationSubview)}
+        {renderProductViewManager()}
       </div>
 
       <div className="rounded-xl border bg-white p-4">
@@ -2562,7 +2513,7 @@ export default function AdminProducts() {
       </>
       ) : null}
 
-      {!isConfigurationView ? (
+      {!isProductCardView ? (
       <>
       {/* Tabs */}
       <div className="border-b">
@@ -2858,7 +2809,7 @@ export default function AdminProducts() {
       </div>
       </>
       ) : null}
-      {!isConfigurationView && showModal ? (
+      {!isProductCardView && showModal ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
           <div className="mx-auto w-full max-w-2xl rounded-xl bg-white p-6 max-h-[92vh] overflow-hidden">
             <h3 className="mb-4 text-xl font-bold text-gray-900">{editing ? 'Edit Product' : 'Add Product'}</h3>
