@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safePersistStorage } from './persistence';
 
 export interface CustomDesignCartItem {
   kind: 'CUSTOM_DESIGN';
@@ -280,6 +281,7 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name: 'cart-storage',
+      storage: safePersistStorage,
       version: 3,
       migrate: (persistedState: any) => {
         if (!persistedState || !Array.isArray(persistedState.items)) {

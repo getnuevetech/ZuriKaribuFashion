@@ -12,6 +12,7 @@ import {
   resolveHomepageMode,
   resolveHomepageThemeMode,
 } from '../design/homepageExperience';
+import { safePersistStorage } from './persistence';
 
 interface HomepageExperienceStoreState {
   settings: HomepageExperienceSettings;
@@ -112,6 +113,7 @@ export const useHomepageExperienceStore = create<HomepageExperienceStoreState>()
     }),
     {
       name: 'homepage-experience-preferences',
+      storage: safePersistStorage,
       partialize: (state) => ({
         userOverrideMode: state.userOverrideMode,
         userOverrideThemeMode: state.userOverrideThemeMode,

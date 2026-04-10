@@ -104,8 +104,23 @@ httpClient.interceptors.response.use(
       url.endsWith('/google') ||
       url.includes('/google-login') ||
       url.includes('/login/google');
+    const readWindowLocation = () => {
+      if (typeof window === 'undefined') {
+        return { pathname: '/', search: '', hash: '' };
+      }
+      try {
+        return {
+          pathname: window.location.pathname || '/',
+          search: window.location.search || '',
+          hash: window.location.hash || '',
+        };
+      } catch {
+        return { pathname: '/', search: '', hash: '' };
+      }
+    };
+    const currentLocation = readWindowLocation();
     const isProtectedPath = (() => {
-      const pathname = window.location.pathname || '/';
+      const pathname = currentLocation.pathname;
       const protectedPrefixes = [
         '/admin',
         '/seller',
@@ -121,10 +136,14 @@ httpClient.interceptors.response.use(
     })();
     if (error.response?.status === 401 && !isAuthRequest) {
       useAuthStore.getState().logout();
-      if (isProtectedPath && window.location.pathname !== '/login') {
-        const returnTo = `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+      if (isProtectedPath && currentLocation.pathname !== '/login') {
+        const returnTo = `${currentLocation.pathname || '/'}${currentLocation.search || ''}${currentLocation.hash || ''}`;
         const encodedReturnTo = encodeURIComponent(returnTo);
-        window.location.href = `/login?returnTo=${encodedReturnTo}`;
+        try {
+          window.location.href = `/login?returnTo=${encodedReturnTo}`;
+        } catch {
+          // Ignore redirect failures in restricted environments.
+        }
       }
     }
     return Promise.reject(error);

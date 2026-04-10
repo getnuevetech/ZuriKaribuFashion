@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safePersistStorage } from './persistence';
 
 type CurrencyConfigPayload = {
   defaultCurrency?: string;
@@ -76,6 +77,7 @@ export const useCurrencyStore = create<CurrencyStoreState>()(
     }),
     {
       name: 'currency-preference',
+      storage: safePersistStorage,
       partialize: (state) => ({ selectedCurrency: state.selectedCurrency }),
     }
   )

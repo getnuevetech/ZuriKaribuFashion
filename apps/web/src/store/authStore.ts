@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { googleLogout } from '@react-oauth/google';
 import type { User, AuthState } from '../types';
+import { safePersistStorage } from './persistence';
 
 interface AuthStore extends AuthState {
   setUser: (user: User | null) => void;
@@ -55,6 +56,7 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
+      storage: safePersistStorage,
       partialize: (state) => ({ 
         user: state.user, 
         token: state.token, 
