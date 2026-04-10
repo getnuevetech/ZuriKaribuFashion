@@ -140,10 +140,18 @@ const queryClient = new QueryClient({
 });
 
 // Initialize Stripe strictly from runtime key sourced via Admin Payment Integrations API.
-const runtimeStripeKey =
-  typeof window !== 'undefined'
-    ? String(window.localStorage.getItem('af_runtime_stripe_publishable_key') || '').trim()
-    : '';
+const readRuntimeStripeKey = (): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return String(window.localStorage.getItem('af_runtime_stripe_publishable_key') || '').trim();
+  } catch {
+    // Some mobile/private browsing environments block localStorage access.
+    // We should not crash app bootstrap because of Stripe runtime key lookup.
+    return '';
+  }
+};
+
+const runtimeStripeKey = readRuntimeStripeKey();
 const configuredStripeKey = String(runtimeStripeKey || '').trim();
 const hasUsableStripeKey = /^pk_(test|live)_/i.test(configuredStripeKey);
 const stripePromise = hasUsableStripeKey ? loadStripe(configuredStripeKey) : null;
@@ -226,7 +234,8 @@ function App() {
               <Route path="/fabricstobuy/:id" element={<FabricDetail />} />
               <Route path="/customtowear/:id" element={<DesignDetail />} />
               <Route path="/cystomtowear/:id" element={<NavigateCategoryDetailWithSearch toBase="/customtowear" />} />
-              <Route path="/shop" element={<Shop />} />
+              <Route path="/shop" element={<NavigateWithSearch to="/Shop" />} />
+              <Route path="/Shop" element={<Shop />} />
               <Route path="/product/:id" element={<KimiProductDetail />} />
               <Route path="/readytowear/:id/try-on" element={<ReadyToWearTryOn />} />
               <Route path="/home-legacy" element={<NavigateWithSearch to="/" />} />
