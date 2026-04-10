@@ -10,6 +10,8 @@ import { resolveCountryCode } from '../../data/locationOptions';
 import { buildMeasurementDropdownOptions } from '../../utils/measurementOptions';
 
 type DetailMode = 'READY' | 'FABRIC' | 'CUSTOM';
+type CategoryPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+type DetailTabKey = 'DETAILS' | 'SPECS' | 'REVIEWS';
 
 type ProductReview = {
   id: string;
@@ -32,6 +34,25 @@ type DiscoverProduct = {
 
 type JenksV14ProductDetailPageProps = {
   mode: DetailMode;
+};
+
+type DetailViewSettings = {
+  titleFontSize: number;
+  titleColor: string;
+  ownerFontSize: number;
+  ownerColor: string;
+  priceLabelColor: string;
+  priceValueFontSize: number;
+  priceValueColor: string;
+  descriptionFontSize: number;
+  descriptionColor: string;
+  specLabelColor: string;
+  specValueColor: string;
+  tabOrder: DetailTabKey[];
+  defaultTab: DetailTabKey;
+  reviewsEnabled: boolean;
+  discoverEnabled: boolean;
+  likesEnabled: boolean;
 };
 
 const MODE_CONFIG: Record<
@@ -61,6 +82,85 @@ const MODE_CONFIG: Record<
     apiType: 'design',
     ownerFallback: 'Designer',
   },
+};
+
+const DETAIL_PAGE_TYPE_BY_MODE: Record<DetailMode, CategoryPageType> = {
+  READY: 'READY_TO_WEAR',
+  FABRIC: 'FABRIC_TO_BUY',
+  CUSTOM: 'CUSTOM_TO_WEAR',
+};
+
+const DETAIL_TABS: DetailTabKey[] = ['DETAILS', 'SPECS', 'REVIEWS'];
+
+const DEFAULT_DETAIL_VIEW_SETTINGS: DetailViewSettings = {
+  titleFontSize: 64,
+  titleColor: '#1A1A1A',
+  ownerFontSize: 16,
+  ownerColor: '#6B6B6B',
+  priceLabelColor: '#6B6B6B',
+  priceValueFontSize: 36,
+  priceValueColor: '#E85A3C',
+  descriptionFontSize: 14,
+  descriptionColor: '#2f2d29',
+  specLabelColor: '#6B6B6B',
+  specValueColor: '#1A1A1A',
+  tabOrder: ['DETAILS', 'SPECS', 'REVIEWS'],
+  defaultTab: 'DETAILS',
+  reviewsEnabled: true,
+  discoverEnabled: true,
+  likesEnabled: true,
+};
+
+const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
+};
+
+const normalizeColor = (value: unknown, fallback: string) => {
+  const token = String(value || '').trim();
+  return token || fallback;
+};
+
+const normalizeDetailTabOrder = (value: unknown): DetailTabKey[] => {
+  const source = Array.isArray(value) ? value.map((entry) => String(entry || '').trim().toUpperCase()) : [];
+  const next: DetailTabKey[] = [];
+  source.forEach((entry) => {
+    if (!DETAIL_TABS.includes(entry as DetailTabKey)) return;
+    if (!next.includes(entry as DetailTabKey)) next.push(entry as DetailTabKey);
+  });
+  DETAIL_TABS.forEach((tab) => {
+    if (!next.includes(tab)) next.push(tab);
+  });
+  return next;
+};
+
+const normalizeDetailViewSettings = (value: unknown): DetailViewSettings => {
+  const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const reviewsEnabled = raw.reviewsEnabled !== false;
+  const tabOrder = normalizeDetailTabOrder(raw.tabOrder);
+  const visibleTabOrder = reviewsEnabled ? tabOrder : tabOrder.filter((tab) => tab !== 'REVIEWS');
+  const safeTabOrder: DetailTabKey[] = visibleTabOrder.length > 0 ? visibleTabOrder : ['DETAILS', 'SPECS'];
+  const defaultTabRaw = String(raw.defaultTab || '').trim().toUpperCase() as DetailTabKey;
+  const safeDefaultTab = safeTabOrder.includes(defaultTabRaw) ? defaultTabRaw : safeTabOrder[0];
+  return {
+    titleFontSize: clampNumber(raw.titleFontSize, 64, 18, 96),
+    titleColor: normalizeColor(raw.titleColor, '#1A1A1A'),
+    ownerFontSize: clampNumber(raw.ownerFontSize, 16, 10, 42),
+    ownerColor: normalizeColor(raw.ownerColor, '#6B6B6B'),
+    priceLabelColor: normalizeColor(raw.priceLabelColor, '#6B6B6B'),
+    priceValueFontSize: clampNumber(raw.priceValueFontSize, 36, 18, 96),
+    priceValueColor: normalizeColor(raw.priceValueColor, '#E85A3C'),
+    descriptionFontSize: clampNumber(raw.descriptionFontSize, 14, 12, 36),
+    descriptionColor: normalizeColor(raw.descriptionColor, '#2f2d29'),
+    specLabelColor: normalizeColor(raw.specLabelColor, '#6B6B6B'),
+    specValueColor: normalizeColor(raw.specValueColor, '#1A1A1A'),
+    tabOrder: safeTabOrder,
+    defaultTab: safeDefaultTab,
+    reviewsEnabled,
+    discoverEnabled: raw.discoverEnabled !== false,
+    likesEnabled: raw.likesEnabled !== false,
+  };
 };
 
 const asText = (value: unknown, fallback = '') => {
@@ -115,7 +215,8 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
   const [customFabricMeters, setCustomFabricMeters] = useState(1);
   const [customNotes, setCustomNotes] = useState('');
   const [customMeasurements, setCustomMeasurements] = useState<Record<string, number>>({});
-  const [activeTab, setActiveTab] = useState<'DETAILS' | 'SPECS' | 'REVIEWS'>('DETAILS');
+  const [activeTab, setActiveTab] = useState<DetailTabKey>('DETAILS');
+  const [detailViewSettings, setDetailViewSettings] = useState<DetailViewSettings>(DEFAULT_DETAIL_VIEW_SETTINGS);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [reviews, setReviews] = useState<ProductReview[]>([]);
@@ -130,6 +231,27 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, [id, mode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDetailViewSettings(DEFAULT_DETAIL_VIEW_SETTINGS);
+    const loadDetailViewSettings = async () => {
+      try {
+        const pageType = DETAIL_PAGE_TYPE_BY_MODE[mode];
+        const response = await api.products.getCategoryPageSettings(pageType);
+        if (cancelled) return;
+        const next = normalizeDetailViewSettings(response?.data?.settings?.detailView);
+        setDetailViewSettings(next);
+      } catch {
+        if (cancelled) return;
+        setDetailViewSettings(DEFAULT_DETAIL_VIEW_SETTINGS);
+      }
+    };
+    void loadDetailViewSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
 
   useEffect(() => {
     if (!id) return;
@@ -184,20 +306,23 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    Promise.allSettled([
-      api.products.getProductLikes(config.apiType, id),
-      api.products.getProductReviews(config.apiType, id, 12),
-      api.products.getDiscoverByCountry(config.apiType, id, 12),
-    ]).then(([likesResult, reviewsResult, discoverResult]) => {
+    const likesRequest = detailViewSettings.likesEnabled ? api.products.getProductLikes(config.apiType, id) : Promise.resolve(null);
+    const reviewsRequest = detailViewSettings.reviewsEnabled
+      ? api.products.getProductReviews(config.apiType, id, 12)
+      : Promise.resolve(null);
+    const discoverRequest = detailViewSettings.discoverEnabled
+      ? api.products.getDiscoverByCountry(config.apiType, id, 12)
+      : Promise.resolve(null);
+    Promise.allSettled([likesRequest, reviewsRequest, discoverRequest]).then(([likesResult, reviewsResult, discoverResult]) => {
       if (cancelled) return;
-      if (likesResult.status === 'fulfilled' && likesResult.value.success) {
+      if (detailViewSettings.likesEnabled && likesResult.status === 'fulfilled' && likesResult.value?.success) {
         setLikeCount(toNumber(likesResult.value.data?.count, 0));
         setIsWishlisted(Boolean(likesResult.value.data?.likedByMe));
       } else {
         setLikeCount(0);
         setIsWishlisted(false);
       }
-      if (reviewsResult.status === 'fulfilled' && reviewsResult.value.success) {
+      if (detailViewSettings.reviewsEnabled && reviewsResult.status === 'fulfilled' && reviewsResult.value?.success) {
         setReviews(asArray<ProductReview>(reviewsResult.value.data?.reviews));
         setReviewAverage(toNumber(reviewsResult.value.data?.summary?.averageRating, 0));
         setReviewCount(toNumber(reviewsResult.value.data?.summary?.count, 0));
@@ -206,7 +331,7 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
         setReviewAverage(0);
         setReviewCount(0);
       }
-      if (discoverResult.status === 'fulfilled' && discoverResult.value.success) {
+      if (detailViewSettings.discoverEnabled && discoverResult.status === 'fulfilled' && discoverResult.value?.success) {
         setDiscoverProducts(asArray<DiscoverProduct>(discoverResult.value.data));
       } else {
         setDiscoverProducts([]);
@@ -215,13 +340,41 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
     return () => {
       cancelled = true;
     };
-  }, [config.apiType, id]);
+  }, [
+    config.apiType,
+    detailViewSettings.discoverEnabled,
+    detailViewSettings.likesEnabled,
+    detailViewSettings.reviewsEnabled,
+    id,
+  ]);
 
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(''), 3200);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  const detailTabs = useMemo(() => {
+    const ordered = normalizeDetailTabOrder(detailViewSettings.tabOrder);
+    if (detailViewSettings.reviewsEnabled) return ordered;
+    const filtered = ordered.filter((tab) => tab !== 'REVIEWS');
+    return filtered.length > 0 ? filtered : ['DETAILS', 'SPECS'];
+  }, [detailViewSettings.reviewsEnabled, detailViewSettings.tabOrder]);
+
+  const detailDefaultTab = useMemo<DetailTabKey>(() => {
+    if (detailTabs.includes(detailViewSettings.defaultTab)) return detailViewSettings.defaultTab;
+    return detailTabs[0] || 'DETAILS';
+  }, [detailTabs, detailViewSettings.defaultTab]);
+
+  useEffect(() => {
+    setActiveTab(detailDefaultTab);
+  }, [detailDefaultTab, id, mode]);
+
+  useEffect(() => {
+    if (!detailTabs.includes(activeTab)) {
+      setActiveTab(detailDefaultTab);
+    }
+  }, [activeTab, detailDefaultTab, detailTabs]);
 
   const ownerName = useMemo(() => {
     if (mode === 'FABRIC') return asText(product?.seller?.businessName, config.ownerFallback);
@@ -429,6 +582,7 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
   };
 
   const handleToggleLike = async () => {
+    if (!detailViewSettings.likesEnabled) return;
     if (!id) return;
     if (!user) {
       loginRedirect();
@@ -594,17 +748,21 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
                   </button>
                 </>
               ) : null}
-              <button
-                type="button"
-                onClick={() => void handleToggleLike()}
-                className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center bg-white/90 text-[#1A1A1A] shadow"
-                aria-label="Toggle wishlist"
-              >
-                <Heart className={`h-5 w-5 ${isWishlisted ? 'fill-[#E85A3C] text-[#E85A3C]' : ''}`} />
-              </button>
-              <div className="absolute left-3 top-3 rounded-full bg-black/65 px-2 py-1 text-[11px] font-medium text-white">
-                {likeCount} likes
-              </div>
+              {detailViewSettings.likesEnabled ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleLike()}
+                    className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center bg-white/90 text-[#1A1A1A] shadow"
+                    aria-label="Toggle wishlist"
+                  >
+                    <Heart className={`h-5 w-5 ${isWishlisted ? 'fill-[#E85A3C] text-[#E85A3C]' : ''}`} />
+                  </button>
+                  <div className="absolute left-3 top-3 rounded-full bg-black/65 px-2 py-1 text-[11px] font-medium text-white">
+                    {likeCount} likes
+                  </div>
+                </>
+              ) : null}
               <div className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/92 text-lg shadow">
                 {countryFlag}
               </div>
@@ -636,25 +794,39 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
             </div>
 
             <div>
-              <h1 className="headline-lg text-[clamp(2rem,4vw,4.2rem)]">{asText(product?.name, 'Product')}</h1>
-              <p className="mt-2 text-base text-[#6B6B6B]">By {ownerName}</p>
-              <div className="mt-3 flex items-center gap-2 text-[#E85A3C]">
-                <div className="flex items-center gap-0.5">
-                  {Array.from({ length: 5 }).map((_, idx) => (
-                    <Star key={`rating-${idx}`} className={`h-4 w-4 ${idx < Math.round(reviewAverage) ? 'fill-current' : ''}`} />
-                  ))}
+              <h1
+                className="headline-lg"
+                style={{ fontSize: `${detailViewSettings.titleFontSize}px`, color: detailViewSettings.titleColor }}
+              >
+                {asText(product?.name, 'Product')}
+              </h1>
+              <p className="mt-2" style={{ fontSize: `${detailViewSettings.ownerFontSize}px`, color: detailViewSettings.ownerColor }}>
+                By {ownerName}
+              </p>
+              {detailViewSettings.reviewsEnabled ? (
+                <div className="mt-3 flex items-center gap-2 text-[#E85A3C]">
+                  <div className="flex items-center gap-0.5">
+                    {Array.from({ length: 5 }).map((_, idx) => (
+                      <Star key={`rating-${idx}`} className={`h-4 w-4 ${idx < Math.round(reviewAverage) ? 'fill-current' : ''}`} />
+                    ))}
+                  </div>
+                  <span className="text-sm text-[#6B6B6B]">
+                    {reviewCount} review{reviewCount === 1 ? '' : 's'}
+                  </span>
                 </div>
-                <span className="text-sm text-[#6B6B6B]">
-                  {reviewCount} review{reviewCount === 1 ? '' : 's'}
-                </span>
-              </div>
+              ) : null}
             </div>
 
             <div className="border border-[#d7d3ca] bg-white p-4">
-              <p className="label-mono text-[#6B6B6B]">
+              <p className="label-mono" style={{ color: detailViewSettings.priceLabelColor }}>
                 {mode === 'FABRIC' ? 'ESTIMATED TOTAL' : mode === 'CUSTOM' ? 'ESTIMATED TOTAL' : 'UNIT PRICE'}
               </p>
-              <p className="mt-2 text-4xl font-semibold text-[#E85A3C]">{formatFromUsd(displayPrice)}</p>
+              <p
+                className="mt-2 font-semibold"
+                style={{ fontSize: `${detailViewSettings.priceValueFontSize}px`, color: detailViewSettings.priceValueColor }}
+              >
+                {formatFromUsd(displayPrice)}
+              </p>
             </div>
 
             {mode === 'READY' ? (
@@ -845,7 +1017,7 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
 
         <section className="mt-10 border border-[#d7d3ca] bg-white">
           <div className="flex flex-wrap items-center gap-6 border-b border-[#e4e0d7] px-4 py-3 sm:px-6">
-            {(['DETAILS', 'SPECS', 'REVIEWS'] as const).map((tab) => (
+            {detailTabs.map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -858,8 +1030,8 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
           </div>
           <div className="space-y-5 px-4 py-5 sm:px-6">
             {activeTab === 'DETAILS' ? (
-              <div className="space-y-4 text-sm leading-relaxed text-[#2f2d29]">
-                <p>{asText(product?.description, 'No description available yet.')}</p>
+              <div className="space-y-4 leading-relaxed" style={{ fontSize: `${detailViewSettings.descriptionFontSize}px` }}>
+                <p style={{ color: detailViewSettings.descriptionColor }}>{asText(product?.description, 'No description available yet.')}</p>
               </div>
             ) : null}
 
@@ -867,22 +1039,33 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {productDetailRows.map((row) => (
                   <div key={`${row.label}-${row.value}`} className="border border-[#e4e0d7] p-3">
-                    <p className="label-mono text-[#6B6B6B]">{row.label}</p>
-                    <p className="mt-2 text-sm font-medium text-[#1A1A1A]">{row.value || 'N/A'}</p>
+                    <p className="label-mono" style={{ color: detailViewSettings.specLabelColor }}>
+                      {row.label}
+                    </p>
+                    <p className="mt-2 text-sm font-medium" style={{ color: detailViewSettings.specValueColor }}>
+                      {row.value || 'N/A'}
+                    </p>
                   </div>
                 ))}
                 {mode === 'CUSTOM' ? (
                   <div className="border border-[#e4e0d7] p-3 sm:col-span-2 lg:col-span-3">
-                    <p className="label-mono text-[#6B6B6B]">Measurements</p>
+                    <p className="label-mono" style={{ color: detailViewSettings.specLabelColor }}>
+                      Measurements
+                    </p>
                     {customMeasurementRows.length === 0 ? (
-                      <p className="mt-2 text-sm text-[#6B6B6B]">No measurement variables are configured for this design.</p>
+                      <p className="mt-2 text-sm" style={{ color: detailViewSettings.specLabelColor }}>
+                        No measurement variables are configured for this design.
+                      </p>
                     ) : (
                       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         {customMeasurementRows.map((entry) => {
                           const key = asText(entry?.name, '');
                           return (
                             <label key={key} className="space-y-1">
-                              <span className="text-xs font-medium uppercase tracking-[0.08em] text-[#6B6B6B]">
+                              <span
+                                className="text-xs font-medium uppercase tracking-[0.08em]"
+                                style={{ color: detailViewSettings.specLabelColor }}
+                              >
                                 {key}
                                 {entry?.isRequired !== false ? ' *' : ''}
                               </span>
@@ -913,7 +1096,7 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
               </div>
             ) : null}
 
-            {activeTab === 'REVIEWS' ? (
+            {detailViewSettings.reviewsEnabled && activeTab === 'REVIEWS' ? (
               <div className="grid gap-5 md:grid-cols-[1fr_2fr]">
                 <div className="space-y-2">
                   <p className="label-mono text-[#6B6B6B]">Leave a review</p>
@@ -984,42 +1167,44 @@ export default function JenksV14ProductDetailPage({ mode }: JenksV14ProductDetai
           </div>
         </section>
 
-        <section className="mt-10">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="headline-lg text-[clamp(1.7rem,3vw,2.6rem)]">You May Also Like</h2>
-            <p className="text-xs uppercase tracking-[0.12em] text-[#6B6B6B]">{discoverProducts.length} products</p>
-          </div>
-          {discoverProducts.length === 0 ? (
-            <div className="border border-[#d7d3ca] bg-white px-4 py-8 text-sm text-[#6B6B6B]">No recommendations available.</div>
-          ) : (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {discoverProducts.map((entry) => (
-                <Link key={`${entry.productType}-${entry.id}`} to={discoverHref(entry)} className="product-card group bg-white">
-                  <div className="relative aspect-[3/4] overflow-hidden bg-[#ece8df]">
-                    <img
-                      src={asText(entry.image, '/images/placeholder.jpg')}
-                      alt={asText(entry.name, 'Product')}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[16px] shadow">
-                      {flagEmoji(resolveCountryCode(entry.country) || 'NG')}
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-all duration-300 group-hover:bg-black/30">
-                      <span className="translate-y-2 border border-[#E85A3C] bg-[#E85A3C] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-white opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-                        View Product
-                      </span>
-                    </div>
-                  </div>
-                  <div className="px-4 py-3">
-                    <p className="line-clamp-1 text-base font-semibold text-[#1A1A1A]">{asText(entry.name, 'Product')}</p>
-                    <p className="line-clamp-1 text-sm text-[#6B6B6B]">{asText(entry.ownerName, config.ownerFallback)}</p>
-                    <p className="mt-1 text-sm font-semibold text-[#E85A3C]">{formatFromUsd(toNumber(entry.priceUsd, 0))}</p>
-                  </div>
-                </Link>
-              ))}
+        {detailViewSettings.discoverEnabled ? (
+          <section className="mt-10">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="headline-lg text-[clamp(1.7rem,3vw,2.6rem)]">You May Also Like</h2>
+              <p className="text-xs uppercase tracking-[0.12em] text-[#6B6B6B]">{discoverProducts.length} products</p>
             </div>
-          )}
-        </section>
+            {discoverProducts.length === 0 ? (
+              <div className="border border-[#d7d3ca] bg-white px-4 py-8 text-sm text-[#6B6B6B]">No recommendations available.</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                {discoverProducts.map((entry) => (
+                  <Link key={`${entry.productType}-${entry.id}`} to={discoverHref(entry)} className="product-card group bg-white">
+                    <div className="relative aspect-[3/4] overflow-hidden bg-[#ece8df]">
+                      <img
+                        src={asText(entry.image, '/images/placeholder.jpg')}
+                        alt={asText(entry.name, 'Product')}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[16px] shadow">
+                        {flagEmoji(resolveCountryCode(entry.country) || 'NG')}
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-all duration-300 group-hover:bg-black/30">
+                        <span className="translate-y-2 border border-[#E85A3C] bg-[#E85A3C] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-white opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                          View Product
+                        </span>
+                      </div>
+                    </div>
+                    <div className="px-4 py-3">
+                      <p className="line-clamp-1 text-base font-semibold text-[#1A1A1A]">{asText(entry.name, 'Product')}</p>
+                      <p className="line-clamp-1 text-sm text-[#6B6B6B]">{asText(entry.ownerName, config.ownerFallback)}</p>
+                      <p className="mt-1 text-sm font-semibold text-[#E85A3C]">{formatFromUsd(toNumber(entry.priceUsd, 0))}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
       </div>
 
       {notice ? (
