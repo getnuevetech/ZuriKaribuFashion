@@ -14,9 +14,11 @@ import CustomerServiceChatWidget from '../components/chat/CustomerServiceChatWid
 type ThemeMode = 'LIGHT' | 'DARK';
 type IconComponent = LucideIcon;
 
+type MenuLinkMode = 'PAGE' | 'CUSTOM_URL';
+
 const DEFAULT_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
-  SHOP: '/shop',
+  SHOP: '/Shop',
   READY_TO_WEAR: '/readytowear',
   FABRICS: '/fabricstobuy',
   FABRICS_TO_BUY: '/fabricstobuy',
@@ -76,7 +78,7 @@ const sanitizeLegacyInternalHref = (href: string) => {
   const { path, suffix } = splitPathAndSuffix(href);
   let nextPath = path;
   if (/^\/main\/?$/i.test(nextPath)) nextPath = '/';
-  if (/^\/shop\/?$/i.test(nextPath)) nextPath = '/shop';
+  if (/^\/shop\/?$/i.test(nextPath)) nextPath = '/Shop';
   if (/^\/ready-to-wear(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/ready-to-wear/i, '/readytowear');
   if (/^\/custom(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/custom/i, '/customtowear');
   if (/^\/cystomtowear(\/.*)?$/i.test(nextPath)) nextPath = nextPath.replace(/^\/cystomtowear/i, '/customtowear');
@@ -108,6 +110,19 @@ const normalizeHref = (value: unknown, fallback: string, routeKey?: unknown) => 
   const routeToken = String(routeKey || '').trim().toUpperCase();
   if (routeToken && DEFAULT_HREF_BY_KEY[routeToken]) return toSafeInternalHref(DEFAULT_HREF_BY_KEY[routeToken]);
   return toSafeInternalHref(fallback);
+};
+
+const resolveConfiguredMenuHref = (
+  entry: Record<string, unknown>,
+  fallbackHref: string
+) => {
+  const hrefMode: MenuLinkMode = asString(entry.hrefMode, 'PAGE').toUpperCase() === 'CUSTOM_URL' ? 'CUSTOM_URL' : 'PAGE';
+  if (hrefMode === 'CUSTOM_URL') {
+    return toSafeInternalHref(normalizeHref(entry.customUrl, normalizeHref(entry.href, fallbackHref)));
+  }
+  const pageKey = asString(entry.pageKey, asString(entry.routeKey, '')).toUpperCase();
+  const pageHref = pageKey && DEFAULT_HREF_BY_KEY[pageKey] ? DEFAULT_HREF_BY_KEY[pageKey] : normalizeHref(entry.href, fallbackHref);
+  return toSafeInternalHref(pageHref);
 };
 
 export default function JenksV2MainLayout() {
@@ -153,6 +168,7 @@ export default function JenksV2MainLayout() {
       right: compact.slice(pivot),
     };
   }, [logoTextRaw]);
+  const headerLogoFontWeight = Math.max(100, Math.min(900, Math.round(asNumber(logoCfg.fontWeight, 700))));
   const themeCfg = useMemo(() => asRecord(asRecord(topNavigationsCfg.controllers).theme), [topNavigationsCfg.controllers]);
   const ThemeIcon = iconFromKey(themeCfg.icon, Sun);
   const ComputedThemeIcon = themeMode === 'DARK' ? Moon : ThemeIcon;
@@ -164,7 +180,7 @@ export default function JenksV2MainLayout() {
         .filter((entry) => asBoolean(entry.enabled, true))
         .map((entry) => ({
           label: asString(entry.label, 'Menu'),
-          href: normalizeHref(entry.href, '/', entry.routeKey),
+          href: resolveConfiguredMenuHref(entry, '/'),
         })),
     [topNavigationsCfg.hamburgerMenu]
   );
@@ -176,7 +192,7 @@ export default function JenksV2MainLayout() {
         .filter((entry) => asBoolean(entry.enabled, true))
         .map((entry) => ({
           label: asString(entry.label, 'Link'),
-          href: normalizeHref(entry.href, '/', entry.routeKey),
+          href: resolveConfiguredMenuHref(entry, '/'),
         })),
     [topNavigationsCfg.additionalTopMenu]
   );
@@ -215,8 +231,13 @@ export default function JenksV2MainLayout() {
       return;
     }
     if (typeof window === 'undefined') return;
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setThemeMode(prefersDark ? 'DARK' : 'LIGHT');
+    try {
+      const prefersDark =
+        typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setThemeMode(prefersDark ? 'DARK' : 'LIGHT');
+    } catch {
+      setThemeMode('LIGHT');
+    }
   }, [themeCfg.mode]);
 
   useEffect(() => {
@@ -325,11 +346,12 @@ export default function JenksV2MainLayout() {
                 />
               ) : (
                 <p
-                  className="font-['Oswald'] font-semibold uppercase leading-none tracking-[0.08em]"
+                  className="font-['Oswald'] uppercase leading-none tracking-[0.08em]"
                   style={{
                     color: asString(logoCfg.textColor, '#111111'),
                     fontFamily: asString(logoCfg.fontFamily, 'Oswald'),
                     fontSize: Math.max(18, Math.round(asNumber(logoCfg.fontSize, 27))),
+                    fontWeight: headerLogoFontWeight,
                   }}
                 >
                   <span>{logoTextSplit.left}</span>
@@ -377,7 +399,7 @@ export default function JenksV2MainLayout() {
 
               {asBoolean(signInCfg.enabled, true) ? (
                 <Link
-                  to={isAuthenticated ? profileRoute : toSafeInternalHref(normalizeHref(signInCfg.href, '/auth/login', signInCfg.routeKey))}
+                  to={isAuthenticated ? profileRoute : resolveConfiguredMenuHref(signInCfg, '/auth/login')}
                   className="hidden text-xs font-semibold uppercase tracking-[0.12em] hover:text-black sm:inline"
                 >
                   {isAuthenticated ? 'Dashboard' : asString(signInCfg.label, 'Sign In')}

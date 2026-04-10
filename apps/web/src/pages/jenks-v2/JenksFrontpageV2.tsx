@@ -2914,7 +2914,13 @@ export default function JenksFrontpageV2() {
     const token = asString(themeCfg.mode, 'LIGHT').toUpperCase();
     if (token === 'DARK') return 'DARK';
     if (token === 'SYSTEM' && typeof window !== 'undefined') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'DARK' : 'LIGHT';
+      try {
+        if (typeof window.matchMedia === 'function') {
+          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'DARK' : 'LIGHT';
+        }
+      } catch {
+        return 'LIGHT';
+      }
     }
     return 'LIGHT';
   }, [themeCfg.mode]);
@@ -2972,9 +2978,16 @@ export default function JenksFrontpageV2() {
   }, [heroSlides.length, index]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
     const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-kimi-anim]'));
     if (nodes.length === 0) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      nodes.forEach((node, idx) => {
+        node.style.transitionDelay = `${Math.min(idx % 6, 5) * 60}ms`;
+        node.classList.add('is-in');
+      });
+      return;
+    }
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
