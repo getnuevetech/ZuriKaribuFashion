@@ -169,7 +169,7 @@ const PRODUCT_CONFIGURATION_SUBMENU: Array<{
 }> = [
   {
     key: 'PRODUCT_CARDS',
-    label: 'Product Cards',
+    label: 'Product Card',
     href: '/admin/products/configuration/product-cards',
     hint: 'Manage minimal product card fields and overlays',
   },
@@ -1000,7 +1000,7 @@ export default function AdminProducts() {
         {showProductCardManager ? (
         <div className="rounded-lg border p-3">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold text-gray-900">Product Card Manager</p>
+            <p className="text-sm font-semibold text-gray-900">Product Card</p>
             {productViewLoading ? <span className="text-xs text-gray-500">Loading...</span> : null}
           </div>
           <p className="mb-3 text-xs text-gray-500">

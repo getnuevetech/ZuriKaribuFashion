@@ -648,7 +648,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     { label: 'Stock Level Analysis', href: '/admin/products/stock-list', icon: ChevronRight },
     { label: 'Product Price Compare', href: '/admin/products/price-compare', icon: ChevronRight },
     { label: 'Failed AI Approval', href: '/admin/products/failed-ai-approvals', icon: ChevronRight },
-    { label: 'Product Cards', href: '/admin/products/configuration/product-cards', icon: ChevronRight },
+    { label: 'Product Card', href: '/admin/products/configuration/product-cards', icon: ChevronRight },
     {
       label: 'Detailed Product View',
       href: '/admin/products/configuration/detailed-product-view',
@@ -966,7 +966,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
         entries,
         [
           {
-            label: 'Product Cards',
+            label: 'Product Card',
             href: '/admin/products/configuration/product-cards',
             keywords: ['product card', 'card manager', 'frontpage card', 'category card', 'ads card'],
           },
