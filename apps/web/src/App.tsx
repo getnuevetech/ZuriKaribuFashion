@@ -1,134 +1,127 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 
-// Layouts
 import JenksV2MainLayout from './layouts/JenksV2MainLayout';
-import DashboardLayout from './layouts/DashboardLayout';
-
-// Public Pages
-import CountryProducts from './pages/CountryProducts';
-import ReadyToWear from './pages/ReadyToWear';
-import ReadyToWearDetail from './pages/ReadyToWearDetail';
-import Fabrics from './pages/Fabrics';
-import FabricDetail from './pages/FabricDetail';
-import Designs from './pages/Designs';
-import DesignDetail from './pages/DesignDetail';
-import KimiProductDetail from './pages/KimiProductDetail';
-import ReadyToWearTryOn from './pages/ReadyToWearTryOn';
-import Shop from './pages/Shop';
-import TryOn from './pages/TryOn';
-import Cart from './pages/Cart';
-import Checkout from './pages/Checkout';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import ChangePasswordRequired from './pages/ChangePasswordRequired';
-import ReferralCodeRedirect from './pages/ReferralCodeRedirect';
-import StoryPage from './pages/Story';
-import ContactPage from './pages/Contact';
-import HelpCenterPage from './pages/HelpCenter';
-import VendorSupportCenterPage from './pages/VendorSupportCenter';
-import SellerStorefront from './pages/storefront/SellerStorefront';
-import DesignerStorefront from './pages/storefront/DesignerStorefront';
-
-// Customer Pages
-import CustomerDashboard from './pages/customer/Dashboard';
-import CustomerOrders from './pages/customer/Orders';
-import CustomerProfile from './pages/customer/Profile';
-import CustomerMeasurements from './pages/customer/Measurements';
-
-// Admin Pages
-import AdminDashboard from './pages/admin/Dashboard';
-import AdminUsers from './pages/admin/Users';
-import AdminProducts from './pages/admin/Products';
-import AdminProductLabels from './pages/admin/ProductLabels';
-import AdminOrders from './pages/admin/Orders';
-import AdminPricingRules from './pages/admin/PricingRules';
-import AdminPromoCodes from './pages/admin/PromoCodes';
-import AdminBanners from './pages/admin/Banners';
-import AdminHomepage from './pages/admin/Homepage';
-import AdminHomepageSections from './pages/admin/HomepageSections';
-import AdminHomepageVisibility from './pages/admin/HomepageVisibility';
-import AdminCategoryPages from './pages/admin/CategoryPages';
-import AdminBlogs from './pages/admin/Blogs';
-import AdminRoleManagement from './pages/admin/RoleManagement';
-import AdminVendorProfiles from './pages/admin/VendorProfiles';
-import AdminSessionAudit from './pages/admin/SessionAudit';
-import AdminTraffic from './pages/admin/Traffic';
-import AdminNewsletterSubscribersPage from './pages/admin/NewsletterSubscribers';
-import AdminMeasurementTemplates from './pages/admin/MeasurementTemplates';
-import AdminCurrencyMatrix from './pages/admin/CurrencyMatrix';
-import AdminPayments from './pages/admin/Payments';
-import AdminVendorPayments from './pages/admin/VendorPayments';
-import AdminShipping from './pages/admin/Shipping';
-import AdminPartnerIntegrations from './pages/admin/PartnerIntegrations';
-import AdminTryOnSettings from './pages/admin/TryOnSettings';
-import AdminApiRouteDiagnostics from './pages/admin/ApiRouteDiagnostics';
-import AdminFeaturedRequests from './pages/admin/FeaturedRequests';
-import AdminNotificationCenter from './pages/admin/NotificationCenter';
-import AdminBackups from './pages/admin/Backups';
-import AdminProductChangeRequests from './pages/admin/ProductChangeRequests';
-import AdminProductStockList from './pages/admin/ProductStockList';
-import AdminProductPriceCompare from './pages/admin/ProductPriceCompare';
-import AdminFailedAiApproval from './pages/admin/FailedAiApproval';
-import AdminResellerInfluencers from './pages/admin/ResellerInfluencers';
-import AdminAutomationApprovals from './pages/admin/AutomationApprovals';
-import AdminAutomationAiConfig from './pages/admin/AutomationAiConfig';
-import AdminAutomationSystem from './pages/admin/AutomationSystem';
-import AdminDynamicFields from './pages/admin/DynamicFields';
-import AdminReferralMaterials from './pages/admin/ReferralMaterials';
-import AdminReferralList from './pages/admin/ReferralList';
-import AdminReports from './pages/admin/Reports';
-import AdminProfilePage from './pages/admin/Profile';
-import AdminTicketManagement from './pages/admin/TicketManagement';
-import AdminCustomerServiceChat from './pages/admin/CustomerServiceChat';
-import AdminCustomerServiceSettings from './pages/admin/CustomerServiceSettings';
-import AdminVoipConfiguration from './pages/admin/VoipConfiguration';
-import AdminAuthenticatorSettings from './pages/admin/AuthenticatorSettings';
-import AdminHelpCenterContent from './pages/admin/HelpCenterContent';
-import AdminContactPageManager from './pages/admin/ContactPageManager';
-import AdminModuleRuntimeSettings from './pages/admin/ModuleRuntimeSettings';
-import AdminHomepageRuntimeSwitchboard from './pages/admin/HomepageRuntimeSwitchboard';
-import AdminJenksHomepageManage from './pages/admin/JenksHomepageManage';
-import AdminJenksV2FrontPageManager from './pages/admin/JenksV2FrontPageManager';
 import JenksFrontpageV2 from './pages/jenks-v2/JenksFrontpageV2';
-
-// Seller Pages
-import SellerDashboard from './pages/seller/Dashboard';
-import SellerPayments from './pages/seller/Payments';
-import SellerProfilePage from './pages/seller/Profile';
-import SellerEnterprisePage from './pages/seller/Enterprise';
-import SellerEnterpriseRoleManagementPage from './pages/seller/EnterpriseRoleManagement';
-import SellerMessagesPage from './pages/seller/Messages';
-import SellerFailedProductApprovalPage from './pages/seller/FailedProductApproval';
-
-// Designer Pages
-import DesignerDashboard from './pages/designer/Dashboard';
-import DesignerPayments from './pages/designer/Payments';
-import DesignerProfilePage from './pages/designer/Profile';
-import DesignerEnterprisePage from './pages/designer/Enterprise';
-import DesignerEnterpriseRoleManagementPage from './pages/designer/EnterpriseRoleManagement';
-import DesignerMessagesPage from './pages/designer/Messages';
-import DesignerMeasurementsPage from './pages/designer/Measurements';
-import DesignerFailedProductApprovalPage from './pages/designer/FailedProductApproval';
-
-// QA Pages
-import QADashboard from './pages/qa/Dashboard';
-import QAMessagesPage from './pages/qa/Messages';
-import CustomerMessagesPage from './pages/customer/Messages';
-import ResellerDashboard from './pages/reseller/Dashboard';
-import ResellerProfilePage from './pages/reseller/Profile';
-import ResellerMaterialsPage from './pages/reseller/Materials';
-
-// Auth
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminPermissionGuard from './components/AdminPermissionGuard';
 import DashboardErrorBoundary from './components/DashboardErrorBoundary';
 import { useAuthStore } from './store/authStore';
 import { getHomeRouteForUser } from './auth/rbac';
+
+const DashboardLayout = lazy(() => import('./layouts/DashboardLayout'));
+
+const CountryProducts = lazy(() => import('./pages/CountryProducts'));
+const ReadyToWear = lazy(() => import('./pages/ReadyToWear'));
+const ReadyToWearDetail = lazy(() => import('./pages/ReadyToWearDetail'));
+const Fabrics = lazy(() => import('./pages/Fabrics'));
+const FabricDetail = lazy(() => import('./pages/FabricDetail'));
+const Designs = lazy(() => import('./pages/Designs'));
+const DesignDetail = lazy(() => import('./pages/DesignDetail'));
+const KimiProductDetail = lazy(() => import('./pages/KimiProductDetail'));
+const ReadyToWearTryOn = lazy(() => import('./pages/ReadyToWearTryOn'));
+const Shop = lazy(() => import('./pages/Shop'));
+const TryOn = lazy(() => import('./pages/TryOn'));
+const Cart = lazy(() => import('./pages/Cart'));
+const Checkout = lazy(() => import('./pages/Checkout'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const ChangePasswordRequired = lazy(() => import('./pages/ChangePasswordRequired'));
+const ReferralCodeRedirect = lazy(() => import('./pages/ReferralCodeRedirect'));
+const StoryPage = lazy(() => import('./pages/Story'));
+const ContactPage = lazy(() => import('./pages/Contact'));
+const HelpCenterPage = lazy(() => import('./pages/HelpCenter'));
+const VendorSupportCenterPage = lazy(() => import('./pages/VendorSupportCenter'));
+const SellerStorefront = lazy(() => import('./pages/storefront/SellerStorefront'));
+const DesignerStorefront = lazy(() => import('./pages/storefront/DesignerStorefront'));
+
+const CustomerDashboard = lazy(() => import('./pages/customer/Dashboard'));
+const CustomerOrders = lazy(() => import('./pages/customer/Orders'));
+const CustomerProfile = lazy(() => import('./pages/customer/Profile'));
+const CustomerMeasurements = lazy(() => import('./pages/customer/Measurements'));
+const CustomerMessagesPage = lazy(() => import('./pages/customer/Messages'));
+
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
+const AdminUsers = lazy(() => import('./pages/admin/Users'));
+const AdminProducts = lazy(() => import('./pages/admin/Products'));
+const AdminProductLabels = lazy(() => import('./pages/admin/ProductLabels'));
+const AdminOrders = lazy(() => import('./pages/admin/Orders'));
+const AdminPricingRules = lazy(() => import('./pages/admin/PricingRules'));
+const AdminPromoCodes = lazy(() => import('./pages/admin/PromoCodes'));
+const AdminBanners = lazy(() => import('./pages/admin/Banners'));
+const AdminHomepage = lazy(() => import('./pages/admin/Homepage'));
+const AdminHomepageSections = lazy(() => import('./pages/admin/HomepageSections'));
+const AdminHomepageVisibility = lazy(() => import('./pages/admin/HomepageVisibility'));
+const AdminCategoryPages = lazy(() => import('./pages/admin/CategoryPages'));
+const AdminBlogs = lazy(() => import('./pages/admin/Blogs'));
+const AdminRoleManagement = lazy(() => import('./pages/admin/RoleManagement'));
+const AdminVendorProfiles = lazy(() => import('./pages/admin/VendorProfiles'));
+const AdminSessionAudit = lazy(() => import('./pages/admin/SessionAudit'));
+const AdminTraffic = lazy(() => import('./pages/admin/Traffic'));
+const AdminNewsletterSubscribersPage = lazy(() => import('./pages/admin/NewsletterSubscribers'));
+const AdminMeasurementTemplates = lazy(() => import('./pages/admin/MeasurementTemplates'));
+const AdminCurrencyMatrix = lazy(() => import('./pages/admin/CurrencyMatrix'));
+const AdminPayments = lazy(() => import('./pages/admin/Payments'));
+const AdminVendorPayments = lazy(() => import('./pages/admin/VendorPayments'));
+const AdminShipping = lazy(() => import('./pages/admin/Shipping'));
+const AdminPartnerIntegrations = lazy(() => import('./pages/admin/PartnerIntegrations'));
+const AdminTryOnSettings = lazy(() => import('./pages/admin/TryOnSettings'));
+const AdminApiRouteDiagnostics = lazy(() => import('./pages/admin/ApiRouteDiagnostics'));
+const AdminFeaturedRequests = lazy(() => import('./pages/admin/FeaturedRequests'));
+const AdminNotificationCenter = lazy(() => import('./pages/admin/NotificationCenter'));
+const AdminBackups = lazy(() => import('./pages/admin/Backups'));
+const AdminProductChangeRequests = lazy(() => import('./pages/admin/ProductChangeRequests'));
+const AdminProductStockList = lazy(() => import('./pages/admin/ProductStockList'));
+const AdminProductPriceCompare = lazy(() => import('./pages/admin/ProductPriceCompare'));
+const AdminFailedAiApproval = lazy(() => import('./pages/admin/FailedAiApproval'));
+const AdminResellerInfluencers = lazy(() => import('./pages/admin/ResellerInfluencers'));
+const AdminAutomationApprovals = lazy(() => import('./pages/admin/AutomationApprovals'));
+const AdminAutomationAiConfig = lazy(() => import('./pages/admin/AutomationAiConfig'));
+const AdminAutomationSystem = lazy(() => import('./pages/admin/AutomationSystem'));
+const AdminDynamicFields = lazy(() => import('./pages/admin/DynamicFields'));
+const AdminReferralMaterials = lazy(() => import('./pages/admin/ReferralMaterials'));
+const AdminReferralList = lazy(() => import('./pages/admin/ReferralList'));
+const AdminReports = lazy(() => import('./pages/admin/Reports'));
+const AdminProfilePage = lazy(() => import('./pages/admin/Profile'));
+const AdminTicketManagement = lazy(() => import('./pages/admin/TicketManagement'));
+const AdminCustomerServiceChat = lazy(() => import('./pages/admin/CustomerServiceChat'));
+const AdminCustomerServiceSettings = lazy(() => import('./pages/admin/CustomerServiceSettings'));
+const AdminVoipConfiguration = lazy(() => import('./pages/admin/VoipConfiguration'));
+const AdminAuthenticatorSettings = lazy(() => import('./pages/admin/AuthenticatorSettings'));
+const AdminHelpCenterContent = lazy(() => import('./pages/admin/HelpCenterContent'));
+const AdminContactPageManager = lazy(() => import('./pages/admin/ContactPageManager'));
+const AdminModuleRuntimeSettings = lazy(() => import('./pages/admin/ModuleRuntimeSettings'));
+const AdminHomepageRuntimeSwitchboard = lazy(() => import('./pages/admin/HomepageRuntimeSwitchboard'));
+const AdminJenksHomepageManage = lazy(() => import('./pages/admin/JenksHomepageManage'));
+const AdminJenksV2FrontPageManager = lazy(() => import('./pages/admin/JenksV2FrontPageManager'));
+
+const SellerDashboard = lazy(() => import('./pages/seller/Dashboard'));
+const SellerPayments = lazy(() => import('./pages/seller/Payments'));
+const SellerProfilePage = lazy(() => import('./pages/seller/Profile'));
+const SellerEnterprisePage = lazy(() => import('./pages/seller/Enterprise'));
+const SellerEnterpriseRoleManagementPage = lazy(() => import('./pages/seller/EnterpriseRoleManagement'));
+const SellerMessagesPage = lazy(() => import('./pages/seller/Messages'));
+const SellerFailedProductApprovalPage = lazy(() => import('./pages/seller/FailedProductApproval'));
+
+const DesignerDashboard = lazy(() => import('./pages/designer/Dashboard'));
+const DesignerPayments = lazy(() => import('./pages/designer/Payments'));
+const DesignerProfilePage = lazy(() => import('./pages/designer/Profile'));
+const DesignerEnterprisePage = lazy(() => import('./pages/designer/Enterprise'));
+const DesignerEnterpriseRoleManagementPage = lazy(() => import('./pages/designer/EnterpriseRoleManagement'));
+const DesignerMessagesPage = lazy(() => import('./pages/designer/Messages'));
+const DesignerMeasurementsPage = lazy(() => import('./pages/designer/Measurements'));
+const DesignerFailedProductApprovalPage = lazy(() => import('./pages/designer/FailedProductApproval'));
+
+const QADashboard = lazy(() => import('./pages/qa/Dashboard'));
+const QAMessagesPage = lazy(() => import('./pages/qa/Messages'));
+const ResellerDashboard = lazy(() => import('./pages/reseller/Dashboard'));
+const ResellerProfilePage = lazy(() => import('./pages/reseller/Profile'));
+const ResellerMaterialsPage = lazy(() => import('./pages/reseller/Materials'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -175,6 +168,24 @@ function NavigateCategoryDetailWithSearch({
   return <Navigate to={`${toBase}/${safeId}${suffix}${location.search || ''}${location.hash || ''}`} replace />;
 }
 
+function RouteSuspenseFallback() {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'Inter Tight, Inter, system-ui, -apple-system, sans-serif',
+        background: '#f8f6f1',
+        color: '#111111',
+      }}
+    >
+      Loading...
+    </div>
+  );
+}
+
 function App() {
   const { isAuthenticated, user } = useAuthStore();
   const authenticatedHomeRoute = getHomeRouteForUser(user);
@@ -183,7 +194,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Elements stripe={stripePromise}>
         <Router>
-          <Routes>
+          <Suspense fallback={<RouteSuspenseFallback />}>
+            <Routes>
             <Route path="/" element={<JenksFrontpageV2 />} />
             <Route path="/main" element={<NavigateWithSearch to="/" />} />
             <Route path="/main/" element={<NavigateWithSearch to="/" />} />
@@ -859,7 +871,8 @@ function App() {
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </Router>
       </Elements>
     </QueryClientProvider>

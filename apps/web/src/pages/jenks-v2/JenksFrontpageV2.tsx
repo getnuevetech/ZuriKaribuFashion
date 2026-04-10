@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import BrandImageWithFallback from '../../components/BrandImageWithFallback';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, resolveAssetUrl } from '../../services/api';
+import { publicApi as api, resolveAssetUrl } from '../../services/publicApi';
 import { stripLegacyFallbackImage } from '../../utils/imageFallback';
 import '../../styles/jenks-v2.css';
 

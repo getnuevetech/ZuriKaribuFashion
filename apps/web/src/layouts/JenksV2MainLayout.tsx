@@ -1,15 +1,16 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Menu, Moon, Search, ShoppingBag, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import JenksV2NewsletterFooter from '../components/JenksV2NewsletterFooter';
-import { api, resolveAssetUrl } from '../services/api';
+import { publicApi as api, resolveAssetUrl } from '../services/publicApi';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { getHomeRouteForUser, normalizeRole } from '../auth/rbac';
 import CustomerServiceChatWidgetBoundary from '../components/chat/CustomerServiceChatWidgetBoundary';
-import CustomerServiceChatWidget from '../components/chat/CustomerServiceChatWidget';
+
+const CustomerServiceChatWidget = lazy(() => import('../components/chat/CustomerServiceChatWidget'));
 
 type ThemeMode = 'LIGHT' | 'DARK';
 type IconComponent = LucideIcon;
@@ -532,7 +533,9 @@ export default function JenksV2MainLayout() {
       ) : null}
 
       <CustomerServiceChatWidgetBoundary>
-        <CustomerServiceChatWidget />
+        <Suspense fallback={null}>
+          <CustomerServiceChatWidget />
+        </Suspense>
       </CustomerServiceChatWidgetBoundary>
       <JenksV2NewsletterFooter config={asRecord(frontpageConfig)} />
     </div>

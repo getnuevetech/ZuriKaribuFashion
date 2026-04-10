@@ -2,7 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone, Twitter, Youtube } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { api, resolveAssetUrl } from '../services/api';
+import { publicApi as api, resolveAssetUrl } from '../services/publicApi';
 
 type Props = {
   config?: Record<string, unknown> | null;
