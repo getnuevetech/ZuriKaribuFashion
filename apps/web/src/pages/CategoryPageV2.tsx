@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Loader2, Search } from 'lucide-react';
+import { Heart, Loader2, Search } from 'lucide-react';
 import { api, resolveAssetUrl } from '../services/api';
 import { resolveCountryCode } from '../data/locationOptions';
 import { ThemeProvider } from './jenks-v14/context/ThemeContext';
@@ -25,6 +25,40 @@ type CategoryPageRuntime = {
     primaryGridColumns: number;
     primaryGridProductIds: string[];
     countryRowCount: number;
+    productCard: {
+      imageEnabled: boolean;
+      fieldOrder: Array<'DESIGNER_NAME' | 'PRODUCT_NAME' | 'SHORT_DESCRIPTION' | 'PRICE'>;
+      imageAspectRatio: '3:4' | '1:1';
+      textGap: number;
+      contentPaddingX: number;
+      contentPaddingY: number;
+      designerNameEnabled: boolean;
+      designerNameFontSize: number;
+      designerNameColor: string;
+      productNameEnabled: boolean;
+      productNameFontSize: number;
+      productNameColor: string;
+      shortDescriptionEnabled: boolean;
+      shortDescriptionFontSize: number;
+      shortDescriptionColor: string;
+      shortDescriptionWordLimit: number;
+      priceEnabled: boolean;
+      priceFontSize: number;
+      priceColor: string;
+      labelEnabled: boolean;
+      labelFontSize: number;
+      labelTextColor: string;
+      labelBackgroundColor: string;
+      labelPosition: 'TOP_LEFT';
+      likesEnabled: boolean;
+      likesSize: number;
+      likesColor: string;
+      likesActiveColor: string;
+      likesPosition: 'TOP_RIGHT';
+      countryIconEnabled: boolean;
+      countryIconSize: number;
+      countryIconPosition: 'BOTTOM_RIGHT';
+    };
     filterDefinitions: Array<{
       id: string;
       key: CategoryFilterKey;
@@ -74,7 +108,55 @@ const PAGE_PATH_BY_TYPE: Record<CategoryPageType, string> = {
   SHOP: '/Shop',
 };
 
+const DEFAULT_PRODUCT_CARD = {
+  imageEnabled: true,
+  fieldOrder: ['DESIGNER_NAME', 'PRODUCT_NAME', 'SHORT_DESCRIPTION', 'PRICE'] as Array<
+    'DESIGNER_NAME' | 'PRODUCT_NAME' | 'SHORT_DESCRIPTION' | 'PRICE'
+  >,
+  imageAspectRatio: '3:4' as '3:4' | '1:1',
+  textGap: 6,
+  contentPaddingX: 16,
+  contentPaddingY: 16,
+  designerNameEnabled: true,
+  designerNameFontSize: 14,
+  designerNameColor: '#6b7280',
+  productNameEnabled: true,
+  productNameFontSize: 16,
+  productNameColor: '#111111',
+  shortDescriptionEnabled: true,
+  shortDescriptionFontSize: 13,
+  shortDescriptionColor: '#4b5563',
+  shortDescriptionWordLimit: 10,
+  priceEnabled: true,
+  priceFontSize: 14,
+  priceColor: '#e66045',
+  labelEnabled: true,
+  labelFontSize: 11,
+  labelTextColor: '#ffffff',
+  labelBackgroundColor: 'rgba(17, 17, 17, 0.75)',
+  labelPosition: 'TOP_LEFT' as const,
+  likesEnabled: true,
+  likesSize: 18,
+  likesColor: '#ffffff',
+  likesActiveColor: '#ef4444',
+  likesPosition: 'TOP_RIGHT' as const,
+  countryIconEnabled: true,
+  countryIconSize: 24,
+  countryIconPosition: 'BOTTOM_RIGHT' as const,
+};
+
 const normalizeToken = (value: string) => String(value || '').trim().toLowerCase();
+
+const shortDescription = (value: string, wordLimit: number) => {
+  const words = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+  if (words.length === 0) return '';
+  const limit = Math.max(4, Math.min(24, Math.round(Number(wordLimit || 10))));
+  return words.slice(0, limit).join(' ');
+};
 
 const parseFilterTokens = (value: string, options: string[]) => {
   const raw = String(value || '').trim();
@@ -221,6 +303,114 @@ export default function CategoryPageV2({
   const primaryProducts = (runtime?.primaryGridProducts || []).slice(0, primarySlotCount);
   const primaryIds = new Set(primaryProducts.map((row) => row.id));
   const listingProducts = products.filter((row) => !primaryIds.has(row.id));
+  const cardCfg = runtime?.settings.productCard || DEFAULT_PRODUCT_CARD;
+
+  const renderCard = (row: CategoryPageProduct, cardKey: string) => {
+    const countryCode = resolveCountryCode(row.country);
+    const fieldRenderers: Record<string, () => JSX.Element | null> = {
+      DESIGNER_NAME: () =>
+        cardCfg.designerNameEnabled ? (
+          <p
+            className="leading-tight"
+            style={{ fontSize: `${cardCfg.designerNameFontSize}px`, color: cardCfg.designerNameColor }}
+          >
+            {row.ownerName}
+          </p>
+        ) : null,
+      PRODUCT_NAME: () =>
+        cardCfg.productNameEnabled ? (
+          <h3
+            className="line-clamp-1 leading-tight"
+            style={{ fontSize: `${cardCfg.productNameFontSize}px`, color: cardCfg.productNameColor, fontWeight: 500 }}
+          >
+            {row.name}
+          </h3>
+        ) : null,
+      SHORT_DESCRIPTION: () =>
+        cardCfg.shortDescriptionEnabled ? (
+          <p
+            className="line-clamp-2 leading-snug"
+            style={{ fontSize: `${cardCfg.shortDescriptionFontSize}px`, color: cardCfg.shortDescriptionColor }}
+          >
+            {shortDescription(row.description || '', cardCfg.shortDescriptionWordLimit)}
+          </p>
+        ) : null,
+      PRICE: () =>
+        cardCfg.priceEnabled ? (
+          <p className="leading-tight" style={{ fontSize: `${cardCfg.priceFontSize}px`, color: cardCfg.priceColor }}>
+            ${Number(row.priceUsd || 0).toFixed(2)}
+          </p>
+        ) : null,
+    };
+    return (
+      <Link key={cardKey} to={row.href} className="group bg-[var(--bg-secondary)] border border-[var(--border)]">
+        {cardCfg.imageEnabled ? (
+          <div
+            className="relative overflow-hidden"
+            style={{ aspectRatio: cardCfg.imageAspectRatio === '1:1' ? '1 / 1' : '3 / 4' }}
+          >
+            <BrandImageWithFallback
+              src={resolveAssetUrl(row.image)}
+              alt={row.name}
+              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+            />
+            {cardCfg.labelEnabled ? (
+              <span
+                className="absolute left-2 top-2 rounded px-2 py-1 uppercase tracking-[0.06em]"
+                style={{
+                  fontSize: `${cardCfg.labelFontSize}px`,
+                  color: cardCfg.labelTextColor,
+                  backgroundColor: cardCfg.labelBackgroundColor,
+                }}
+              >
+                {row.category}
+              </span>
+            ) : null}
+            {cardCfg.likesEnabled ? (
+              <span className="absolute right-2 top-2">
+                <Heart
+                  className="drop-shadow"
+                  style={{
+                    width: `${cardCfg.likesSize}px`,
+                    height: `${cardCfg.likesSize}px`,
+                    color: cardCfg.likesColor,
+                  }}
+                />
+              </span>
+            ) : null}
+            {cardCfg.countryIconEnabled && countryCode ? (
+              <span className="absolute bottom-2 right-2 overflow-hidden rounded-sm border border-white/40">
+                <img
+                  src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
+                  alt={row.country}
+                  style={{
+                    width: `${cardCfg.countryIconSize}px`,
+                    height: `${Math.round(cardCfg.countryIconSize * 0.66)}px`,
+                    objectFit: 'cover',
+                  }}
+                  loading="lazy"
+                />
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        <div
+          style={{
+            paddingLeft: `${cardCfg.contentPaddingX}px`,
+            paddingRight: `${cardCfg.contentPaddingX}px`,
+            paddingTop: `${cardCfg.contentPaddingY}px`,
+            paddingBottom: `${cardCfg.contentPaddingY}px`,
+            display: 'grid',
+            gap: `${cardCfg.textGap}px`,
+          }}
+        >
+          {(Array.isArray(cardCfg.fieldOrder) ? cardCfg.fieldOrder : DEFAULT_PRODUCT_CARD.fieldOrder).map((fieldKey) =>
+            fieldRenderers[fieldKey] ? fieldRenderers[fieldKey]() : null
+          )}
+        </div>
+      </Link>
+    );
+  };
 
   const submitFilters = (event?: FormEvent) => {
     event?.preventDefault();
@@ -376,20 +566,7 @@ export default function CategoryPageV2({
                     style={{ gridTemplateColumns: `repeat(${Math.max(1, Number(runtime?.settings.primaryGridColumns || 3))}, minmax(0, 1fr))` }}
                   >
                     {primaryProducts.map((row) => (
-                      <Link key={`primary-${row.id}`} to={row.href} className="group bg-[var(--bg-secondary)] border border-[var(--border)]">
-                        <div className="relative aspect-[3/4] overflow-hidden">
-                          <BrandImageWithFallback
-                            src={resolveAssetUrl(row.image)}
-                            alt={row.name}
-                            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                          />
-                        </div>
-                        <div className="px-4 py-3">
-                          <p className="text-sm text-[var(--text-secondary)]">{row.ownerName}</p>
-                          <h3 className="text-base font-medium text-[var(--text-primary)] line-clamp-1">{row.name}</h3>
-                          <p className="text-[var(--accent)] text-sm mt-1">${Number(row.priceUsd || 0).toFixed(2)}</p>
-                        </div>
-                      </Link>
+                      renderCard(row, `primary-${row.id}`)
                     ))}
                   </div>
                 </div>
@@ -410,20 +587,7 @@ export default function CategoryPageV2({
                 ) : (
                   <div className="grid gap-8" style={{ gridTemplateColumns: `repeat(${Math.max(1, Number(runtime?.settings.columns || 4))}, minmax(0, 1fr))` }}>
                     {listingProducts.map((row) => (
-                      <Link key={`product-${row.sourceType}-${row.id}`} to={row.href} className="group bg-[var(--bg-secondary)] border border-[var(--border)]">
-                        <div className="relative aspect-[3/4] overflow-hidden">
-                          <BrandImageWithFallback
-                            src={resolveAssetUrl(row.image)}
-                            alt={row.name}
-                            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                          />
-                        </div>
-                        <div className="px-4 py-4">
-                          <p className="text-sm text-[var(--text-secondary)]">{row.ownerName}</p>
-                          <h3 className="text-[var(--text-primary)] font-medium text-base line-clamp-1">{row.name}</h3>
-                          <p className="text-[var(--accent)] text-sm mt-1">${Number(row.priceUsd || 0).toFixed(2)}</p>
-                        </div>
-                      </Link>
+                      renderCard(row, `product-${row.sourceType}-${row.id}`)
                     ))}
                   </div>
                 )}

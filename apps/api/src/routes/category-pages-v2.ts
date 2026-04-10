@@ -29,6 +29,43 @@ const updateSchema = z
     primaryGridColumns: z.number().int().min(1).max(6).optional(),
     primaryGridProductIds: z.array(z.string().trim().min(1)).max(60).optional(),
     countryRowCount: z.number().int().min(4).max(30).optional(),
+    productCard: z
+      .object({
+        fieldOrder: z
+          .array(
+            z.object({
+              key: z.enum([
+                'IMAGE',
+                'LABEL',
+                'LIKES_ICON',
+                'COUNTRY_ICON',
+                'DESIGNER_NAME',
+                'PRODUCT_NAME',
+                'SHORT_DESCRIPTION',
+                'PRICE',
+              ]),
+              enabled: z.boolean(),
+              order: z.number().int().min(1).max(99),
+            })
+          )
+          .max(8)
+          .optional(),
+        designerNameFontSize: z.number().int().min(8).max(72).optional(),
+        designerNameColor: z.string().trim().max(40).optional(),
+        productNameFontSize: z.number().int().min(8).max(72).optional(),
+        productNameColor: z.string().trim().max(40).optional(),
+        shortDescriptionFontSize: z.number().int().min(8).max(72).optional(),
+        shortDescriptionColor: z.string().trim().max(40).optional(),
+        priceFontSize: z.number().int().min(8).max(72).optional(),
+        priceColor: z.string().trim().max(40).optional(),
+        labelFontSize: z.number().int().min(8).max(72).optional(),
+        labelColor: z.string().trim().max(40).optional(),
+        labelBackgroundColor: z.string().trim().max(40).optional(),
+        likesIconSize: z.number().int().min(8).max(72).optional(),
+        likesIconColor: z.string().trim().max(40).optional(),
+        countryIconSize: z.number().int().min(8).max(96).optional(),
+      })
+      .optional(),
     filterDefinitions: z
       .array(
         z.object({

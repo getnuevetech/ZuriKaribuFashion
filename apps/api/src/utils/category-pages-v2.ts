@@ -25,6 +25,42 @@ export type CategoryPageV2FilterKey = (typeof CATEGORY_PAGE_V2_FILTER_KEYS)[numb
 export const CATEGORY_PAGE_V2_FILTER_INPUT_TYPES = ['DROPDOWN', 'SUGGESTIVE_SEARCH'] as const;
 export type CategoryPageV2FilterInputType = (typeof CATEGORY_PAGE_V2_FILTER_INPUT_TYPES)[number];
 
+export const CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS = [
+  'IMAGE',
+  'LABEL',
+  'LIKES_ICON',
+  'COUNTRY_ICON',
+  'DESIGNER_NAME',
+  'PRODUCT_NAME',
+  'SHORT_DESCRIPTION',
+  'PRICE',
+] as const;
+export type CategoryPageV2ProductCardFieldKey = (typeof CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS)[number];
+
+type CategoryPageV2ProductCardFieldOrder = {
+  key: CategoryPageV2ProductCardFieldKey;
+  enabled: boolean;
+  order: number;
+};
+
+type CategoryPageV2ProductCardSettings = {
+  fieldOrder: CategoryPageV2ProductCardFieldOrder[];
+  designerNameFontSize: number;
+  designerNameColor: string;
+  productNameFontSize: number;
+  productNameColor: string;
+  shortDescriptionFontSize: number;
+  shortDescriptionColor: string;
+  priceFontSize: number;
+  priceColor: string;
+  labelFontSize: number;
+  labelColor: string;
+  labelBackgroundColor: string;
+  likesIconSize: number;
+  likesIconColor: string;
+  countryIconSize: number;
+};
+
 export type CategoryPageV2Product = {
   id: string;
   sourceType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
@@ -66,14 +102,151 @@ const settingsSchema = z.object({
   primaryGridProductIds: z.array(z.string().trim().min(1)).max(60),
   countryRowCount: z.number().int().min(4).max(30),
   filterDefinitions: z.array(settingsFilterRowSchema).max(20),
+  productCard: z.object({
+    fieldOrder: z
+      .array(
+        z.object({
+          key: z.enum(CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS),
+          enabled: z.boolean(),
+          order: z.number().int().min(1).max(99),
+        })
+      )
+      .max(CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS.length),
+    designerNameFontSize: z.number().int().min(8).max(72),
+    designerNameColor: z.string().trim().max(40),
+    productNameFontSize: z.number().int().min(8).max(72),
+    productNameColor: z.string().trim().max(40),
+    shortDescriptionFontSize: z.number().int().min(8).max(72),
+    shortDescriptionColor: z.string().trim().max(40),
+    priceFontSize: z.number().int().min(8).max(72),
+    priceColor: z.string().trim().max(40),
+    labelFontSize: z.number().int().min(8).max(72),
+    labelColor: z.string().trim().max(40),
+    labelBackgroundColor: z.string().trim().max(40),
+    likesIconSize: z.number().int().min(8).max(72),
+    likesIconColor: z.string().trim().max(40),
+    countryIconSize: z.number().int().min(8).max(96),
+  }),
 });
 
-const settingsPatchSchema = settingsSchema.partial();
+const settingsPatchSchema = settingsSchema
+  .partial()
+  .extend({
+    productCard: settingsSchema.shape.productCard.partial().optional(),
+  });
 
 export type CategoryPageV2Settings = z.infer<typeof settingsSchema>;
 type CategoryPageV2FilterRow = z.infer<typeof settingsFilterRowSchema>;
 
 const SETTINGS_KEY_PREFIX = 'CATEGORY_PAGES_V2_';
+
+const DEFAULT_PRODUCT_CARD_FIELD_ORDER: CategoryPageV2ProductCardFieldOrder[] = [
+  { key: 'IMAGE', enabled: true, order: 1 },
+  { key: 'LABEL', enabled: true, order: 2 },
+  { key: 'LIKES_ICON', enabled: true, order: 3 },
+  { key: 'COUNTRY_ICON', enabled: true, order: 4 },
+  { key: 'DESIGNER_NAME', enabled: true, order: 5 },
+  { key: 'PRODUCT_NAME', enabled: true, order: 6 },
+  { key: 'SHORT_DESCRIPTION', enabled: true, order: 7 },
+  { key: 'PRICE', enabled: true, order: 8 },
+];
+
+const createDefaultProductCard = (): CategoryPageV2ProductCardSettings => ({
+  fieldOrder: DEFAULT_PRODUCT_CARD_FIELD_ORDER.map((entry) => ({ ...entry })),
+  designerNameFontSize: 13,
+  designerNameColor: '#6b7280',
+  productNameFontSize: 16,
+  productNameColor: '#111827',
+  shortDescriptionFontSize: 12,
+  shortDescriptionColor: '#4b5563',
+  priceFontSize: 13,
+  priceColor: '#e66045',
+  labelFontSize: 11,
+  labelColor: '#ffffff',
+  labelBackgroundColor: 'rgba(0,0,0,0.7)',
+  likesIconSize: 17,
+  likesIconColor: '#ffffff',
+  countryIconSize: 20,
+});
+
+const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(numeric)));
+};
+
+const normalizeColor = (value: unknown, fallback: string) => {
+  const token = normalizeText(value).slice(0, 40);
+  return token || fallback;
+};
+
+const normalizeProductCardFieldOrder = (
+  value: unknown,
+  fallbackRows: CategoryPageV2ProductCardFieldOrder[]
+): CategoryPageV2ProductCardFieldOrder[] => {
+  const fallbackByKey = new Map<CategoryPageV2ProductCardFieldKey, CategoryPageV2ProductCardFieldOrder>(
+    fallbackRows.map((entry) => [entry.key, entry])
+  );
+  const rows = Array.isArray(value) ? value : fallbackRows;
+  const collected = new Map<CategoryPageV2ProductCardFieldKey, CategoryPageV2ProductCardFieldOrder>();
+  rows.forEach((entry, index) => {
+    const row = asObject(entry);
+    const keyToken = normalizeText(row.key).toUpperCase();
+    if (!CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS.includes(keyToken as CategoryPageV2ProductCardFieldKey)) return;
+    const key = keyToken as CategoryPageV2ProductCardFieldKey;
+    const fallback = fallbackByKey.get(key) || fallbackRows[index] || fallbackRows[0];
+    collected.set(key, {
+      key,
+      enabled: typeof row.enabled === 'boolean' ? row.enabled : fallback.enabled,
+      order: clampNumber(row.order, fallback.order, 1, 99),
+    });
+  });
+  CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS.forEach((key, index) => {
+    if (collected.has(key)) return;
+    const fallback = fallbackByKey.get(key) || fallbackRows[index] || fallbackRows[0];
+    collected.set(key, { ...fallback });
+  });
+  return Array.from(collected.values()).sort((a, b) => a.order - b.order || a.key.localeCompare(b.key));
+};
+
+const normalizeProductCardStyle = (
+  value: unknown,
+  fallback: CategoryPageV2ProductCardSettings
+): CategoryPageV2ProductCardSettings => {
+  const row = asObject(value);
+  return {
+    fieldOrder: normalizeProductCardFieldOrder(row.fieldOrder, fallback.fieldOrder),
+    designerNameFontSize: clampNumber(row.designerNameFontSize, fallback.designerNameFontSize, 8, 72),
+    designerNameColor: normalizeColor(row.designerNameColor, fallback.designerNameColor),
+    productNameFontSize: clampNumber(row.productNameFontSize, fallback.productNameFontSize, 8, 72),
+    productNameColor: normalizeColor(row.productNameColor, fallback.productNameColor),
+    shortDescriptionFontSize: clampNumber(row.shortDescriptionFontSize, fallback.shortDescriptionFontSize, 8, 72),
+    shortDescriptionColor: normalizeColor(row.shortDescriptionColor, fallback.shortDescriptionColor),
+    priceFontSize: clampNumber(row.priceFontSize, fallback.priceFontSize, 8, 72),
+    priceColor: normalizeColor(row.priceColor, fallback.priceColor),
+    labelFontSize: clampNumber(row.labelFontSize, fallback.labelFontSize, 8, 72),
+    labelColor: normalizeColor(row.labelColor, fallback.labelColor),
+    labelBackgroundColor: normalizeColor(row.labelBackgroundColor, fallback.labelBackgroundColor),
+    likesIconSize: clampNumber(row.likesIconSize, fallback.likesIconSize, 8, 72),
+    likesIconColor: normalizeColor(row.likesIconColor, fallback.likesIconColor),
+    countryIconSize: clampNumber(row.countryIconSize, fallback.countryIconSize, 8, 96),
+  };
+};
+
+const mergeProductCardPatch = (
+  base: CategoryPageV2ProductCardSettings,
+  patch: unknown
+): CategoryPageV2ProductCardSettings => {
+  const source = asObject(patch);
+  return normalizeProductCardStyle(
+    {
+      ...base,
+      ...source,
+      fieldOrder: source.fieldOrder ?? base.fieldOrder,
+    },
+    base
+  );
+};
 
 const DEFAULT_FILTERS: Record<CategoryPageV2Type, CategoryPageV2FilterRow[]> = {
   READY_TO_WEAR: [
@@ -134,6 +307,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     primaryGridProductIds: [],
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.READY_TO_WEAR,
+    productCard: createDefaultProductCard(),
   },
   FABRIC_TO_BUY: {
     title: 'Fabrics',
@@ -149,6 +323,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     primaryGridProductIds: [],
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.FABRIC_TO_BUY,
+    productCard: createDefaultProductCard(),
   },
   CUSTOM_TO_WEAR: {
     title: 'Custom To Wear',
@@ -164,6 +339,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     primaryGridProductIds: [],
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.CUSTOM_TO_WEAR,
+    productCard: createDefaultProductCard(),
   },
   COUNTRY: {
     title: 'Country Products',
@@ -179,6 +355,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     primaryGridProductIds: [],
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.COUNTRY,
+    productCard: createDefaultProductCard(),
   },
   SHOP: {
     title: 'Shop',
@@ -194,6 +371,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     primaryGridProductIds: [],
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.SHOP,
+    productCard: createDefaultProductCard(),
   },
 };
 
@@ -301,6 +479,7 @@ const normalizeSettings = (pageType: CategoryPageV2Type, payload: unknown): Cate
       ? Math.max(4, Math.min(30, Math.round(Number(row.countryRowCount))))
       : fallback.countryRowCount,
     filterDefinitions: normalizeFilters(pageType, row.filterDefinitions),
+    productCard: normalizeProductCardStyle(row.productCard, fallback.productCard),
   });
   if (parsed.success) return parsed.data;
   return { ...fallback };
@@ -375,7 +554,7 @@ const mapDesign = (row: any): CategoryPageV2Product => ({
   ownerName: normalizeText(row?.designer?.businessName) || 'Designer',
   country: normalizeText(row?.designer?.country),
   priceUsd: Number(row?.finalPrice || row?.basePrice || 0),
-  href: `/cystomtowear/${String(row?.id || '')}`,
+  href: `/customtowear/${String(row?.id || '')}`,
   style: normalizeText(row?.category?.name) || 'Custom',
   fabricType: normalizeText(row?.materialType?.name) || 'Fabric',
   material: normalizeText(row?.materialType?.name) || 'Material',
@@ -491,7 +670,11 @@ const listContains = (filterValues: string[] | undefined, value: string) => {
   if (!Array.isArray(filterValues) || filterValues.length === 0) return true;
   const valueToken = normalizeToken(value);
   if (!valueToken) return false;
-  return filterValues.some((entry) => normalizeToken(entry) === valueToken);
+  return filterValues.some((entry) => {
+    const needle = normalizeToken(entry);
+    if (!needle) return false;
+    return valueToken === needle || valueToken.includes(needle);
+  });
 };
 
 const filterProducts = (rows: CategoryPageV2Product[], filters: FilterInput): CategoryPageV2Product[] => {
@@ -598,7 +781,12 @@ export async function writeCategoryPageV2Settings(pageType: CategoryPageV2Type, 
   const parsedPatch = settingsPatchSchema.parse(patch || {});
   const existing = await readCategoryPageV2Settings(pageType);
   const nextPayload = merge
-    ? { ...existing.settings, ...parsedPatch, filterDefinitions: parsedPatch.filterDefinitions || existing.settings.filterDefinitions }
+    ? {
+        ...existing.settings,
+        ...parsedPatch,
+        filterDefinitions: parsedPatch.filterDefinitions || existing.settings.filterDefinitions,
+        productCard: mergeProductCardPatch(existing.settings.productCard, parsedPatch.productCard),
+      }
     : { ...DEFAULT_SETTINGS[pageType], ...parsedPatch };
   const normalized = normalizeSettings(pageType, nextPayload);
   const serialized = JSON.stringify(normalized);

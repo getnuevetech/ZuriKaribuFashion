@@ -30,6 +30,40 @@ type CategoryPageSettingsForm = {
   primaryGridColumns: number;
   primaryGridProductIds: string[];
   countryRowCount: number;
+  productCard: {
+    imageEnabled: boolean;
+    fieldOrder: string[];
+    imageAspectRatio: '3:4' | '1:1';
+    textGap: number;
+    contentPaddingX: number;
+    contentPaddingY: number;
+    designerNameEnabled: boolean;
+    designerNameFontSize: number;
+    designerNameColor: string;
+    productNameEnabled: boolean;
+    productNameFontSize: number;
+    productNameColor: string;
+    shortDescriptionEnabled: boolean;
+    shortDescriptionFontSize: number;
+    shortDescriptionColor: string;
+    shortDescriptionWordLimit: number;
+    priceEnabled: boolean;
+    priceFontSize: number;
+    priceColor: string;
+    labelEnabled: boolean;
+    labelFontSize: number;
+    labelTextColor: string;
+    labelBackgroundColor: string;
+    labelPosition: 'TOP_LEFT';
+    likesEnabled: boolean;
+    likesSize: number;
+    likesColor: string;
+    likesActiveColor: string;
+    likesPosition: 'TOP_RIGHT';
+    countryIconEnabled: boolean;
+    countryIconSize: number;
+    countryIconPosition: 'BOTTOM_RIGHT';
+  };
   filterDefinitions: CategoryFilterDefinition[];
 };
 
@@ -71,7 +105,62 @@ const EMPTY_SETTINGS: CategoryPageSettingsForm = {
   primaryGridColumns: 3,
   primaryGridProductIds: [],
   countryRowCount: 12,
+  productCard: {
+    imageEnabled: true,
+    fieldOrder: ['DESIGNER_NAME', 'PRODUCT_NAME', 'SHORT_DESCRIPTION', 'PRICE'],
+    imageAspectRatio: '3:4',
+    textGap: 6,
+    contentPaddingX: 16,
+    contentPaddingY: 16,
+    designerNameEnabled: true,
+    designerNameFontSize: 14,
+    designerNameColor: '#6b7280',
+    productNameEnabled: true,
+    productNameFontSize: 16,
+    productNameColor: '#111111',
+    shortDescriptionEnabled: true,
+    shortDescriptionFontSize: 13,
+    shortDescriptionColor: '#4b5563',
+    shortDescriptionWordLimit: 10,
+    priceEnabled: true,
+    priceFontSize: 14,
+    priceColor: '#e66045',
+    labelEnabled: true,
+    labelFontSize: 11,
+    labelTextColor: '#ffffff',
+    labelBackgroundColor: 'rgba(17, 17, 17, 0.75)',
+    labelPosition: 'TOP_LEFT',
+    likesEnabled: true,
+    likesSize: 18,
+    likesColor: '#ffffff',
+    likesActiveColor: '#ef4444',
+    likesPosition: 'TOP_RIGHT',
+    countryIconEnabled: true,
+    countryIconSize: 24,
+    countryIconPosition: 'BOTTOM_RIGHT',
+  },
   filterDefinitions: [],
+};
+
+const PRODUCT_CARD_FIELDS: Array<{ key: string; label: string }> = [
+  { key: 'DESIGNER_NAME', label: 'Designer Name' },
+  { key: 'PRODUCT_NAME', label: 'Product Name' },
+  { key: 'SHORT_DESCRIPTION', label: 'Short Description' },
+  { key: 'PRICE', label: 'Price' },
+];
+
+const normalizeFieldOrder = (value: unknown) => {
+  const allowed = new Set(PRODUCT_CARD_FIELDS.map((entry) => entry.key));
+  const source = Array.isArray(value) ? value.map((entry) => String(entry || '').trim().toUpperCase()) : [];
+  const unique: string[] = [];
+  source.forEach((token) => {
+    if (!allowed.has(token) || unique.includes(token)) return;
+    unique.push(token);
+  });
+  PRODUCT_CARD_FIELDS.forEach((entry) => {
+    if (!unique.includes(entry.key)) unique.push(entry.key);
+  });
+  return unique;
 };
 
 const normalizeSettings = (input: any): CategoryPageSettingsForm => ({
@@ -89,6 +178,40 @@ const normalizeSettings = (input: any): CategoryPageSettingsForm => ({
     ? Array.from(new Set(input.primaryGridProductIds.map((entry: any) => String(entry || '').trim()).filter(Boolean))).slice(0, 60)
     : [],
   countryRowCount: Math.max(4, Math.min(30, Number(input?.countryRowCount || 12))),
+  productCard: {
+    imageEnabled: input?.productCard?.imageEnabled !== false,
+    fieldOrder: normalizeFieldOrder(input?.productCard?.fieldOrder),
+    imageAspectRatio: String(input?.productCard?.imageAspectRatio || '3:4') === '1:1' ? '1:1' : '3:4',
+    textGap: Math.max(0, Math.min(24, Number(input?.productCard?.textGap || 6))),
+    contentPaddingX: Math.max(0, Math.min(40, Number(input?.productCard?.contentPaddingX || 16))),
+    contentPaddingY: Math.max(0, Math.min(40, Number(input?.productCard?.contentPaddingY || 16))),
+    designerNameEnabled: input?.productCard?.designerNameEnabled !== false,
+    designerNameFontSize: Math.max(10, Math.min(48, Number(input?.productCard?.designerNameFontSize || 14))),
+    designerNameColor: String(input?.productCard?.designerNameColor || '#6b7280'),
+    productNameEnabled: input?.productCard?.productNameEnabled !== false,
+    productNameFontSize: Math.max(10, Math.min(64, Number(input?.productCard?.productNameFontSize || 16))),
+    productNameColor: String(input?.productCard?.productNameColor || '#111111'),
+    shortDescriptionEnabled: input?.productCard?.shortDescriptionEnabled !== false,
+    shortDescriptionFontSize: Math.max(10, Math.min(48, Number(input?.productCard?.shortDescriptionFontSize || 13))),
+    shortDescriptionColor: String(input?.productCard?.shortDescriptionColor || '#4b5563'),
+    shortDescriptionWordLimit: Math.max(4, Math.min(24, Number(input?.productCard?.shortDescriptionWordLimit || 10))),
+    priceEnabled: input?.productCard?.priceEnabled !== false,
+    priceFontSize: Math.max(10, Math.min(64, Number(input?.productCard?.priceFontSize || 14))),
+    priceColor: String(input?.productCard?.priceColor || '#e66045'),
+    labelEnabled: input?.productCard?.labelEnabled !== false,
+    labelFontSize: Math.max(8, Math.min(36, Number(input?.productCard?.labelFontSize || 11))),
+    labelTextColor: String(input?.productCard?.labelTextColor || '#ffffff'),
+    labelBackgroundColor: String(input?.productCard?.labelBackgroundColor || 'rgba(17, 17, 17, 0.75)'),
+    labelPosition: 'TOP_LEFT',
+    likesEnabled: input?.productCard?.likesEnabled !== false,
+    likesSize: Math.max(12, Math.min(48, Number(input?.productCard?.likesSize || 18))),
+    likesColor: String(input?.productCard?.likesColor || '#ffffff'),
+    likesActiveColor: String(input?.productCard?.likesActiveColor || '#ef4444'),
+    likesPosition: 'TOP_RIGHT',
+    countryIconEnabled: input?.productCard?.countryIconEnabled !== false,
+    countryIconSize: Math.max(12, Math.min(56, Number(input?.productCard?.countryIconSize || 24))),
+    countryIconPosition: 'BOTTOM_RIGHT',
+  },
   filterDefinitions: Array.isArray(input?.filterDefinitions)
     ? input.filterDefinitions.map((row: any) => ({
         id: String(row?.id || ''),
@@ -198,6 +321,40 @@ export default function AdminCategoryPages() {
         primaryGridColumns: Math.max(1, Math.min(6, Math.round(Number(settings.primaryGridColumns || 3)))),
         primaryGridProductIds: Array.from(new Set(settings.primaryGridProductIds.map((entry) => String(entry || '').trim()).filter(Boolean))).slice(0, 60),
         countryRowCount: Math.max(4, Math.min(30, Math.round(Number(settings.countryRowCount || 12)))),
+        productCard: {
+          imageEnabled: settings.productCard.imageEnabled !== false,
+          fieldOrder: normalizeFieldOrder(settings.productCard.fieldOrder),
+          imageAspectRatio: settings.productCard.imageAspectRatio === '1:1' ? '1:1' : '3:4',
+          textGap: Math.max(0, Math.min(24, Math.round(Number(settings.productCard.textGap || 6)))),
+          contentPaddingX: Math.max(0, Math.min(40, Math.round(Number(settings.productCard.contentPaddingX || 16)))),
+          contentPaddingY: Math.max(0, Math.min(40, Math.round(Number(settings.productCard.contentPaddingY || 16)))),
+          designerNameEnabled: settings.productCard.designerNameEnabled !== false,
+          designerNameFontSize: Math.max(10, Math.min(48, Math.round(Number(settings.productCard.designerNameFontSize || 14)))),
+          designerNameColor: String(settings.productCard.designerNameColor || '#6b7280'),
+          productNameEnabled: settings.productCard.productNameEnabled !== false,
+          productNameFontSize: Math.max(10, Math.min(64, Math.round(Number(settings.productCard.productNameFontSize || 16)))),
+          productNameColor: String(settings.productCard.productNameColor || '#111111'),
+          shortDescriptionEnabled: settings.productCard.shortDescriptionEnabled !== false,
+          shortDescriptionFontSize: Math.max(10, Math.min(48, Math.round(Number(settings.productCard.shortDescriptionFontSize || 13)))),
+          shortDescriptionColor: String(settings.productCard.shortDescriptionColor || '#4b5563'),
+          shortDescriptionWordLimit: Math.max(4, Math.min(24, Math.round(Number(settings.productCard.shortDescriptionWordLimit || 10)))),
+          priceEnabled: settings.productCard.priceEnabled !== false,
+          priceFontSize: Math.max(10, Math.min(64, Math.round(Number(settings.productCard.priceFontSize || 14)))),
+          priceColor: String(settings.productCard.priceColor || '#e66045'),
+          labelEnabled: settings.productCard.labelEnabled !== false,
+          labelFontSize: Math.max(8, Math.min(36, Math.round(Number(settings.productCard.labelFontSize || 11)))),
+          labelTextColor: String(settings.productCard.labelTextColor || '#ffffff'),
+          labelBackgroundColor: String(settings.productCard.labelBackgroundColor || 'rgba(17, 17, 17, 0.75)'),
+          labelPosition: 'TOP_LEFT',
+          likesEnabled: settings.productCard.likesEnabled !== false,
+          likesSize: Math.max(12, Math.min(48, Math.round(Number(settings.productCard.likesSize || 18)))),
+          likesColor: String(settings.productCard.likesColor || '#ffffff'),
+          likesActiveColor: String(settings.productCard.likesActiveColor || '#ef4444'),
+          likesPosition: 'TOP_RIGHT',
+          countryIconEnabled: settings.productCard.countryIconEnabled !== false,
+          countryIconSize: Math.max(12, Math.min(56, Math.round(Number(settings.productCard.countryIconSize || 24)))),
+          countryIconPosition: 'BOTTOM_RIGHT',
+        },
         filterDefinitions: settings.filterDefinitions.map((row) => ({
           id: String(row.id || '').trim(),
           key: row.key,
@@ -404,6 +561,364 @@ export default function AdminCategoryPages() {
                 />
                 <span className="text-gray-700">Show pagination</span>
               </label>
+            </div>
+
+            <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-800">Product Card (RTW, FTB, CTW)</h3>
+              <p className="text-xs text-gray-600">
+                Control field visibility, colors, text sizes, icon style, and the order of card fields.
+              </p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <label className="text-xs">
+                  Image Aspect Ratio
+                  <select
+                    className="mt-1 w-full rounded border px-2 py-1"
+                    value={settings.productCard.imageAspectRatio}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        productCard: {
+                          ...prev.productCard,
+                          imageAspectRatio: event.target.value === '1:1' ? '1:1' : '3:4',
+                        },
+                      }))
+                    }
+                  >
+                    <option value="3:4">3:4</option>
+                    <option value="1:1">1:1</option>
+                  </select>
+                </label>
+                <label className="text-xs">
+                  Text Gap (px)
+                  <input
+                    type="number"
+                    min={0}
+                    max={24}
+                    className="mt-1 w-full rounded border px-2 py-1"
+                    value={settings.productCard.textGap}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        productCard: {
+                          ...prev.productCard,
+                          textGap: Math.max(0, Math.min(24, Number(event.target.value || 6))),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Content Padding X (px)
+                  <input
+                    type="number"
+                    min={0}
+                    max={40}
+                    className="mt-1 w-full rounded border px-2 py-1"
+                    value={settings.productCard.contentPaddingX}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        productCard: {
+                          ...prev.productCard,
+                          contentPaddingX: Math.max(0, Math.min(40, Number(event.target.value || 16))),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Content Padding Y (px)
+                  <input
+                    type="number"
+                    min={0}
+                    max={40}
+                    className="mt-1 w-full rounded border px-2 py-1"
+                    value={settings.productCard.contentPaddingY}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        productCard: {
+                          ...prev.productCard,
+                          contentPaddingY: Math.max(0, Math.min(40, Number(event.target.value || 16))),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {PRODUCT_CARD_FIELDS.map((field) => {
+                  const token = field.key;
+                  const enabledKey =
+                    token === 'DESIGNER_NAME'
+                      ? 'designerNameEnabled'
+                      : token === 'PRODUCT_NAME'
+                        ? 'productNameEnabled'
+                        : token === 'SHORT_DESCRIPTION'
+                          ? 'shortDescriptionEnabled'
+                          : 'priceEnabled';
+                  const fontSizeKey =
+                    token === 'DESIGNER_NAME'
+                      ? 'designerNameFontSize'
+                      : token === 'PRODUCT_NAME'
+                        ? 'productNameFontSize'
+                        : token === 'SHORT_DESCRIPTION'
+                          ? 'shortDescriptionFontSize'
+                          : 'priceFontSize';
+                  const colorKey =
+                    token === 'DESIGNER_NAME'
+                      ? 'designerNameColor'
+                      : token === 'PRODUCT_NAME'
+                        ? 'productNameColor'
+                        : token === 'SHORT_DESCRIPTION'
+                          ? 'shortDescriptionColor'
+                          : 'priceColor';
+                  const rank = settings.productCard.fieldOrder.indexOf(token);
+                  return (
+                    <div key={field.key} className="rounded border p-3">
+                      <p className="text-xs font-semibold text-gray-700">{field.label}</p>
+                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                        <label className="inline-flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={Boolean((settings.productCard as any)[enabledKey])}
+                            onChange={(event) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                productCard: { ...prev.productCard, [enabledKey]: event.target.checked },
+                              }))
+                            }
+                          />
+                          Enabled
+                        </label>
+                        <label className="text-xs">
+                          Font Size
+                          <input
+                            type="number"
+                            min={10}
+                            max={64}
+                            className="mt-1 w-full rounded border px-2 py-1"
+                            value={Number((settings.productCard as any)[fontSizeKey] || 14)}
+                            onChange={(event) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                productCard: {
+                                  ...prev.productCard,
+                                  [fontSizeKey]: Math.max(10, Math.min(64, Number(event.target.value || 14))),
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Color
+                          <input
+                            type="text"
+                            className="mt-1 w-full rounded border px-2 py-1"
+                            value={String((settings.productCard as any)[colorKey] || '')}
+                            onChange={(event) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                productCard: { ...prev.productCard, [colorKey]: event.target.value },
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Order
+                          <input
+                            type="number"
+                            min={1}
+                            max={PRODUCT_CARD_FIELDS.length}
+                            className="mt-1 w-full rounded border px-2 py-1"
+                            value={rank + 1}
+                            onChange={(event) => {
+                              const desired = Math.max(1, Math.min(PRODUCT_CARD_FIELDS.length, Number(event.target.value || rank + 1))) - 1;
+                              setSettings((prev) => {
+                                const nextOrder = normalizeFieldOrder(prev.productCard.fieldOrder);
+                                const currentIndex = nextOrder.indexOf(token);
+                                const base = nextOrder.filter((entry) => entry !== token);
+                                base.splice(desired, 0, token);
+                                return {
+                                  ...prev,
+                                  productCard: {
+                                    ...prev.productCard,
+                                    fieldOrder: normalizeFieldOrder(base),
+                                  },
+                                };
+                              });
+                            }}
+                          />
+                        </label>
+                        {token === 'SHORT_DESCRIPTION' ? (
+                          <label className="text-xs">
+                            Word Limit
+                            <input
+                              type="number"
+                              min={4}
+                              max={24}
+                              className="mt-1 w-full rounded border px-2 py-1"
+                              value={settings.productCard.shortDescriptionWordLimit}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  productCard: {
+                                    ...prev.productCard,
+                                    shortDescriptionWordLimit: Math.max(4, Math.min(24, Number(event.target.value || 10))),
+                                  },
+                                }))
+                              }
+                            />
+                          </label>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="rounded border p-3">
+                  <p className="text-xs font-semibold text-gray-700">Product Label (Top-left)</p>
+                  <label className="mt-2 inline-flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={settings.productCard.labelEnabled}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, labelEnabled: event.target.checked },
+                        }))
+                      }
+                    />
+                    Enabled
+                  </label>
+                  <div className="mt-2 grid grid-cols-1 gap-2">
+                    <input
+                      type="number"
+                      min={8}
+                      max={36}
+                      className="rounded border px-2 py-1 text-xs"
+                      value={settings.productCard.labelFontSize}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, labelFontSize: Math.max(8, Math.min(36, Number(event.target.value || 11))) },
+                        }))
+                      }
+                    />
+                    <input
+                      type="text"
+                      className="rounded border px-2 py-1 text-xs"
+                      value={settings.productCard.labelTextColor}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, labelTextColor: event.target.value },
+                        }))
+                      }
+                      placeholder="Text color"
+                    />
+                    <input
+                      type="text"
+                      className="rounded border px-2 py-1 text-xs"
+                      value={settings.productCard.labelBackgroundColor}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, labelBackgroundColor: event.target.value },
+                        }))
+                      }
+                      placeholder="Background color"
+                    />
+                  </div>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs font-semibold text-gray-700">Likes Icon (Top-right)</p>
+                  <label className="mt-2 inline-flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={settings.productCard.likesEnabled}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, likesEnabled: event.target.checked },
+                        }))
+                      }
+                    />
+                    Enabled
+                  </label>
+                  <div className="mt-2 grid grid-cols-1 gap-2">
+                    <input
+                      type="number"
+                      min={12}
+                      max={48}
+                      className="rounded border px-2 py-1 text-xs"
+                      value={settings.productCard.likesSize}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, likesSize: Math.max(12, Math.min(48, Number(event.target.value || 18))) },
+                        }))
+                      }
+                    />
+                    <input
+                      type="text"
+                      className="rounded border px-2 py-1 text-xs"
+                      value={settings.productCard.likesColor}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, likesColor: event.target.value },
+                        }))
+                      }
+                      placeholder="Default color"
+                    />
+                    <input
+                      type="text"
+                      className="rounded border px-2 py-1 text-xs"
+                      value={settings.productCard.likesActiveColor}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, likesActiveColor: event.target.value },
+                        }))
+                      }
+                      placeholder="Active color"
+                    />
+                  </div>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs font-semibold text-gray-700">Country Icon (Bottom-right)</p>
+                  <label className="mt-2 inline-flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={settings.productCard.countryIconEnabled}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, countryIconEnabled: event.target.checked },
+                        }))
+                      }
+                    />
+                    Enabled
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="number"
+                      min={12}
+                      max={56}
+                      className="w-full rounded border px-2 py-1 text-xs"
+                      value={settings.productCard.countryIconSize}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          productCard: { ...prev.productCard, countryIconSize: Math.max(12, Math.min(56, Number(event.target.value || 24))) },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-3 rounded-lg border border-gray-200 p-4">
