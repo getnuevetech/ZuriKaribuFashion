@@ -441,15 +441,27 @@ function App() {
                 />
                 <Route
                   path="/admin/products/configuration"
-                  element={<Navigate to="/admin/products/product-card" replace />}
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProducts />
+                    </AdminPermissionGuard>
+                  }
                 />
                 <Route
                   path="/admin/products/configuration/product-cards"
-                  element={<Navigate to="/admin/products/product-card" replace />}
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProducts />
+                    </AdminPermissionGuard>
+                  }
                 />
                 <Route
                   path="/admin/products/configuration/detailed-product-view"
-                  element={<Navigate to="/admin/products/product-card" replace />}
+                  element={
+                    <AdminPermissionGuard required={['products:manage']}>
+                      <AdminProducts />
+                    </AdminPermissionGuard>
+                  }
                 />
                 <Route
                   path="/admin/product-labels"

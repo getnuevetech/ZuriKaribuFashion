@@ -982,7 +982,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
             keywords: ['country access requests', 'approve designer country'],
           },
         ],
-        { prefix: 'Product Card' }
+        { prefix: 'Product Configuration' }
       );
     }
     if (userType === 'seller' || userType === 'designer') {
