@@ -2,9 +2,18 @@ import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/authStore';
 import { getCountryOptions } from '../data/locationOptions';
 
+const resolveWindowOriginSafe = () => {
+  try {
+    if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
+  } catch {
+    // Ignore origin access failures in restricted browser contexts.
+  }
+  return '';
+};
+
 const defaultApiUrl = import.meta.env.DEV
   ? 'http://localhost:3001/api'
-  : `${window.location.origin}/api`;
+  : `${resolveWindowOriginSafe() || ''}/api`;
 const API_URL = import.meta.env.VITE_API_URL || defaultApiUrl;
 if (typeof window !== 'undefined') {
   try {
