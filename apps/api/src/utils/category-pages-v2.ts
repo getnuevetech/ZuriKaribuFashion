@@ -683,31 +683,42 @@ const normalizeProductLabelSettings = (raw: unknown) => {
   if (autoConditions.autoNewProductTypes.length === 0) autoConditions.autoNewProductTypes = [...allProductTypes];
   if (autoConditions.autoSaleProductTypes.length === 0) autoConditions.autoSaleProductTypes = [...allProductTypes];
   const labelsRaw = Array.isArray(row.labels) ? row.labels : [];
-  const labels = Array.from(
-    new Map(
-      labelsRaw
-        .map((entry) => {
-          const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
-          const id = normalizeText(item.id).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 64);
-          const name = normalizeText(item.name);
-          const mode = normalizeText(item.mode).toUpperCase();
-          if (!id || !name) return null;
-          if (mode !== 'AUTO_NEW' && mode !== 'AUTO_SALE' && mode !== 'MANUAL') return null;
-          return [
-            id,
-            {
-              id,
-              name,
-              mode: mode as 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL',
-              textColor: normalizeText(item.textColor) || '#ffffff',
-              backgroundColor: normalizeText(item.backgroundColor) || '#111827',
-              isActive: item.isActive !== false,
-            },
-          ] as const;
-        })
-        .filter(Boolean)
-    ).values()
-  );
+  const labelEntries = labelsRaw
+    .map((entry) => {
+      const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+      const id = normalizeText(item.id).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 64);
+      const name = normalizeText(item.name);
+      const mode = normalizeText(item.mode).toUpperCase();
+      if (!id || !name) return null;
+      if (mode !== 'AUTO_NEW' && mode !== 'AUTO_SALE' && mode !== 'MANUAL') return null;
+      return [
+        id,
+        {
+          id,
+          name,
+          mode: mode as 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL',
+          textColor: normalizeText(item.textColor) || '#ffffff',
+          backgroundColor: normalizeText(item.backgroundColor) || '#111827',
+          isActive: item.isActive !== false,
+        },
+      ] as const;
+    })
+    .filter(
+      (
+        entry
+      ): entry is readonly [
+        string,
+        {
+          id: string;
+          name: string;
+          mode: 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL';
+          textColor: string;
+          backgroundColor: string;
+          isActive: boolean;
+        },
+      ] => entry !== null
+    );
+  const labels = Array.from(new Map(labelEntries).values());
   const labelsWithDefaults = [...labels];
   if (!labelsWithDefaults.some((entry) => entry.mode === 'AUTO_NEW')) labelsWithDefaults.unshift({ ...DEFAULT_PRODUCT_LABEL_SETTINGS.labels[0] });
   if (!labelsWithDefaults.some((entry) => entry.mode === 'AUTO_SALE')) labelsWithDefaults.push({ ...DEFAULT_PRODUCT_LABEL_SETTINGS.labels[1] });
@@ -1096,7 +1107,7 @@ const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promi
       { productType: 'READY_TO_WEAR', country },
       pricingRules
     );
-    const adjustedVariationPrices = (Array.isArray(row?.sizeVariations) ? row.sizeVariations : [])
+    const adjustedVariationPrices: number[] = (Array.isArray(row?.sizeVariations) ? row.sizeVariations : [])
       .map((entry: any) =>
         applyActivePricingRules(
           Number(entry?.price || 0),
@@ -1107,7 +1118,7 @@ const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promi
       .filter((value: number) => Number.isFinite(value) && value > 0);
     const adjustedPrice =
       adjustedVariationPrices.length > 0 ? Math.min(...adjustedVariationPrices) : adjustedBasePrice;
-    const isOnSale = adjustedVariationPrices.some((price) => price < adjustedBasePrice);
+    const isOnSale = adjustedVariationPrices.some((price: number) => price < adjustedBasePrice);
     const productLabels = buildProductLabels({
       productType: 'READY_TO_WEAR',
       productId: base.id,

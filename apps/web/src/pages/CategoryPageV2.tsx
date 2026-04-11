@@ -112,7 +112,7 @@ const PAGE_PATH_BY_TYPE: Record<CategoryPageType, string> = {
   FABRIC_TO_BUY: '/fabricstobuy',
   CUSTOM_TO_WEAR: '/customtowear',
   COUNTRY: '/country',
-  SHOP: '/Shop',
+  SHOP: '/shop',
 };
 
 const DEFAULT_PRODUCT_CARD = {
@@ -409,6 +409,11 @@ export default function CategoryPageV2({
                 />
               </span>
             ) : null}
+            <span className="pointer-events-none absolute inset-0 inline-flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
+              <span className="inline-flex items-center gap-2 border border-white/70 bg-black/35 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+                Quick View
+              </span>
+            </span>
           </div>
         ) : null}
         <div

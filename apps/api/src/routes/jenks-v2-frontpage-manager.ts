@@ -422,6 +422,8 @@ type DesignerSpotlightSettings = {
   overlayBackgroundColor?: string;
   countryFontSize: number;
   priceFontSize?: number;
+  priceColor?: string;
+  priceHoverColor?: string;
   nameFontSize: number;
   specialtyFontSize: number;
   descriptionFontSize: number;
@@ -1651,6 +1653,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
       priceFontSize: 20,
+      priceColor: '#ffffff',
+      priceHoverColor: '#e66045',
       nameFontSize: 52,
       specialtyFontSize: 24,
       descriptionFontSize: 24,
@@ -2783,6 +2787,13 @@ const normalizeDesignerSpotlight = (
     ...(includePrice
       ? {
           priceFontSize: clamp(Math.round(getNumber(row.priceFontSize) ?? fallback.priceFontSize ?? 20), 10, 96),
+          priceColor: (getString((row as Record<string, unknown>).priceColor) || fallback.priceColor || '#ffffff').slice(0, 64),
+          priceHoverColor:
+            (getString((row as Record<string, unknown>).priceHoverColor) ||
+              getString((row as Record<string, unknown>).priceHoverTextColor) ||
+              fallback.priceHoverColor ||
+              fallback.priceColor ||
+              '#ffffff').slice(0, 64),
         }
       : {}),
     nameFontSize: clamp(

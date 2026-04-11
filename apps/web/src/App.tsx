@@ -246,7 +246,7 @@ function App() {
               <Route path="/fabricstobuy/:id" element={<FabricDetail />} />
               <Route path="/customtowear/:id" element={<DesignDetail />} />
               <Route path="/cystomtowear/:id" element={<NavigateCategoryDetailWithSearch toBase="/customtowear" />} />
-              <Route path="/shop" element={<NavigateWithSearch to="/Shop" />} />
+              <Route path="/shop" element={<Shop />} />
               <Route path="/Shop" element={<Shop />} />
               <Route path="/product/:id" element={<KimiProductDetail />} />
               <Route path="/readytowear/:id/try-on" element={<ReadyToWearTryOn />} />

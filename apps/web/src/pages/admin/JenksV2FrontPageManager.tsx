@@ -417,6 +417,8 @@ type DesignerSpotlight = {
   specialtyFontSize: number;
   descriptionFontSize: number;
   priceFontSize?: number;
+  priceColor?: string;
+  priceHoverColor?: string;
   textAreaBackgroundEnabled: boolean;
   textAreaBackgroundColor: string;
   cards: DesignerSpotlightCard[];
@@ -1722,6 +1724,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     specialtyFontSize: 22,
     descriptionFontSize: 24,
     priceFontSize: 20,
+    priceColor: '#ffffff',
+    priceHoverColor: '#e66045',
     textAreaBackgroundEnabled: true,
     textAreaBackgroundColor: 'rgba(0,0,0,0.45)',
     cards: [
@@ -1984,6 +1988,8 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
     ...config.rtwFtb,
     nameFontSize: config.rtwFtb.designerNameFontSize,
     priceFontSize: config.rtwFtb.priceFontSize,
+    priceColor: config.rtwFtb.priceColor,
+    priceHoverColor: config.rtwFtb.priceHoverColor,
     overlayEnabled: config.rtwFtb.textAreaBackgroundEnabled,
     overlayBackgroundColor: config.rtwFtb.textAreaBackgroundColor,
     cards: config.rtwFtb.cards.map((card) => {
@@ -2224,6 +2230,8 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
   };
   next.rtwFtb = {
     ...next.rtwFtb,
+    priceColor: String(next.rtwFtb.priceColor || '#ffffff'),
+    priceHoverColor: String(next.rtwFtb.priceHoverColor || next.rtwFtb.priceColor || '#ffffff'),
     cards: next.rtwFtb.cards.map((item) => ({
       ...item,
       countryCode: countryCodeFromToken(item.countryCode || item.country, 'NG'),
@@ -2234,8 +2242,8 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
       ctaLink:
         normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
-          ? resolvePageHrefForKey(item.ctaPageKey, '/Shop')
-          : normalizeManagerHref(item.ctaLink, '/Shop'),
+          ? resolvePageHrefForKey(item.ctaPageKey, '/shop')
+          : normalizeManagerHref(item.ctaLink, '/shop'),
     })),
   };
   next.newsletterFooter = {
@@ -3057,6 +3065,21 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         10,
         96
       ),
+      priceColor: String(
+        (rtwFtbRaw as Record<string, unknown>).priceColor ||
+          (rtwFtb as DesignerSpotlight | undefined)?.priceColor ||
+          DEFAULT_CONFIG.rtwFtb.priceColor ||
+          '#ffffff'
+      ).slice(0, 64),
+      priceHoverColor: String(
+        (rtwFtbRaw as Record<string, unknown>).priceHoverColor ||
+          (rtwFtbRaw as Record<string, unknown>).priceHoverTextColor ||
+          (rtwFtb as DesignerSpotlight | undefined)?.priceHoverColor ||
+          (rtwFtb as DesignerSpotlight | undefined)?.priceColor ||
+          DEFAULT_CONFIG.rtwFtb.priceHoverColor ||
+          DEFAULT_CONFIG.rtwFtb.priceColor ||
+          '#ffffff'
+      ).slice(0, 64),
       textAreaBackgroundEnabled: toBoolean(
         (rtwFtbRaw as Record<string, unknown>).textAreaBackgroundEnabled ??
           (rtwFtbRaw as Record<string, unknown>).overlayEnabled,
@@ -10066,6 +10089,36 @@ export default function JenksV2FrontPageManager() {
                     updateSpotlightConfig((current) => ({
                       ...current,
                       priceFontSize: clamp(toNumber(event.target.value, current.priceFontSize ?? 20), 10, 96),
+                    }))
+                  }
+                />
+              </label>
+            ) : null}
+            {isRtwFtbTab ? (
+              <label className="text-xs">
+                Price Text Color
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={String(spotlightConfig.priceColor || '#ffffff')}
+                  onChange={(event) =>
+                    updateSpotlightConfig((current) => ({
+                      ...current,
+                      priceColor: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            ) : null}
+            {isRtwFtbTab ? (
+              <label className="text-xs">
+                Price Hover Color
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={String(spotlightConfig.priceHoverColor || spotlightConfig.priceColor || '#ffffff')}
+                  onChange={(event) =>
+                    updateSpotlightConfig((current) => ({
+                      ...current,
+                      priceHoverColor: event.target.value,
                     }))
                   }
                 />

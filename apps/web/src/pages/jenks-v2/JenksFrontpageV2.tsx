@@ -203,6 +203,9 @@ type SpotlightTypography = {
   nameFontSize: number;
   specialtyFontSize: number;
   descriptionFontSize: number;
+  priceFontSize?: number;
+  priceColor?: string;
+  priceHoverColor?: string;
 };
 type ProductCardFieldKey = 'DESIGNER_NAME' | 'PRODUCT_NAME' | 'SHORT_DESCRIPTION' | 'PRICE';
 type ProductCardStyle = {
@@ -401,7 +404,7 @@ const DEFAULT_HREF_BY_KEY: Record<string, string> = {
   CTW: '/customtowear',
   FTB: '/fabricstobuy',
   HOME: '/',
-  SHOP: '/Shop',
+  SHOP: '/shop',
   READY_TO_WEAR: '/readytowear',
   CUSTOM_TO_WEAR: '/customtowear',
   FABRICS: '/fabricstobuy',
@@ -596,12 +599,12 @@ const productGroupHref = (groupRaw: unknown) => {
   if (group === 'RTW') return buildCountryProductsHref('Nigeria', 'RTW');
   if (group === 'CTW') return buildCountryProductsHref('Nigeria', 'CTW');
   if (group === 'FTB') return buildCountryProductsHref('Nigeria', 'FTB');
-  return '/Shop';
+  return '/shop';
 };
 
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
-  SHOP: '/Shop',
+  SHOP: '/shop',
   READY_TO_WEAR: '/readytowear',
   FABRICS: '/fabricstobuy',
   CUSTOM_TO_WEAR: '/customtowear',
@@ -619,7 +622,7 @@ const mapSourceCategoryToDetailHref = (
   source: Record<string, unknown>
 ) => {
   const safeId = asString(id, '').trim();
-  if (!safeId) return '/Shop';
+  if (!safeId) return '/shop';
   const preferredHref = asString(source.href, asString(source.url, ''));
   if (preferredHref) return toSafeInternalHref(preferredHref);
   if (category === 'RTW') return `/readytowear/${safeId}`;
@@ -868,7 +871,7 @@ const isExternalHref = (href: string) => /^https?:\/\//i.test(href);
 
 const sanitizeLegacyInternalHref = (href: string) => {
   const trimmed = href.trim();
-  if (!trimmed) return '/Shop';
+  if (!trimmed) return '/shop';
   if (
     trimmed === '/main' ||
     trimmed === '/main/' ||
@@ -879,8 +882,8 @@ const sanitizeLegacyInternalHref = (href: string) => {
     trimmed.startsWith('/shop?') ||
     trimmed.startsWith('/shop#')
   ) {
-    if (/^\/shop(\/)?$/i.test(trimmed)) return '/Shop';
-    if (/^\/shop[?#]/i.test(trimmed)) return `/Shop${trimmed.slice('/shop'.length)}`;
+    if (/^\/shop(\/)?$/i.test(trimmed)) return '/shop';
+    if (/^\/shop[?#]/i.test(trimmed)) return `/shop${trimmed.slice('/shop'.length)}`;
     return trimmed;
   }
   return trimmed;
@@ -1254,7 +1257,7 @@ const FRESH_DROPS: Array<{
     name: 'Awon Da',
     brand: 'Diallo Fabrics',
     price: '$230.00',
-    href: '/Shop',
+    href: '/shop',
   },
   {
     id: 'drop-2',
@@ -1262,7 +1265,7 @@ const FRESH_DROPS: Array<{
     name: 'Kakaki Kentus',
     brand: 'Diallo Fabrics',
     price: '$115.00',
-    href: '/Shop',
+    href: '/shop',
   },
   {
     id: 'drop-3',
@@ -1270,7 +1273,7 @@ const FRESH_DROPS: Array<{
     name: 'Ankara Agege',
     brand: 'Diallo Fabrics',
     price: '$0.13/yd',
-    href: '/Shop',
+    href: '/shop',
   },
   {
     id: 'drop-4',
@@ -1278,7 +1281,7 @@ const FRESH_DROPS: Array<{
     name: 'Bazin Royale',
     brand: 'Diallo Fabrics',
     price: '$145.00',
-    href: '/Shop',
+    href: '/shop',
   },
 ];
 
@@ -1327,7 +1330,7 @@ const RTW_FTB_SPOTLIGHT = [
     specialty: 'Ready-to-Wear & Fabric Curation',
     description: 'Hand-picked ready-to-wear looks and premium fabrics curated for immediate shopping.',
     cta: 'SHOP COLLECTION',
-    href: '/Shop',
+    href: '/shop',
     tag: 'RTW & FTB',
   },
   {
@@ -1338,7 +1341,7 @@ const RTW_FTB_SPOTLIGHT = [
     specialty: 'Fabric Selection',
     description: 'Discover bold prints and artisan materials selected for modern African wardrobes.',
     cta: 'SHOP COLLECTION',
-    href: '/Shop',
+    href: '/shop',
     tag: 'RTW & FTB',
   },
   {
@@ -1349,7 +1352,7 @@ const RTW_FTB_SPOTLIGHT = [
     specialty: 'Ready-to-Wear Styling',
     description: 'From statement silhouettes to everyday staples, shop latest RTW selections instantly.',
     cta: 'SHOP COLLECTION',
-    href: '/Shop',
+    href: '/shop',
     tag: 'RTW & FTB',
   },
 ] as const;
@@ -1492,18 +1495,18 @@ export default function JenksFrontpageV2() {
       { label: 'Ready To Wear', href: '/readytowear' },
       { label: 'Custom To Wear', href: '/customtowear' },
       { label: 'Fabrics', href: '/fabricstobuy' },
-      { label: 'Shop', href: '/Shop' },
+      { label: 'Shop', href: '/shop' },
       { label: 'Country', href: '/country' },
     ],
     []
   );
   const searchTargetHref = useMemo(() => {
     const token = searchQuery.trim().toLowerCase();
-    if (!token) return '/Shop';
+    if (!token) return '/shop';
     const matched =
       searchSuggestions.find((entry) => entry.label.toLowerCase() === token) ||
       searchSuggestions.find((entry) => entry.label.toLowerCase().includes(token));
-    return matched?.href || `/Shop?search=${encodeURIComponent(searchQuery.trim())}`;
+    return matched?.href || `/shop?search=${encodeURIComponent(searchQuery.trim())}`;
   }, [searchQuery, searchSuggestions]);
   const submitSearchOverlay = () => {
     const target = searchTargetHref;
@@ -2215,6 +2218,8 @@ export default function JenksFrontpageV2() {
         ...(variant === 'RTW_FTB'
           ? {
               priceFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.priceFontSize, 18)))),
+              priceColor: asString(cfg.priceColor, '#ffffff'),
+              priceHoverColor: asString(cfg.priceHoverColor, asString(cfg.priceColor, '#ffffff')),
             }
           : {}),
       };
@@ -2239,7 +2244,7 @@ export default function JenksFrontpageV2() {
         .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
         .map((entry, idx) => {
           const fallbackRow = fallbackRows[idx % fallbackRows.length];
-          const fallbackHref = fallbackRow?.href || (variant === 'RTW_FTB' ? '/Shop' : '/customtowear');
+          const fallbackHref = fallbackRow?.href || (variant === 'RTW_FTB' ? '/shop' : '/customtowear');
           const fallbackTitle = fallbackRow?.title || 'OLUWASEUN ADEYEMI';
           const fallbackSpecialty = fallbackRow?.specialty || 'Contemporary African Designer';
           const fallbackDescription =
@@ -3743,7 +3748,7 @@ export default function JenksFrontpageV2() {
                       ? hamburgerMenuLinks
                       : [
                           { label: 'Home', href: '/' },
-                          { label: 'Shop', href: '/readytowear' },
+                          { label: 'Shop', href: '/shop' },
                           { label: 'Ready To Wear', href: '/readytowear' },
                           { label: 'Fabrics To Buy', href: '/fabricstobuy' },
                           { label: 'Custom To Wear', href: '/customtowear' },
@@ -4724,8 +4729,17 @@ export default function JenksFrontpageV2() {
               >
                 {spot.showPrice ? (
                   <p
-                    className="font-semibold uppercase tracking-[0.08em] text-white"
-                    style={{ fontSize: `${rtwFtbSpotlightTypography.priceFontSize}px` }}
+                    className="font-semibold uppercase tracking-[0.08em] transition-colors duration-300 group-hover:text-[var(--rtw-ftb-price-hover-color)]"
+                    style={
+                      {
+                        fontSize: `${rtwFtbSpotlightTypography.priceFontSize}px`,
+                        color: asString(rtwFtbSpotlightTypography.priceColor, '#ffffff'),
+                        '--rtw-ftb-price-hover-color': asString(
+                          rtwFtbSpotlightTypography.priceHoverColor,
+                          asString(rtwFtbSpotlightTypography.priceColor, '#ffffff')
+                        ),
+                      } as CSSProperties
+                    }
                   >
                     {spot.price || ''}
                   </p>
