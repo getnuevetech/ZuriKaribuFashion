@@ -4418,6 +4418,12 @@ const productsApi = {
           material: string;
           color: string;
           category: string;
+          productLabels?: Array<{
+            id: string;
+            name: string;
+            textColor: string;
+            backgroundColor: string;
+          }>;
         }>;
         pagination: { page: number; limit: number; total: number; pages: number };
       };

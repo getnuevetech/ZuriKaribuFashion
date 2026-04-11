@@ -89,6 +89,12 @@ type CategoryPageProduct = {
   material: string;
   color: string;
   category: string;
+  productLabels?: Array<{
+    id: string;
+    name: string;
+    textColor: string;
+    backgroundColor: string;
+  }>;
 };
 
 const FILTER_PARAM_BY_KEY: Record<CategoryFilterKey, 'style' | 'fabricType' | 'material' | 'country' | 'price' | 'color' | 'category'> = {
@@ -309,6 +315,8 @@ export default function CategoryPageV2({
 
   const renderCard = (row: CategoryPageProduct, cardKey: string) => {
     const countryCode = resolveCountryCode(row.country);
+    const primaryLabel = Array.isArray(row.productLabels) && row.productLabels.length > 0 ? row.productLabels[0] : null;
+    const labelText = String(primaryLabel?.name || '').trim();
     const fieldRenderers: Record<string, () => JSX.Element | null> = {
       DESIGNER_NAME: () =>
         cardCfg.designerNameEnabled ? (
@@ -363,16 +371,16 @@ export default function CategoryPageV2({
               alt={row.name}
               className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
             />
-            {cardCfg.labelEnabled ? (
+            {cardCfg.labelEnabled && labelText ? (
               <span
                 className="absolute left-2 top-2 rounded px-2 py-1 uppercase tracking-[0.06em]"
                 style={{
                   fontSize: `${cardCfg.labelFontSize}px`,
-                  color: cardCfg.labelTextColor,
-                  backgroundColor: cardCfg.labelBackgroundColor,
+                  color: String(primaryLabel?.textColor || cardCfg.labelTextColor),
+                  backgroundColor: String(primaryLabel?.backgroundColor || cardCfg.labelBackgroundColor),
                 }}
               >
-                {row.category}
+                {labelText}
               </span>
             ) : null}
             {cardCfg.likesEnabled ? (

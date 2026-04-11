@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, ProductStatus } from '../db';
+import { applyActivePricingRules, readActivePricingRules, type ActivePricingRule } from './pricing-rules';
 
 export const CATEGORY_PAGE_V2_TYPES = [
   'READY_TO_WEAR',
@@ -106,6 +107,65 @@ export type CategoryPageV2Product = {
   material: string;
   color: string;
   category: string;
+  productLabels?: Array<{
+    id: string;
+    name: string;
+    textColor: string;
+    backgroundColor: string;
+  }>;
+};
+
+type ProductLabelDisplay = {
+  id: string;
+  name: string;
+  textColor: string;
+  backgroundColor: string;
+  sizePercent: number;
+  fontSizePx: number;
+  isBold: boolean;
+};
+
+type LabelProductType = 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+
+const HOMEPAGE_PRODUCT_LABEL_SETTINGS_KEY = 'HOMEPAGE_PRODUCT_LABELS';
+const DISCOUNT_ADJUSTMENT_TYPE_SET = new Set<string>(['PERCENTAGE_DISCOUNT', 'FIXED_DISCOUNT']);
+const DEFAULT_PRODUCT_LABEL_SETTINGS = {
+  newTagDays: 14,
+  autoConditions: {
+    newTagDaysForSaleProducts: 14,
+    autoNewProductTypes: ['FABRIC', 'DESIGN', 'READY_TO_WEAR'] as Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>,
+    autoSaleProductTypes: ['FABRIC', 'DESIGN', 'READY_TO_WEAR'] as Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>,
+    autoSaleUsePriceDrop: true,
+    autoSaleUseMarkdownRules: true,
+  },
+  appearance: {
+    sizePercent: 120,
+    fontSizePx: 12,
+    isBold: true,
+  },
+  labels: [
+    {
+      id: 'new',
+      name: 'NEW',
+      mode: 'AUTO_NEW' as const,
+      textColor: '#ffffff',
+      backgroundColor: '#111827',
+      isActive: true,
+    },
+    {
+      id: 'sale',
+      name: 'SALE',
+      mode: 'AUTO_SALE' as const,
+      textColor: '#ffffff',
+      backgroundColor: '#dc2626',
+      isActive: true,
+    },
+  ],
+  assignments: [] as Array<{
+    labelId: string;
+    productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR';
+    productIds: string[];
+  }>,
 };
 
 const settingsFilterRowSchema = z.object({
@@ -563,6 +623,217 @@ const parsePriceBucket = (token: string): { min?: number; max?: number } => {
 
 const normalizeText = (value: unknown) => String(value || '').trim();
 const normalizeToken = (value: unknown) => normalizeText(value).toLowerCase();
+const normalizeCountryCode = (value: unknown) => normalizeText(value).toUpperCase();
+
+const normalizeLabelProductType = (value: unknown): LabelProductType | '' => {
+  const token = normalizeText(value).toUpperCase().replace(/[\s-]+/g, '_');
+  if (token === 'FABRIC' || token === 'FTB' || token === 'FABRIC_TO_BUY') return 'FABRIC';
+  if (token === 'DESIGN' || token === 'CTW' || token === 'CUSTOM_TO_WEAR' || token === 'CUSTOMTOWEAR') return 'DESIGN';
+  if (token === 'READY_TO_WEAR' || token === 'RTW' || token === 'READYTOWEAR') return 'READY_TO_WEAR';
+  return '';
+};
+
+const normalizeProductTypeList = (
+  value: unknown,
+  fallback: Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'>
+): Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'> => {
+  const list = Array.isArray(value) ? value : fallback;
+  const parsed = list
+    .map((entry) => normalizeLabelProductType(entry))
+    .filter((entry): entry is 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR' => Boolean(entry));
+  return parsed.length > 0 ? Array.from(new Set(parsed)) : [...fallback];
+};
+
+const normalizeProductLabelSettings = (raw: unknown) => {
+  const allProductTypes: Array<'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'> = ['FABRIC', 'DESIGN', 'READY_TO_WEAR'];
+  const fallback = {
+    ...DEFAULT_PRODUCT_LABEL_SETTINGS,
+    autoConditions: {
+      ...DEFAULT_PRODUCT_LABEL_SETTINGS.autoConditions,
+      autoNewProductTypes: [...DEFAULT_PRODUCT_LABEL_SETTINGS.autoConditions.autoNewProductTypes],
+      autoSaleProductTypes: [...DEFAULT_PRODUCT_LABEL_SETTINGS.autoConditions.autoSaleProductTypes],
+    },
+    labels: DEFAULT_PRODUCT_LABEL_SETTINGS.labels.map((entry) => ({ ...entry })),
+    assignments: [] as Array<{ labelId: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productIds: string[] }>,
+  };
+  if (!raw || typeof raw !== 'object') return fallback;
+  const row = raw as Record<string, unknown>;
+  const newTagDaysRaw = Number(row.newTagDays);
+  const autoConditionsRow =
+    row.autoConditions && typeof row.autoConditions === 'object' && !Array.isArray(row.autoConditions)
+      ? (row.autoConditions as Record<string, unknown>)
+      : {};
+  const autoConditions = {
+    newTagDaysForSaleProducts: Number.isFinite(Number(autoConditionsRow.newTagDaysForSaleProducts))
+      ? Math.max(1, Math.min(120, Math.round(Number(autoConditionsRow.newTagDaysForSaleProducts))))
+      : Number.isFinite(newTagDaysRaw)
+        ? Math.max(1, Math.min(120, Math.round(newTagDaysRaw)))
+        : fallback.autoConditions.newTagDaysForSaleProducts,
+    autoNewProductTypes: normalizeProductTypeList(autoConditionsRow.autoNewProductTypes, fallback.autoConditions.autoNewProductTypes),
+    autoSaleProductTypes: normalizeProductTypeList(autoConditionsRow.autoSaleProductTypes, fallback.autoConditions.autoSaleProductTypes),
+    autoSaleUsePriceDrop:
+      typeof autoConditionsRow.autoSaleUsePriceDrop === 'boolean'
+        ? autoConditionsRow.autoSaleUsePriceDrop
+        : fallback.autoConditions.autoSaleUsePriceDrop,
+    autoSaleUseMarkdownRules:
+      typeof autoConditionsRow.autoSaleUseMarkdownRules === 'boolean'
+        ? autoConditionsRow.autoSaleUseMarkdownRules
+        : fallback.autoConditions.autoSaleUseMarkdownRules,
+  };
+  if (autoConditions.autoNewProductTypes.length === 0) autoConditions.autoNewProductTypes = [...allProductTypes];
+  if (autoConditions.autoSaleProductTypes.length === 0) autoConditions.autoSaleProductTypes = [...allProductTypes];
+  const labelsRaw = Array.isArray(row.labels) ? row.labels : [];
+  const labels = Array.from(
+    new Map(
+      labelsRaw
+        .map((entry) => {
+          const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+          const id = normalizeText(item.id).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 64);
+          const name = normalizeText(item.name);
+          const mode = normalizeText(item.mode).toUpperCase();
+          if (!id || !name) return null;
+          if (mode !== 'AUTO_NEW' && mode !== 'AUTO_SALE' && mode !== 'MANUAL') return null;
+          return [
+            id,
+            {
+              id,
+              name,
+              mode: mode as 'AUTO_NEW' | 'AUTO_SALE' | 'MANUAL',
+              textColor: normalizeText(item.textColor) || '#ffffff',
+              backgroundColor: normalizeText(item.backgroundColor) || '#111827',
+              isActive: item.isActive !== false,
+            },
+          ] as const;
+        })
+        .filter(Boolean)
+    ).values()
+  );
+  const labelsWithDefaults = [...labels];
+  if (!labelsWithDefaults.some((entry) => entry.mode === 'AUTO_NEW')) labelsWithDefaults.unshift({ ...DEFAULT_PRODUCT_LABEL_SETTINGS.labels[0] });
+  if (!labelsWithDefaults.some((entry) => entry.mode === 'AUTO_SALE')) labelsWithDefaults.push({ ...DEFAULT_PRODUCT_LABEL_SETTINGS.labels[1] });
+  const validLabelIds = new Set(labelsWithDefaults.map((entry) => entry.id));
+  const assignmentsRaw = Array.isArray(row.assignments) ? row.assignments : [];
+  const assignments = assignmentsRaw
+    .map((entry) => {
+      const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+      const labelId = normalizeText(item.labelId).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 64);
+      const productType = normalizeLabelProductType(item.productType);
+      if (!labelId || !validLabelIds.has(labelId) || !productType) return null;
+      const productIds = Array.from(new Set((Array.isArray(item.productIds) ? item.productIds : []).map((value) => normalizeText(value)).filter(Boolean)));
+      if (productIds.length === 0) return null;
+      return { labelId, productType, productIds };
+    })
+    .filter(Boolean) as Array<{ labelId: string; productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; productIds: string[] }>;
+  return {
+    newTagDays: Number.isFinite(newTagDaysRaw) ? Math.max(1, Math.min(120, Math.round(newTagDaysRaw))) : fallback.newTagDays,
+    autoConditions,
+    appearance: fallback.appearance,
+    labels: labelsWithDefaults,
+    assignments,
+  };
+};
+
+const readProductLabelSettings = async () => {
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT "value" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+      HOMEPAGE_PRODUCT_LABEL_SETTINGS_KEY
+    );
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    if (!row) return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
+    return normalizeProductLabelSettings(JSON.parse(String(row.value || '{}')));
+  } catch {
+    return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
+  }
+};
+
+const extractMarkdownRules = (rules: ActivePricingRule[]) =>
+  rules
+    .filter(
+      (rule) =>
+        rule.isSale === true ||
+        DISCOUNT_ADJUSTMENT_TYPE_SET.has(String(rule.adjustmentType || '').trim().toUpperCase())
+    )
+    .map((rule) => ({
+      productType: normalizeLabelProductType(rule.productType) || null,
+      country: normalizeCountryCode(rule.country) || null,
+    }));
+
+const hasMarkdownSaleRule = (
+  rules: Array<{ productType: LabelProductType | null; country: string | null }>,
+  context: { productType: LabelProductType; country?: string | null }
+) => {
+  const country = normalizeCountryCode(context.country);
+  return rules.some((rule) => {
+    if (rule.productType && rule.productType !== context.productType) return false;
+    const ruleCountry = normalizeCountryCode(rule.country);
+    if (ruleCountry && country && ruleCountry !== country) return false;
+    if (ruleCountry && !country) return false;
+    return true;
+  });
+};
+
+const buildProductLabels = (params: {
+  productType: LabelProductType;
+  productId: string;
+  createdAt?: string | Date | null;
+  isOnSale: boolean;
+  saleTriggeredByMarkdownRule?: boolean;
+  settings: ReturnType<typeof normalizeProductLabelSettings>;
+}): ProductLabelDisplay[] => {
+  const labels = params.settings.labels.filter((entry) => entry.isActive !== false);
+  const labelMap = new Map(labels.map((entry) => [entry.id, entry]));
+  const output: ProductLabelDisplay[] = [];
+  const add = (labelId: string) => {
+    const row = labelMap.get(labelId);
+    if (!row || output.some((item) => item.id === row.id)) return;
+    output.push({
+      id: row.id,
+      name: row.name,
+      textColor: row.textColor,
+      backgroundColor: row.backgroundColor,
+      sizePercent: params.settings.appearance.sizePercent,
+      fontSizePx: params.settings.appearance.fontSizePx,
+      isBold: params.settings.appearance.isBold,
+    });
+  };
+  const now = Date.now();
+  const createdAt = params.createdAt ? new Date(params.createdAt).getTime() : 0;
+  const autoNewEnabledForType = params.settings.autoConditions.autoNewProductTypes.includes(params.productType);
+  const autoSaleEnabledForType = params.settings.autoConditions.autoSaleProductTypes.includes(params.productType);
+  const qualifiesAsSale =
+    autoSaleEnabledForType &&
+    ((params.settings.autoConditions.autoSaleUsePriceDrop && params.isOnSale) ||
+      (params.settings.autoConditions.autoSaleUseMarkdownRules && params.saleTriggeredByMarkdownRule === true));
+  const effectiveNewTagDays =
+    qualifiesAsSale && autoNewEnabledForType
+      ? params.settings.autoConditions.newTagDaysForSaleProducts
+      : params.settings.newTagDays;
+  const isNew = createdAt > 0 && now - createdAt <= effectiveNewTagDays * 24 * 60 * 60 * 1000;
+  if (isNew && autoNewEnabledForType) {
+    const autoNew = labels.find((entry) => entry.mode === 'AUTO_NEW');
+    if (autoNew) add(autoNew.id);
+  }
+  if (qualifiesAsSale) {
+    const autoSale = labels.find((entry) => entry.mode === 'AUTO_SALE');
+    if (autoSale) add(autoSale.id);
+  }
+  const manualLabelIds = params.settings.assignments
+    .filter((entry) => entry.productType === params.productType && Array.isArray(entry.productIds) && entry.productIds.includes(params.productId))
+    .map((entry) => entry.labelId);
+  for (const labelId of manualLabelIds) add(labelId);
+  return output;
+};
+
+const toCardLabelPayload = (labels: ProductLabelDisplay[] | undefined) =>
+  Array.isArray(labels)
+    ? labels.map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        textColor: entry.textColor,
+        backgroundColor: entry.backgroundColor,
+      }))
+    : [];
 
 const getSettingsKey = (pageType: CategoryPageV2Type) => `${SETTINGS_KEY_PREFIX}${pageType}`;
 
@@ -808,12 +1079,108 @@ const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promi
           take: 400,
         });
 
-  const [readyRows, fabricRows, designRows] = await Promise.all([readyPromise, fabricPromise, designPromise]);
-  const products: CategoryPageV2Product[] = [
-    ...(readyRows as any[]).map((row) => mapReadyToWear(row)),
-    ...(fabricRows as any[]).map((row) => mapFabric(row)),
-    ...(designRows as any[]).map((row) => mapDesign(row)),
-  ];
+  const [readyRows, fabricRows, designRows, pricingRules, labelSettings] = await Promise.all([
+    readyPromise,
+    fabricPromise,
+    designPromise,
+    readActivePricingRules(),
+    readProductLabelSettings(),
+  ]);
+  const markdownRules = extractMarkdownRules(pricingRules);
+
+  const readyProducts = (readyRows as any[]).map((row) => {
+    const base = mapReadyToWear(row);
+    const country = normalizeText(row?.designer?.country);
+    const adjustedBasePrice = applyActivePricingRules(
+      Number(row?.basePrice || base.priceUsd || 0),
+      { productType: 'READY_TO_WEAR', country },
+      pricingRules
+    );
+    const adjustedVariationPrices = (Array.isArray(row?.sizeVariations) ? row.sizeVariations : [])
+      .map((entry: any) =>
+        applyActivePricingRules(
+          Number(entry?.price || 0),
+          { productType: 'READY_TO_WEAR', country },
+          pricingRules
+        )
+      )
+      .filter((value: number) => Number.isFinite(value) && value > 0);
+    const adjustedPrice =
+      adjustedVariationPrices.length > 0 ? Math.min(...adjustedVariationPrices) : adjustedBasePrice;
+    const isOnSale = adjustedVariationPrices.some((price) => price < adjustedBasePrice);
+    const productLabels = buildProductLabels({
+      productType: 'READY_TO_WEAR',
+      productId: base.id,
+      createdAt: row?.createdAt,
+      isOnSale,
+      saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
+        productType: 'READY_TO_WEAR',
+        country,
+      }),
+      settings: labelSettings,
+    });
+    return {
+      ...base,
+      priceUsd: Math.max(0, adjustedPrice),
+      productLabels: toCardLabelPayload(productLabels),
+    };
+  });
+
+  const fabricProducts = (fabricRows as any[]).map((row) => {
+    const base = mapFabric(row);
+    const country = normalizeText(row?.seller?.country);
+    const sellerPrice = Number(row?.sellerPrice || 0);
+    const adjustedPrice = applyActivePricingRules(
+      Number(row?.sellerPrice || row?.finalPrice || base.priceUsd || 0),
+      { productType: 'FABRIC', country },
+      pricingRules
+    );
+    const productLabels = buildProductLabels({
+      productType: 'FABRIC',
+      productId: base.id,
+      createdAt: row?.createdAt,
+      isOnSale: adjustedPrice < sellerPrice,
+      saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
+        productType: 'FABRIC',
+        country,
+      }),
+      settings: labelSettings,
+    });
+    return {
+      ...base,
+      priceUsd: Math.max(0, adjustedPrice),
+      productLabels: toCardLabelPayload(productLabels),
+    };
+  });
+
+  const designProducts = (designRows as any[]).map((row) => {
+    const base = mapDesign(row);
+    const country = normalizeText(row?.designer?.country);
+    const basePrice = Number(row?.basePrice || 0);
+    const adjustedPrice = applyActivePricingRules(
+      Number(row?.basePrice || row?.finalPrice || base.priceUsd || 0),
+      { productType: 'DESIGN', country },
+      pricingRules
+    );
+    const productLabels = buildProductLabels({
+      productType: 'DESIGN',
+      productId: base.id,
+      createdAt: row?.createdAt,
+      isOnSale: adjustedPrice < basePrice,
+      saleTriggeredByMarkdownRule: hasMarkdownSaleRule(markdownRules, {
+        productType: 'DESIGN',
+        country,
+      }),
+      settings: labelSettings,
+    });
+    return {
+      ...base,
+      priceUsd: Math.max(0, adjustedPrice),
+      productLabels: toCardLabelPayload(productLabels),
+    };
+  });
+
+  const products: CategoryPageV2Product[] = [...readyProducts, ...fabricProducts, ...designProducts];
   return products.filter((entry) => Boolean(entry.id));
 };
 

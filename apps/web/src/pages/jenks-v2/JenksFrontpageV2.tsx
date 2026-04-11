@@ -1456,6 +1456,11 @@ export default function JenksFrontpageV2() {
       createdAtTs: number;
       category: 'RTW' | 'CTW' | 'FTB';
       countryCode: string;
+      productLabel?: {
+        name: string;
+        textColor: string;
+        backgroundColor: string;
+      };
       label: string;
     }>
   >([]);
@@ -2173,6 +2178,7 @@ export default function JenksFrontpageV2() {
       href: entry.href,
       category: entry.category,
       countryCode: entry.countryCode,
+      productLabel: entry.productLabel,
       label: entry.label,
     }));
     if (dynamicRows.length > 0) return dynamicRows.slice(0, maxItems);
@@ -2182,7 +2188,8 @@ export default function JenksFrontpageV2() {
       priceUsd: Number(String(entry.price || '').replace(/[^0-9.]/g, '')) || 0,
       category: 'RTW' as const,
       countryCode: 'NG',
-      label: 'READY TO WEAR',
+      productLabel: undefined,
+      label: '',
     }));
   }, [freshDropsCfg.columns, freshDropsCfg.rows, freshDropsProducts]);
 
@@ -3355,6 +3362,11 @@ export default function JenksFrontpageV2() {
           createdAtTs: number;
           category: 'RTW' | 'CTW' | 'FTB';
           countryCode: string;
+          productLabel?: {
+            name: string;
+            textColor: string;
+            backgroundColor: string;
+          };
         }> = [];
         const pushRows = (sourceRows: unknown[], category: 'RTW' | 'CTW' | 'FTB') => {
           sourceRows.forEach((raw, index) => {
@@ -3373,18 +3385,47 @@ export default function JenksFrontpageV2() {
               asArray(row.images).map((entry) => asString(asRecord(entry).url, '')).find(Boolean) || row.image || row.coverImage || '',
               ''
             );
-            const priceValue = asNumber(row.price, asNumber(row.basePrice, asNumber(row.finalPrice, 0)));
+            const firstVariantPrice = (() => {
+              const variationValues = asArray(row.sizeVariations)
+                .map((entry) => asNumber(asRecord(entry).price, 0))
+                .filter((entry) => Number.isFinite(entry) && entry > 0);
+              return variationValues.length > 0 ? Math.min(...variationValues) : 0;
+            })();
+            const priceValue = asNumber(
+              row.price,
+              asNumber(row.finalPrice, asNumber(row.basePrice, asNumber(row.sellerPrice, asNumber(row.listingUsdPrice, firstVariantPrice))))
+            );
+            const labelRow = asRecord(asArray(row.productLabels)[0]);
+            const labelName = asString(labelRow.name, '').trim();
+            const productLabel =
+              labelName.length > 0
+                ? {
+                    name: labelName.toUpperCase(),
+                    textColor: asString(labelRow.textColor, '#ffffff'),
+                    backgroundColor: asString(labelRow.backgroundColor, '#111827'),
+                  }
+                : undefined;
             rows.push({
               id: `${category}-${id}`,
               image,
               name: asString(row.name, category === 'FTB' ? 'Fabric' : 'Product'),
               description: asString(row.description, ''),
-              brand: asString(row.designerName, asString(row.sellerName, asString(row.ownerName, 'Jenks'))),
+              brand: asString(
+                asRecord(row.designer).businessName,
+                asString(
+                  asRecord(row.seller).businessName,
+                  asString(
+                    row.designerName,
+                    asString(row.sellerName, asString(row.ownerName, category === 'FTB' ? 'Seller' : 'Designer'))
+                  )
+                )
+              ),
               priceUsd: Math.max(0, priceValue),
               href: category === 'RTW' ? `/readytowear/${id}` : category === 'CTW' ? `/customtowear/${id}` : `/fabricstobuy/${id}`,
               createdAtTs,
               category,
               countryCode: countryToken || 'NG',
+              productLabel,
             });
           });
         };
@@ -3406,7 +3447,8 @@ export default function JenksFrontpageV2() {
             createdAtTs: entry.createdAtTs,
             category: entry.category,
             countryCode: entry.countryCode,
-            label: entry.category === 'FTB' ? 'FABRICS' : entry.category === 'CTW' ? 'CUSTOM TO WEAR' : 'READY TO WEAR',
+            productLabel: entry.productLabel,
+            label: entry.productLabel?.name || '',
           })));
         }
       } catch {
@@ -4444,6 +4486,7 @@ export default function JenksFrontpageV2() {
             {freshDropsCards.map((drop) => {
               const productPageType = PRODUCT_PAGE_BY_SECTION_KEY[drop.category || 'RTW'];
               const cardCfg = frontpageProductCardByType[productPageType] || PRODUCT_CARD_FALLBACK_STYLE;
+              const labelText = asString(drop.productLabel?.name, asString(drop.label, '')).trim();
               const fieldRenderers: Record<ProductCardFieldKey, () => JSX.Element | null> = {
                 DESIGNER_NAME: () =>
                   cardCfg.designerNameEnabled ? (
@@ -4504,16 +4547,16 @@ export default function JenksFrontpageV2() {
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       spinnerClassName="h-6 w-6"
                     />
-                    {cardCfg.labelEnabled ? (
+                    {cardCfg.labelEnabled && labelText ? (
                       <span
                         className="absolute left-3 top-3 rounded px-2 py-1 uppercase tracking-[0.06em]"
                         style={{
                           fontSize: `${cardCfg.labelFontSize}px`,
-                          color: cardCfg.labelTextColor,
-                          backgroundColor: cardCfg.labelBackgroundColor,
+                          color: asString(drop.productLabel?.textColor, cardCfg.labelTextColor),
+                          backgroundColor: asString(drop.productLabel?.backgroundColor, cardCfg.labelBackgroundColor),
                         }}
                       >
-                        {drop.label}
+                        {labelText}
                       </span>
                     ) : null}
                     {cardCfg.likesEnabled ? (
@@ -4533,9 +4576,11 @@ export default function JenksFrontpageV2() {
                         {countryCodeToFlagEmoji(drop.countryCode)}
                       </span>
                     ) : null}
-                    <span className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-2 border border-white/70 bg-black/30 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white opacity-0 transition-all duration-300 group-hover:opacity-100">
-                      Quick View
-                      <ArrowRight className="h-3.5 w-3.5" />
+                    <span className="pointer-events-none absolute inset-0 inline-flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
+                      <span className="inline-flex items-center gap-2 border border-white/70 bg-black/35 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+                        Quick View
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </span>
                     </span>
                   </div>
                 ) : null}
