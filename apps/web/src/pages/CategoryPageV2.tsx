@@ -45,6 +45,7 @@ type CategoryPageRuntime = {
       priceEnabled: boolean;
       priceFontSize: number;
       priceColor: string;
+      priceFontWeight: number;
       labelEnabled: boolean;
       labelFontSize: number;
       labelTextColor: string;
@@ -130,6 +131,7 @@ const DEFAULT_PRODUCT_CARD = {
   priceEnabled: true,
   priceFontSize: 14,
   priceColor: '#e66045',
+  priceFontWeight: 600,
   labelEnabled: true,
   labelFontSize: 11,
   labelTextColor: '#ffffff',
@@ -337,7 +339,14 @@ export default function CategoryPageV2({
         ) : null,
       PRICE: () =>
         cardCfg.priceEnabled ? (
-          <p className="leading-tight" style={{ fontSize: `${cardCfg.priceFontSize}px`, color: cardCfg.priceColor }}>
+          <p
+            className="leading-tight"
+            style={{
+              fontSize: `${cardCfg.priceFontSize}px`,
+              color: cardCfg.priceColor,
+              fontWeight: Math.max(100, Math.min(900, Math.round(Number(cardCfg.priceFontWeight || 600)))),
+            }}
+          >
             ${Number(row.priceUsd || 0).toFixed(2)}
           </p>
         ) : null,

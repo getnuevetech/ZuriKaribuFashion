@@ -224,6 +224,7 @@ type ProductCardStyle = {
   shortDescriptionWordLimit: number;
   priceEnabled: boolean;
   priceFontSize: number;
+  priceFontWeight: number;
   priceColor: string;
   labelEnabled: boolean;
   labelFontSize: number;
@@ -351,6 +352,7 @@ const PRODUCT_CARD_FALLBACK_STYLE: ProductCardStyle = {
   shortDescriptionWordLimit: 10,
   priceEnabled: true,
   priceFontSize: 14,
+  priceFontWeight: 600,
   priceColor: '#e66045',
   labelEnabled: true,
   labelFontSize: 11,
@@ -717,6 +719,10 @@ const normalizeProductCardStyle = (value: unknown): ProductCardStyle => {
     ),
     priceEnabled: asBoolean(row.priceEnabled, PRODUCT_CARD_FALLBACK_STYLE.priceEnabled),
     priceFontSize: Math.max(8, Math.min(72, Math.round(asNumber(row.priceFontSize, PRODUCT_CARD_FALLBACK_STYLE.priceFontSize)))),
+    priceFontWeight: Math.max(
+      100,
+      Math.min(900, Math.round(asNumber(row.priceFontWeight, PRODUCT_CARD_FALLBACK_STYLE.priceFontWeight) / 100) * 100)
+    ),
     priceColor: asString(row.priceColor, PRODUCT_CARD_FALLBACK_STYLE.priceColor),
     labelEnabled: asBoolean(row.labelEnabled, PRODUCT_CARD_FALLBACK_STYLE.labelEnabled),
     labelFontSize: Math.max(8, Math.min(72, Math.round(asNumber(row.labelFontSize, PRODUCT_CARD_FALLBACK_STYLE.labelFontSize)))),
@@ -4468,7 +4474,14 @@ export default function JenksFrontpageV2() {
                   ) : null,
                 PRICE: () =>
                   cardCfg.priceEnabled ? (
-                    <p className="leading-tight" style={{ fontSize: `${cardCfg.priceFontSize}px`, color: cardCfg.priceColor }}>
+                    <p
+                      className="leading-tight"
+                      style={{
+                        fontSize: `${cardCfg.priceFontSize}px`,
+                        fontWeight: cardCfg.priceFontWeight,
+                        color: cardCfg.priceColor,
+                      }}
+                    >
                       ${Number(drop.priceUsd || 0).toFixed(2)}
                     </p>
                   ) : null,

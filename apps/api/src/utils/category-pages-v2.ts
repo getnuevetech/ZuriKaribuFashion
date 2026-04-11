@@ -56,6 +56,7 @@ type CategoryPageV2ProductCardSettings = {
   priceEnabled: boolean;
   priceFontSize: number;
   priceColor: string;
+  priceFontWeight: number;
   labelEnabled: boolean;
   labelFontSize: number;
   labelTextColor: string;
@@ -151,6 +152,7 @@ const settingsSchema = z.object({
     priceEnabled: z.boolean(),
     priceFontSize: z.number().int().min(8).max(72),
     priceColor: z.string().trim().max(40),
+  priceFontWeight: z.number().int().min(100).max(900),
     labelEnabled: z.boolean(),
     labelFontSize: z.number().int().min(8).max(72),
     labelTextColor: z.string().trim().max(40),
@@ -224,6 +226,7 @@ const createDefaultProductCard = (): CategoryPageV2ProductCardSettings => ({
   priceEnabled: true,
   priceFontSize: 14,
   priceColor: '#e66045',
+  priceFontWeight: 600,
   labelEnabled: true,
   labelFontSize: 11,
   labelTextColor: '#ffffff',
@@ -314,6 +317,7 @@ const normalizeProductCardStyle = (
     priceEnabled: typeof row.priceEnabled === 'boolean' ? row.priceEnabled : fallback.priceEnabled,
     priceFontSize: clampNumber(row.priceFontSize, fallback.priceFontSize, 8, 72),
     priceColor: normalizeColor(row.priceColor, fallback.priceColor),
+    priceFontWeight: clampNumber(row.priceFontWeight, fallback.priceFontWeight, 100, 900),
     labelEnabled: typeof row.labelEnabled === 'boolean' ? row.labelEnabled : fallback.labelEnabled,
     labelFontSize: clampNumber(row.labelFontSize, fallback.labelFontSize, 8, 72),
     labelTextColor: normalizeColor(row.labelTextColor, fallback.labelTextColor),

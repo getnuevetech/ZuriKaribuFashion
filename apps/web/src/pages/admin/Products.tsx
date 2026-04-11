@@ -119,6 +119,7 @@ type ProductCardManagerSettings = {
   priceEnabled: boolean;
   priceFontSize: number;
   priceColor: string;
+  priceFontWeight: number;
   labelEnabled: boolean;
   labelFontSize: number;
   labelTextColor: string;
@@ -190,6 +191,7 @@ const DEFAULT_PRODUCT_CARD_MANAGER_SETTINGS: ProductCardManagerSettings = {
   priceEnabled: true,
   priceFontSize: 14,
   priceColor: '#e66045',
+  priceFontWeight: 600,
   labelEnabled: true,
   labelFontSize: 11,
   labelTextColor: '#ffffff',
@@ -297,6 +299,7 @@ const normalizeProductViewManagerSettings = (raw: any): ProductViewManagerSettin
       priceEnabled: productCardRaw?.priceEnabled !== false,
       priceFontSize: clamp(productCardRaw?.priceFontSize, 14, 8, 72),
       priceColor: String(productCardRaw?.priceColor || '#e66045'),
+      priceFontWeight: clamp(productCardRaw?.priceFontWeight, 600, 100, 900),
       labelEnabled: productCardRaw?.labelEnabled !== false,
       labelFontSize: clamp(productCardRaw?.labelFontSize, 11, 8, 72),
       labelTextColor: String(productCardRaw?.labelTextColor || '#ffffff'),
@@ -882,6 +885,7 @@ export default function AdminProducts() {
           priceEnabled: normalized.productCard.priceEnabled !== false,
           priceFontSize: clamp(normalized.productCard.priceFontSize, 14, 8, 72),
           priceColor: String(normalized.productCard.priceColor || '#e66045'),
+          priceFontWeight: clamp(normalized.productCard.priceFontWeight, 600, 100, 900),
           labelEnabled: normalized.productCard.labelEnabled !== false,
           labelFontSize: clamp(normalized.productCard.labelFontSize, 11, 8, 72),
           labelTextColor: String(normalized.productCard.labelTextColor || '#ffffff'),
@@ -1073,6 +1077,7 @@ export default function AdminProducts() {
                     : field.key === 'SHORT_DESCRIPTION'
                       ? 'shortDescriptionColor'
                       : 'priceColor';
+              const fieldWeightKey = field.key === 'PRICE' ? 'priceFontWeight' : null;
               const order = Math.max(1, card.fieldOrder.indexOf(field.key) + 1);
               return (
                 <div key={field.key} className="rounded border p-2">
@@ -1130,6 +1135,24 @@ export default function AdminProducts() {
                         className="mt-1 w-full rounded border px-2 py-1 text-[11px]"
                       />
                     </label>
+                    {fieldWeightKey ? (
+                      <label className="text-[11px] text-gray-700">
+                        Weight
+                        <input
+                          type="number"
+                          min={100}
+                          max={900}
+                          step={100}
+                          value={Number((card as any)[fieldWeightKey] || 600)}
+                          onChange={(event) =>
+                            setProductCardPatch({
+                              [fieldWeightKey]: clamp(event.target.value, Number((card as any)[fieldWeightKey] || 600), 100, 900),
+                            } as any)
+                          }
+                          className="mt-1 w-full rounded border px-2 py-1 text-[11px]"
+                        />
+                      </label>
+                    ) : null}
                   </div>
                 </div>
               );

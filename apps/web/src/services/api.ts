@@ -4337,6 +4337,7 @@ const productsApi = {
             priceEnabled?: boolean;
             priceFontSize?: number;
             priceColor?: string;
+            priceFontWeight?: number;
             labelEnabled?: boolean;
             labelFontSize?: number;
             labelTextColor?: string;

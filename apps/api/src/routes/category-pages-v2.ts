@@ -50,6 +50,7 @@ const updateSchema = z
         priceEnabled: z.boolean().optional(),
         priceFontSize: z.number().int().min(8).max(72).optional(),
         priceColor: z.string().trim().max(40).optional(),
+        priceFontWeight: z.number().int().min(100).max(900).optional(),
         labelEnabled: z.boolean().optional(),
         labelFontSize: z.number().int().min(8).max(72).optional(),
         labelTextColor: z.string().trim().max(40).optional(),
