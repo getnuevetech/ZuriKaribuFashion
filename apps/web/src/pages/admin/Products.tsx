@@ -2211,55 +2211,6 @@ export default function AdminProducts() {
       {isConfigurationView ? (
       <>
       <div className="rounded-xl border bg-white p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-900">Product Configuration</h2>
-            <p className="text-xs text-gray-500">
-              Manage Detailed Product View from Product Configuration. Product Card settings are managed in the standalone
-              Product Card tab.
-            </p>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void saveProductViewManager()}
-            disabled={productViewSaving}
-          >
-            {productViewSaving ? 'Saving...' : 'Save Product View Settings'}
-          </Button>
-        </div>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {PRODUCT_VIEW_PAGE_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveProductViewPage(tab.key)}
-              className={`rounded-lg border px-3 py-1.5 text-sm ${
-                activeProductViewPage === tab.key
-                  ? 'border-amber-300 bg-amber-50 text-amber-800'
-                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-              }`}
-              title={tab.hint}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        {productViewMessage ? (
-          <div
-            className={`mb-3 rounded border px-3 py-2 text-xs ${
-              productViewMessageType === 'success'
-                ? 'border-green-200 bg-green-50 text-green-800'
-                : 'border-amber-200 bg-amber-50 text-amber-800'
-            }`}
-          >
-            {productViewMessage}
-          </div>
-        ) : null}
-        {renderProductViewManager('DETAILED_PRODUCT_VIEW')}
-      </div>
-
-      <div className="rounded-xl border bg-white p-4">
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-gray-900">Product Taxonomy Management</h2>
           <p className="text-xs text-gray-500">
