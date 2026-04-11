@@ -26,10 +26,6 @@ export const CATEGORY_PAGE_V2_FILTER_INPUT_TYPES = ['DROPDOWN', 'SUGGESTIVE_SEAR
 export type CategoryPageV2FilterInputType = (typeof CATEGORY_PAGE_V2_FILTER_INPUT_TYPES)[number];
 
 export const CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS = [
-  'IMAGE',
-  'LABEL',
-  'LIKES_ICON',
-  'COUNTRY_ICON',
   'DESIGNER_NAME',
   'PRODUCT_NAME',
   'SHORT_DESCRIPTION',
@@ -37,28 +33,61 @@ export const CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS = [
 ] as const;
 export type CategoryPageV2ProductCardFieldKey = (typeof CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS)[number];
 
-type CategoryPageV2ProductCardFieldOrder = {
-  key: CategoryPageV2ProductCardFieldKey;
-  enabled: boolean;
-  order: number;
-};
+export const CATEGORY_PAGE_V2_DETAIL_TABS = ['DETAILS', 'SPECS', 'REVIEWS'] as const;
+export type CategoryPageV2DetailTabKey = (typeof CATEGORY_PAGE_V2_DETAIL_TABS)[number];
 
 type CategoryPageV2ProductCardSettings = {
-  fieldOrder: CategoryPageV2ProductCardFieldOrder[];
+  imageEnabled: boolean;
+  fieldOrder: CategoryPageV2ProductCardFieldKey[];
+  imageAspectRatio: '3:4' | '1:1';
+  textGap: number;
+  contentPaddingX: number;
+  contentPaddingY: number;
+  designerNameEnabled: boolean;
   designerNameFontSize: number;
   designerNameColor: string;
+  productNameEnabled: boolean;
   productNameFontSize: number;
   productNameColor: string;
+  shortDescriptionEnabled: boolean;
   shortDescriptionFontSize: number;
   shortDescriptionColor: string;
+  shortDescriptionWordLimit: number;
+  priceEnabled: boolean;
   priceFontSize: number;
   priceColor: string;
+  labelEnabled: boolean;
   labelFontSize: number;
-  labelColor: string;
+  labelTextColor: string;
   labelBackgroundColor: string;
-  likesIconSize: number;
-  likesIconColor: string;
+  labelPosition: 'TOP_LEFT';
+  likesEnabled: boolean;
+  likesSize: number;
+  likesColor: string;
+  likesActiveColor: string;
+  likesPosition: 'TOP_RIGHT';
+  countryIconEnabled: boolean;
   countryIconSize: number;
+  countryIconPosition: 'BOTTOM_RIGHT';
+};
+
+type CategoryPageV2DetailViewSettings = {
+  titleFontSize: number;
+  titleColor: string;
+  ownerFontSize: number;
+  ownerColor: string;
+  priceLabelColor: string;
+  priceValueFontSize: number;
+  priceValueColor: string;
+  descriptionFontSize: number;
+  descriptionColor: string;
+  specLabelColor: string;
+  specValueColor: string;
+  tabOrder: CategoryPageV2DetailTabKey[];
+  defaultTab: CategoryPageV2DetailTabKey;
+  reviewsEnabled: boolean;
+  discoverEnabled: boolean;
+  likesEnabled: boolean;
 };
 
 export type CategoryPageV2Product = {
@@ -103,29 +132,56 @@ const settingsSchema = z.object({
   countryRowCount: z.number().int().min(4).max(30),
   filterDefinitions: z.array(settingsFilterRowSchema).max(20),
   productCard: z.object({
-    fieldOrder: z
-      .array(
-        z.object({
-          key: z.enum(CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS),
-          enabled: z.boolean(),
-          order: z.number().int().min(1).max(99),
-        })
-      )
-      .max(CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS.length),
+    imageEnabled: z.boolean(),
+    fieldOrder: z.array(z.enum(CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS)).max(CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS.length),
+    imageAspectRatio: z.enum(['3:4', '1:1']),
+    textGap: z.number().int().min(0).max(24),
+    contentPaddingX: z.number().int().min(0).max(40),
+    contentPaddingY: z.number().int().min(0).max(40),
+    designerNameEnabled: z.boolean(),
     designerNameFontSize: z.number().int().min(8).max(72),
     designerNameColor: z.string().trim().max(40),
+    productNameEnabled: z.boolean(),
     productNameFontSize: z.number().int().min(8).max(72),
     productNameColor: z.string().trim().max(40),
+    shortDescriptionEnabled: z.boolean(),
     shortDescriptionFontSize: z.number().int().min(8).max(72),
     shortDescriptionColor: z.string().trim().max(40),
+    shortDescriptionWordLimit: z.number().int().min(4).max(24),
+    priceEnabled: z.boolean(),
     priceFontSize: z.number().int().min(8).max(72),
     priceColor: z.string().trim().max(40),
+    labelEnabled: z.boolean(),
     labelFontSize: z.number().int().min(8).max(72),
-    labelColor: z.string().trim().max(40),
+    labelTextColor: z.string().trim().max(40),
     labelBackgroundColor: z.string().trim().max(40),
-    likesIconSize: z.number().int().min(8).max(72),
-    likesIconColor: z.string().trim().max(40),
+    labelPosition: z.literal('TOP_LEFT'),
+    likesEnabled: z.boolean(),
+    likesSize: z.number().int().min(8).max(72),
+    likesColor: z.string().trim().max(40),
+    likesActiveColor: z.string().trim().max(40),
+    likesPosition: z.literal('TOP_RIGHT'),
+    countryIconEnabled: z.boolean(),
     countryIconSize: z.number().int().min(8).max(96),
+    countryIconPosition: z.literal('BOTTOM_RIGHT'),
+  }),
+  detailView: z.object({
+    titleFontSize: z.number().int().min(18).max(96),
+    titleColor: z.string().trim().max(40),
+    ownerFontSize: z.number().int().min(10).max(42),
+    ownerColor: z.string().trim().max(40),
+    priceLabelColor: z.string().trim().max(40),
+    priceValueFontSize: z.number().int().min(18).max(96),
+    priceValueColor: z.string().trim().max(40),
+    descriptionFontSize: z.number().int().min(12).max(36),
+    descriptionColor: z.string().trim().max(40),
+    specLabelColor: z.string().trim().max(40),
+    specValueColor: z.string().trim().max(40),
+    tabOrder: z.array(z.enum(CATEGORY_PAGE_V2_DETAIL_TABS)).max(CATEGORY_PAGE_V2_DETAIL_TABS.length),
+    defaultTab: z.enum(CATEGORY_PAGE_V2_DETAIL_TABS),
+    reviewsEnabled: z.boolean(),
+    discoverEnabled: z.boolean(),
+    likesEnabled: z.boolean(),
   }),
 });
 
@@ -133,6 +189,7 @@ const settingsPatchSchema = settingsSchema
   .partial()
   .extend({
     productCard: settingsSchema.shape.productCard.partial().optional(),
+    detailView: settingsSchema.shape.detailView.partial().optional(),
   });
 
 export type CategoryPageV2Settings = z.infer<typeof settingsSchema>;
@@ -140,33 +197,65 @@ type CategoryPageV2FilterRow = z.infer<typeof settingsFilterRowSchema>;
 
 const SETTINGS_KEY_PREFIX = 'CATEGORY_PAGES_V2_';
 
-const DEFAULT_PRODUCT_CARD_FIELD_ORDER: CategoryPageV2ProductCardFieldOrder[] = [
-  { key: 'IMAGE', enabled: true, order: 1 },
-  { key: 'LABEL', enabled: true, order: 2 },
-  { key: 'LIKES_ICON', enabled: true, order: 3 },
-  { key: 'COUNTRY_ICON', enabled: true, order: 4 },
-  { key: 'DESIGNER_NAME', enabled: true, order: 5 },
-  { key: 'PRODUCT_NAME', enabled: true, order: 6 },
-  { key: 'SHORT_DESCRIPTION', enabled: true, order: 7 },
-  { key: 'PRICE', enabled: true, order: 8 },
+const DEFAULT_PRODUCT_CARD_FIELD_ORDER: CategoryPageV2ProductCardFieldKey[] = [
+  'DESIGNER_NAME',
+  'PRODUCT_NAME',
+  'SHORT_DESCRIPTION',
+  'PRICE',
 ];
 
 const createDefaultProductCard = (): CategoryPageV2ProductCardSettings => ({
-  fieldOrder: DEFAULT_PRODUCT_CARD_FIELD_ORDER.map((entry) => ({ ...entry })),
-  designerNameFontSize: 13,
+  imageEnabled: true,
+  fieldOrder: [...DEFAULT_PRODUCT_CARD_FIELD_ORDER],
+  imageAspectRatio: '3:4',
+  textGap: 6,
+  contentPaddingX: 16,
+  contentPaddingY: 16,
+  designerNameEnabled: true,
+  designerNameFontSize: 14,
   designerNameColor: '#6b7280',
+  productNameEnabled: true,
   productNameFontSize: 16,
   productNameColor: '#111827',
-  shortDescriptionFontSize: 12,
+  shortDescriptionEnabled: true,
+  shortDescriptionFontSize: 13,
   shortDescriptionColor: '#4b5563',
-  priceFontSize: 13,
+  shortDescriptionWordLimit: 10,
+  priceEnabled: true,
+  priceFontSize: 14,
   priceColor: '#e66045',
+  labelEnabled: true,
   labelFontSize: 11,
-  labelColor: '#ffffff',
-  labelBackgroundColor: 'rgba(0,0,0,0.7)',
-  likesIconSize: 17,
-  likesIconColor: '#ffffff',
+  labelTextColor: '#ffffff',
+  labelBackgroundColor: 'rgba(17, 17, 17, 0.75)',
+  labelPosition: 'TOP_LEFT',
+  likesEnabled: true,
+  likesSize: 18,
+  likesColor: '#ffffff',
+  likesActiveColor: '#ef4444',
+  likesPosition: 'TOP_RIGHT',
+  countryIconEnabled: true,
   countryIconSize: 20,
+  countryIconPosition: 'BOTTOM_RIGHT',
+});
+
+const createDefaultDetailView = (): CategoryPageV2DetailViewSettings => ({
+  titleFontSize: 64,
+  titleColor: '#1A1A1A',
+  ownerFontSize: 16,
+  ownerColor: '#6B6B6B',
+  priceLabelColor: '#6B6B6B',
+  priceValueFontSize: 36,
+  priceValueColor: '#E85A3C',
+  descriptionFontSize: 14,
+  descriptionColor: '#2f2d29',
+  specLabelColor: '#6B6B6B',
+  specValueColor: '#1A1A1A',
+  tabOrder: ['DETAILS', 'SPECS', 'REVIEWS'],
+  defaultTab: 'DETAILS',
+  reviewsEnabled: true,
+  discoverEnabled: true,
+  likesEnabled: true,
 });
 
 const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
@@ -182,31 +271,21 @@ const normalizeColor = (value: unknown, fallback: string) => {
 
 const normalizeProductCardFieldOrder = (
   value: unknown,
-  fallbackRows: CategoryPageV2ProductCardFieldOrder[]
-): CategoryPageV2ProductCardFieldOrder[] => {
-  const fallbackByKey = new Map<CategoryPageV2ProductCardFieldKey, CategoryPageV2ProductCardFieldOrder>(
-    fallbackRows.map((entry) => [entry.key, entry])
-  );
+  fallbackRows: CategoryPageV2ProductCardFieldKey[]
+): CategoryPageV2ProductCardFieldKey[] => {
   const rows = Array.isArray(value) ? value : fallbackRows;
-  const collected = new Map<CategoryPageV2ProductCardFieldKey, CategoryPageV2ProductCardFieldOrder>();
+  const collected: CategoryPageV2ProductCardFieldKey[] = [];
   rows.forEach((entry, index) => {
-    const row = asObject(entry);
-    const keyToken = normalizeText(row.key).toUpperCase();
+    const row = asObject(entry as unknown);
+    const keyToken = normalizeText(typeof entry === 'string' ? entry : row.key || fallbackRows[index]).toUpperCase();
     if (!CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS.includes(keyToken as CategoryPageV2ProductCardFieldKey)) return;
     const key = keyToken as CategoryPageV2ProductCardFieldKey;
-    const fallback = fallbackByKey.get(key) || fallbackRows[index] || fallbackRows[0];
-    collected.set(key, {
-      key,
-      enabled: typeof row.enabled === 'boolean' ? row.enabled : fallback.enabled,
-      order: clampNumber(row.order, fallback.order, 1, 99),
-    });
+    if (!collected.includes(key)) collected.push(key);
   });
-  CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS.forEach((key, index) => {
-    if (collected.has(key)) return;
-    const fallback = fallbackByKey.get(key) || fallbackRows[index] || fallbackRows[0];
-    collected.set(key, { ...fallback });
+  CATEGORY_PAGE_V2_PRODUCT_CARD_FIELDS.forEach((key) => {
+    if (!collected.includes(key)) collected.push(key);
   });
-  return Array.from(collected.values()).sort((a, b) => a.order - b.order || a.key.localeCompare(b.key));
+  return collected;
 };
 
 const normalizeProductCardStyle = (
@@ -215,21 +294,39 @@ const normalizeProductCardStyle = (
 ): CategoryPageV2ProductCardSettings => {
   const row = asObject(value);
   return {
+    imageEnabled: typeof row.imageEnabled === 'boolean' ? row.imageEnabled : fallback.imageEnabled,
     fieldOrder: normalizeProductCardFieldOrder(row.fieldOrder, fallback.fieldOrder),
+    imageAspectRatio: normalizeText(row.imageAspectRatio) === '1:1' ? '1:1' : fallback.imageAspectRatio,
+    textGap: clampNumber(row.textGap, fallback.textGap, 0, 24),
+    contentPaddingX: clampNumber(row.contentPaddingX, fallback.contentPaddingX, 0, 40),
+    contentPaddingY: clampNumber(row.contentPaddingY, fallback.contentPaddingY, 0, 40),
+    designerNameEnabled: typeof row.designerNameEnabled === 'boolean' ? row.designerNameEnabled : fallback.designerNameEnabled,
     designerNameFontSize: clampNumber(row.designerNameFontSize, fallback.designerNameFontSize, 8, 72),
     designerNameColor: normalizeColor(row.designerNameColor, fallback.designerNameColor),
+    productNameEnabled: typeof row.productNameEnabled === 'boolean' ? row.productNameEnabled : fallback.productNameEnabled,
     productNameFontSize: clampNumber(row.productNameFontSize, fallback.productNameFontSize, 8, 72),
     productNameColor: normalizeColor(row.productNameColor, fallback.productNameColor),
+    shortDescriptionEnabled:
+      typeof row.shortDescriptionEnabled === 'boolean' ? row.shortDescriptionEnabled : fallback.shortDescriptionEnabled,
     shortDescriptionFontSize: clampNumber(row.shortDescriptionFontSize, fallback.shortDescriptionFontSize, 8, 72),
     shortDescriptionColor: normalizeColor(row.shortDescriptionColor, fallback.shortDescriptionColor),
+    shortDescriptionWordLimit: clampNumber(row.shortDescriptionWordLimit, fallback.shortDescriptionWordLimit, 4, 24),
+    priceEnabled: typeof row.priceEnabled === 'boolean' ? row.priceEnabled : fallback.priceEnabled,
     priceFontSize: clampNumber(row.priceFontSize, fallback.priceFontSize, 8, 72),
     priceColor: normalizeColor(row.priceColor, fallback.priceColor),
+    labelEnabled: typeof row.labelEnabled === 'boolean' ? row.labelEnabled : fallback.labelEnabled,
     labelFontSize: clampNumber(row.labelFontSize, fallback.labelFontSize, 8, 72),
-    labelColor: normalizeColor(row.labelColor, fallback.labelColor),
+    labelTextColor: normalizeColor(row.labelTextColor, fallback.labelTextColor),
     labelBackgroundColor: normalizeColor(row.labelBackgroundColor, fallback.labelBackgroundColor),
-    likesIconSize: clampNumber(row.likesIconSize, fallback.likesIconSize, 8, 72),
-    likesIconColor: normalizeColor(row.likesIconColor, fallback.likesIconColor),
+    labelPosition: 'TOP_LEFT',
+    likesEnabled: typeof row.likesEnabled === 'boolean' ? row.likesEnabled : fallback.likesEnabled,
+    likesSize: clampNumber(row.likesSize, fallback.likesSize, 8, 72),
+    likesColor: normalizeColor(row.likesColor, fallback.likesColor),
+    likesActiveColor: normalizeColor(row.likesActiveColor, fallback.likesActiveColor),
+    likesPosition: 'TOP_RIGHT',
+    countryIconEnabled: typeof row.countryIconEnabled === 'boolean' ? row.countryIconEnabled : fallback.countryIconEnabled,
     countryIconSize: clampNumber(row.countryIconSize, fallback.countryIconSize, 8, 96),
+    countryIconPosition: 'BOTTOM_RIGHT',
   };
 };
 
@@ -243,6 +340,63 @@ const mergeProductCardPatch = (
       ...base,
       ...source,
       fieldOrder: source.fieldOrder ?? base.fieldOrder,
+    },
+    base
+  );
+};
+
+const normalizeDetailTabs = (value: unknown, fallbackRows: CategoryPageV2DetailTabKey[]): CategoryPageV2DetailTabKey[] => {
+  const rows = Array.isArray(value) ? value : fallbackRows;
+  const collected: CategoryPageV2DetailTabKey[] = [];
+  rows.forEach((entry, index) => {
+    const token = normalizeText(entry || fallbackRows[index]).toUpperCase();
+    if (!CATEGORY_PAGE_V2_DETAIL_TABS.includes(token as CategoryPageV2DetailTabKey)) return;
+    const tab = token as CategoryPageV2DetailTabKey;
+    if (!collected.includes(tab)) collected.push(tab);
+  });
+  CATEGORY_PAGE_V2_DETAIL_TABS.forEach((tab) => {
+    if (!collected.includes(tab)) collected.push(tab);
+  });
+  return collected;
+};
+
+const normalizeDetailViewStyle = (
+  value: unknown,
+  fallback: CategoryPageV2DetailViewSettings
+): CategoryPageV2DetailViewSettings => {
+  const row = asObject(value);
+  const tabOrder = normalizeDetailTabs(row.tabOrder, fallback.tabOrder);
+  const defaultTabToken = normalizeText(row.defaultTab).toUpperCase();
+  const defaultTab = CATEGORY_PAGE_V2_DETAIL_TABS.includes(defaultTabToken as CategoryPageV2DetailTabKey)
+    ? (defaultTabToken as CategoryPageV2DetailTabKey)
+    : fallback.defaultTab;
+  return {
+    titleFontSize: clampNumber(row.titleFontSize, fallback.titleFontSize, 18, 96),
+    titleColor: normalizeColor(row.titleColor, fallback.titleColor),
+    ownerFontSize: clampNumber(row.ownerFontSize, fallback.ownerFontSize, 10, 42),
+    ownerColor: normalizeColor(row.ownerColor, fallback.ownerColor),
+    priceLabelColor: normalizeColor(row.priceLabelColor, fallback.priceLabelColor),
+    priceValueFontSize: clampNumber(row.priceValueFontSize, fallback.priceValueFontSize, 18, 96),
+    priceValueColor: normalizeColor(row.priceValueColor, fallback.priceValueColor),
+    descriptionFontSize: clampNumber(row.descriptionFontSize, fallback.descriptionFontSize, 12, 36),
+    descriptionColor: normalizeColor(row.descriptionColor, fallback.descriptionColor),
+    specLabelColor: normalizeColor(row.specLabelColor, fallback.specLabelColor),
+    specValueColor: normalizeColor(row.specValueColor, fallback.specValueColor),
+    tabOrder,
+    defaultTab: tabOrder.includes(defaultTab) ? defaultTab : tabOrder[0],
+    reviewsEnabled: typeof row.reviewsEnabled === 'boolean' ? row.reviewsEnabled : fallback.reviewsEnabled,
+    discoverEnabled: typeof row.discoverEnabled === 'boolean' ? row.discoverEnabled : fallback.discoverEnabled,
+    likesEnabled: typeof row.likesEnabled === 'boolean' ? row.likesEnabled : fallback.likesEnabled,
+  };
+};
+
+const mergeDetailViewPatch = (base: CategoryPageV2DetailViewSettings, patch: unknown): CategoryPageV2DetailViewSettings => {
+  const source = asObject(patch);
+  return normalizeDetailViewStyle(
+    {
+      ...base,
+      ...source,
+      tabOrder: source.tabOrder ?? base.tabOrder,
     },
     base
   );
@@ -308,6 +462,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.READY_TO_WEAR,
     productCard: createDefaultProductCard(),
+    detailView: createDefaultDetailView(),
   },
   FABRIC_TO_BUY: {
     title: 'Fabrics',
@@ -324,6 +479,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.FABRIC_TO_BUY,
     productCard: createDefaultProductCard(),
+    detailView: createDefaultDetailView(),
   },
   CUSTOM_TO_WEAR: {
     title: 'Custom To Wear',
@@ -340,6 +496,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.CUSTOM_TO_WEAR,
     productCard: createDefaultProductCard(),
+    detailView: createDefaultDetailView(),
   },
   COUNTRY: {
     title: 'Country Products',
@@ -356,6 +513,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.COUNTRY,
     productCard: createDefaultProductCard(),
+    detailView: createDefaultDetailView(),
   },
   SHOP: {
     title: 'Shop',
@@ -372,6 +530,7 @@ const DEFAULT_SETTINGS: Record<CategoryPageV2Type, CategoryPageV2Settings> = {
     countryRowCount: 12,
     filterDefinitions: DEFAULT_FILTERS.SHOP,
     productCard: createDefaultProductCard(),
+    detailView: createDefaultDetailView(),
   },
 };
 
@@ -480,6 +639,7 @@ const normalizeSettings = (pageType: CategoryPageV2Type, payload: unknown): Cate
       : fallback.countryRowCount,
     filterDefinitions: normalizeFilters(pageType, row.filterDefinitions),
     productCard: normalizeProductCardStyle(row.productCard, fallback.productCard),
+    detailView: normalizeDetailViewStyle(row.detailView, fallback.detailView),
   });
   if (parsed.success) return parsed.data;
   return { ...fallback };
@@ -786,6 +946,7 @@ export async function writeCategoryPageV2Settings(pageType: CategoryPageV2Type, 
         ...parsedPatch,
         filterDefinitions: parsedPatch.filterDefinitions || existing.settings.filterDefinitions,
         productCard: mergeProductCardPatch(existing.settings.productCard, parsedPatch.productCard),
+        detailView: mergeDetailViewPatch(existing.settings.detailView, parsedPatch.detailView),
       }
     : { ...DEFAULT_SETTINGS[pageType], ...parsedPatch };
   const normalized = normalizeSettings(pageType, nextPayload);
