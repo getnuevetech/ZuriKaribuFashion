@@ -198,6 +198,7 @@ export default function CategoryPageV2({
   allowCountryQuery?: boolean;
 }) {
   const [searchParams] = useSearchParams();
+  const searchParamsKey = searchParams.toString();
   const querySearch = String(searchParams.get('search') || '').trim();
   const [runtime, setRuntime] = useState<CategoryPageRuntime | null>(null);
   const [products, setProducts] = useState<CategoryPageProduct[]>([]);
@@ -229,18 +230,19 @@ export default function CategoryPageV2({
         setRuntime(data);
         const initialFilters: Record<string, string> = {};
         const nextApplied: Record<string, string[]> = {};
+        const params = new URLSearchParams(searchParamsKey);
         for (const row of data.settings.filterDefinitions || []) {
           initialFilters[row.key] = '';
           const paramKey = FILTER_PARAM_BY_KEY[row.key];
-          const queryValue = String(searchParams.get(paramKey) || '').trim();
+          const queryValue = String(params.get(paramKey) || '').trim();
           if (!queryValue) continue;
           initialFilters[row.key] = queryValue;
           const tokens = parseFilterTokens(queryValue, row.options || []);
           if (tokens.length > 0) nextApplied[paramKey] = tokens;
         }
         if (allowCountryQuery) {
-          const queryCountry = String(searchParams.get('country') || '').trim();
-          const queryCategory = String(searchParams.get('category') || '').trim();
+          const queryCountry = String(params.get('country') || '').trim();
+          const queryCategory = String(params.get('category') || '').trim();
           if (queryCountry) {
             initialFilters.COUNTRY = queryCountry;
             nextApplied.country = [queryCountry];
@@ -267,7 +269,7 @@ export default function CategoryPageV2({
     return () => {
       active = false;
     };
-  }, [pageType, allowCountryQuery, querySearch, searchParams]);
+  }, [pageType, allowCountryQuery, querySearch, searchParamsKey]);
 
   useEffect(() => {
     if (!runtime?.settings) return;
