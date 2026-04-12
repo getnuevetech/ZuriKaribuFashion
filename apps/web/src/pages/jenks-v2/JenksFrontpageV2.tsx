@@ -1568,6 +1568,9 @@ export default function JenksFrontpageV2() {
     if (target) window.location.assign(target);
   };
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
+  const ftbSpotlightStripRef = useRef<HTMLDivElement | null>(null);
+  const [ftbCanScrollLeft, setFtbCanScrollLeft] = useState(false);
+  const [ftbCanScrollRight, setFtbCanScrollRight] = useState(false);
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(managerConfig).topNavigations), [managerConfig]);
   const shopByCfg = useMemo(() => asRecord(asRecord(managerConfig).shopBy), [managerConfig]);
   const shopByCountryCfg = useMemo(() => asRecord(asRecord(managerConfig).shopByCountry), [managerConfig]);
@@ -2415,7 +2418,7 @@ export default function JenksFrontpageV2() {
         columns,
         typography,
         colsClass,
-        cards: source.slice(0, maxItems),
+        cards: variant === 'FTB' ? source : source.slice(0, maxItems),
       };
     },
     [spotCtaHref]
@@ -2446,6 +2449,32 @@ export default function JenksFrontpageV2() {
   const ftbSpotlightCards = ftbSpotlightModel.cards;
   const ftbSpotlightColsClass = ftbSpotlightModel.colsClass;
   const ftbSpotlightTypography = ftbSpotlightModel.typography;
+  const ftbSpotlightVisibleColumns = Math.max(1, Math.round(asNumber(ftbSpotlightModel.columns, 3)));
+  const ftbSpotlightNeedsHorizontalScroll = ftbSpotlightCards.length > ftbSpotlightVisibleColumns;
+  const syncFtbSpotlightScrollButtons = useCallback(() => {
+    const node = ftbSpotlightStripRef.current;
+    if (!node || !ftbSpotlightNeedsHorizontalScroll) {
+      setFtbCanScrollLeft(false);
+      setFtbCanScrollRight(false);
+      return;
+    }
+    const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+    setFtbCanScrollLeft(node.scrollLeft > 4);
+    setFtbCanScrollRight(node.scrollLeft < maxScrollLeft - 4);
+  }, [ftbSpotlightNeedsHorizontalScroll]);
+  const scrollFtbSpotlight = useCallback(
+    (direction: 'LEFT' | 'RIGHT') => {
+      const node = ftbSpotlightStripRef.current;
+      if (!node) return;
+      const cardWidth = node.clientWidth / Math.max(1, ftbSpotlightVisibleColumns);
+      node.scrollBy({
+        left: (direction === 'LEFT' ? -1 : 1) * cardWidth,
+        behavior: 'smooth',
+      });
+    },
+    [ftbSpotlightVisibleColumns]
+  );
+  const ftbSpotlightCardBasis = `${100 / ftbSpotlightVisibleColumns}%`;
   const staticReviewCards = useMemo(() => {
     const rows = asArray(customerReviewsCfg.staticMessages)
       .map((entry) => asRecord(entry))
@@ -3621,6 +3650,24 @@ export default function JenksFrontpageV2() {
     customerReviewsHovered,
     showCustomerReviewsSection,
   ]);
+  useEffect(() => {
+    const node = ftbSpotlightStripRef.current;
+    syncFtbSpotlightScrollButtons();
+    if (!node || !ftbSpotlightNeedsHorizontalScroll) return;
+    const handleScroll = () => syncFtbSpotlightScrollButtons();
+    const handleResize = () => syncFtbSpotlightScrollButtons();
+    node.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleResize);
+    return () => {
+      node.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [
+    ftbSpotlightNeedsHorizontalScroll,
+    ftbSpotlightCards.length,
+    ftbSpotlightVisibleColumns,
+    syncFtbSpotlightScrollButtons,
+  ]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -3639,6 +3686,120 @@ export default function JenksFrontpageV2() {
       style.remove();
     };
   }, []);
+
+  const renderFtbSpotlightCard = (spot: any, key: string, cardClassName = '') => (
+    <Link
+      key={key}
+      to={spot.href}
+      className={`group relative overflow-hidden ${cardClassName}`}
+      data-kimi-anim="zoom-in"
+    >
+      <BrandImageWithFallback
+        src={spot.image}
+        alt={spot.title}
+        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+        spinnerClassName="h-8 w-8"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
+      {spot.showTag ? (
+        <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
+          {spot.tag}
+        </p>
+      ) : null}
+      {spot.showCountry ? (
+        <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
+          {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
+        </p>
+      ) : null}
+      <div
+        className="absolute bottom-6 left-6 right-6 text-white"
+        style={{
+          backgroundColor: spot.textBackgroundEnabled ? spot.textBackgroundColor : 'transparent',
+          padding: spot.textBackgroundEnabled ? '10px 12px' : '0px',
+          borderRadius: spot.textBackgroundEnabled ? '2px' : '0px',
+        }}
+      >
+        {spot.showPrice ? (
+          <p
+            className="font-semibold uppercase tracking-[0.08em] text-[var(--ftb-price-color)] transition-colors duration-300 group-hover:text-[var(--ftb-price-hover-color)]"
+            style={
+              {
+                fontSize: `${ftbSpotlightTypography.priceFontSize}px`,
+                '--ftb-price-color': asString(ftbSpotlightTypography.priceColor, '#ffffff'),
+                '--ftb-price-hover-color': asString(
+                  ftbSpotlightTypography.priceHoverColor,
+                  asString(ftbSpotlightTypography.priceColor, '#ffffff')
+                ),
+              } as CSSProperties
+            }
+          >
+            {spot.price || ''}
+          </p>
+        ) : null}
+        {spot.showCountry ? (
+          <p
+            className="font-medium uppercase tracking-[0.08em] text-white/78"
+            style={{ fontSize: `${ftbSpotlightTypography.countryFontSize}px` }}
+          >
+            {spot.designerCountry || spot.tag}
+          </p>
+        ) : null}
+        {spot.showDesignerName ? (
+          <h3
+            className="font-['Oswald'] font-bold uppercase leading-[0.95] text-[var(--ftb-name-color)] transition-colors duration-300 group-hover:text-[var(--ftb-name-hover-color)]"
+            style={
+              {
+                fontSize: `${ftbSpotlightTypography.nameFontSize}px`,
+                '--ftb-name-color': asString(ftbSpotlightTypography.nameColor, '#ffffff'),
+                '--ftb-name-hover-color': asString(
+                  ftbSpotlightTypography.nameHoverColor,
+                  asString(ftbSpotlightTypography.nameColor, '#ffffff')
+                ),
+              } as CSSProperties
+            }
+          >
+            {spot.designerName || spot.title}
+          </h3>
+        ) : null}
+        {spot.showSpecialty ? (
+          <p
+            className="mt-2 leading-[1.25] text-white/78"
+            style={{ fontSize: `${ftbSpotlightTypography.specialtyFontSize}px` }}
+          >
+            {spot.designerSpecialty || 'Contemporary African Designer'}
+          </p>
+        ) : null}
+        {spot.showDescription ? (
+          <p
+            className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
+            style={{ fontSize: `${ftbSpotlightTypography.descriptionFontSize}px` }}
+          >
+            {spot.description}
+          </p>
+        ) : null}
+        <span
+          className="relative mt-5 inline-flex items-center gap-3 border-[var(--cta-border-color)] pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-[var(--cta-text-color)] transition-colors duration-300 group-hover:border-[var(--cta-hover-border-color)] group-hover:text-[var(--cta-hover-text-color)]"
+          style={buildCTAStyle(spot.ctaStyle, {
+            ...DEFAULT_INLINE_CTA_STYLE,
+            textColor: '#ffffff',
+            hoverTextColor: '#ffffff',
+            borderColor: 'transparent',
+            hoverBorderColor: 'transparent',
+          })}
+          onMouseEnter={(event) =>
+            applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, true)
+          }
+          onMouseLeave={(event) =>
+            applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, false)
+          }
+        >
+          {spot.cta}
+          <ArrowRight className="h-4 w-4" />
+          <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
+        </span>
+      </div>
+    </Link>
+  );
 
   return (
     <div className="kimi-site flex flex-col bg-[#f5f3ee] text-[#111]">
@@ -4961,117 +5122,42 @@ export default function JenksFrontpageV2() {
       {/* FTB SPOTLIGHT */}
       {isSectionVisible('FTB_SPOTLIGHT') ? (
         <section
-          className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] ${ftbSpotlightColsClass}`}
+          className={`${HERO_HEIGHT_CLASS} bg-[#101010] ${ftbSpotlightNeedsHorizontalScroll ? 'relative' : `grid grid-cols-1 gap-0 ${ftbSpotlightColsClass}`}`}
           style={{ order: getSectionOrder('FTB_SPOTLIGHT') }}
         >
-          {ftbSpotlightCards.map((spot) => (
-            <Link key={`ftb-${spot.id}`} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
-              <BrandImageWithFallback
-                src={spot.image}
-                alt={spot.title}
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                spinnerClassName="h-8 w-8"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
-              {spot.showTag ? (
-                <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
-                  {spot.tag}
-                </p>
-              ) : null}
-              {spot.showCountry ? (
-                <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
-                  {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
-                </p>
-              ) : null}
-              <div
-                className="absolute bottom-6 left-6 right-6 text-white"
-                style={{
-                  backgroundColor: spot.textBackgroundEnabled ? spot.textBackgroundColor : 'transparent',
-                  padding: spot.textBackgroundEnabled ? '10px 12px' : '0px',
-                  borderRadius: spot.textBackgroundEnabled ? '2px' : '0px',
-                }}
+          {ftbSpotlightNeedsHorizontalScroll ? (
+            <>
+              <button
+                type="button"
+                onClick={() => scrollFtbSpotlight('LEFT')}
+                disabled={!ftbCanScrollLeft}
+                className="absolute left-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center border border-white/30 bg-black/45 text-white transition-colors hover:border-white/60 hover:bg-black/65 disabled:cursor-not-allowed disabled:opacity-40 md:inline-flex"
+                aria-label="Scroll FTB spotlight left"
               >
-                {spot.showPrice ? (
-                  <p
-                    className="font-semibold uppercase tracking-[0.08em] text-[var(--ftb-price-color)] transition-colors duration-300 group-hover:text-[var(--ftb-price-hover-color)]"
-                    style={
-                      {
-                        fontSize: `${ftbSpotlightTypography.priceFontSize}px`,
-                        '--ftb-price-color': asString(ftbSpotlightTypography.priceColor, '#ffffff'),
-                        '--ftb-price-hover-color': asString(
-                          ftbSpotlightTypography.priceHoverColor,
-                          asString(ftbSpotlightTypography.priceColor, '#ffffff')
-                        ),
-                      } as CSSProperties
-                    }
-                  >
-                    {spot.price || ''}
-                  </p>
-                ) : null}
-                {spot.showCountry ? (
-                  <p
-                    className="font-medium uppercase tracking-[0.08em] text-white/78"
-                    style={{ fontSize: `${ftbSpotlightTypography.countryFontSize}px` }}
-                  >
-                    {spot.designerCountry || spot.tag}
-                  </p>
-                ) : null}
-                {spot.showDesignerName ? (
-                  <h3
-                    className="font-['Oswald'] font-bold uppercase leading-[0.95] text-[var(--ftb-name-color)] transition-colors duration-300 group-hover:text-[var(--ftb-name-hover-color)]"
-                    style={
-                      {
-                        fontSize: `${ftbSpotlightTypography.nameFontSize}px`,
-                        '--ftb-name-color': asString(ftbSpotlightTypography.nameColor, '#ffffff'),
-                        '--ftb-name-hover-color': asString(
-                          ftbSpotlightTypography.nameHoverColor,
-                          asString(ftbSpotlightTypography.nameColor, '#ffffff')
-                        ),
-                      } as CSSProperties
-                    }
-                  >
-                    {spot.designerName || spot.title}
-                  </h3>
-                ) : null}
-                {spot.showSpecialty ? (
-                  <p
-                    className="mt-2 leading-[1.25] text-white/78"
-                    style={{ fontSize: `${ftbSpotlightTypography.specialtyFontSize}px` }}
-                  >
-                    {spot.designerSpecialty || 'Contemporary African Designer'}
-                  </p>
-                ) : null}
-                {spot.showDescription ? (
-                  <p
-                    className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
-                    style={{ fontSize: `${ftbSpotlightTypography.descriptionFontSize}px` }}
-                  >
-                    {spot.description}
-                  </p>
-                ) : null}
-                <span
-                  className="relative mt-5 inline-flex items-center gap-3 border-[var(--cta-border-color)] pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-[var(--cta-text-color)] transition-colors duration-300 group-hover:border-[var(--cta-hover-border-color)] group-hover:text-[var(--cta-hover-text-color)]"
-                  style={buildCTAStyle(spot.ctaStyle, {
-                    ...DEFAULT_INLINE_CTA_STYLE,
-                    textColor: '#ffffff',
-                    hoverTextColor: '#ffffff',
-                    borderColor: 'transparent',
-                    hoverBorderColor: 'transparent',
-                  })}
-                  onMouseEnter={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, true)
-                  }
-                  onMouseLeave={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, false)
-                  }
-                >
-                  {spot.cta}
-                  <ArrowRight className="h-4 w-4" />
-                  <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
-                </span>
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollFtbSpotlight('RIGHT')}
+                disabled={!ftbCanScrollRight}
+                className="absolute right-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center border border-white/30 bg-black/45 text-white transition-colors hover:border-white/60 hover:bg-black/65 disabled:cursor-not-allowed disabled:opacity-40 md:inline-flex"
+                aria-label="Scroll FTB spotlight right"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+              <div
+                ref={ftbSpotlightStripRef}
+                className="flex h-full overflow-x-auto scroll-smooth scrollbar-hide"
+                style={{ '--ftb-card-basis': ftbSpotlightCardBasis } as CSSProperties}
+              >
+                {ftbSpotlightCards.map((spot) =>
+                  renderFtbSpotlightCard(spot, `ftb-${spot.id}`, 'h-full shrink-0 basis-full md:[flex-basis:var(--ftb-card-basis)]')
+                )}
               </div>
-            </Link>
-          ))}
+            </>
+          ) : (
+            ftbSpotlightCards.map((spot) => renderFtbSpotlightCard(spot, `ftb-${spot.id}`))
+          )}
         </section>
       ) : null}
 
