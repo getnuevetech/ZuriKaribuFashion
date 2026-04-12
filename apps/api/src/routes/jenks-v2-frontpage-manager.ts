@@ -28,6 +28,7 @@ const TEMPLATE_KEYS = [
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
   'RTW_FTB',
+  'FTB_SPOTLIGHT',
   'HERITAGE',
   'CUSTOMER_REVIEWS',
   'NEWSLETTER_FOOTER',
@@ -580,6 +581,7 @@ type JenksV2FrontpageManagerSettings = {
   freshDrops: FreshDropsSettings;
   designerSpotlight: DesignerSpotlightSettings;
   rtwFtb: DesignerSpotlightSettings;
+  ftbSpotlight: DesignerSpotlightSettings;
   heritage: HeritageSettings;
   customerReviews: CustomerReviewsSettings;
   newsletterFooter: NewsletterFooterSettings;
@@ -602,7 +604,8 @@ const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string
   { templateKey: 'INSTANT_BUY', key: 'instant-buy', name: 'Instant Buy' },
   { templateKey: 'FRESH_DROPS', key: 'fresh-drops', name: 'Fresh Drops' },
   { templateKey: 'DESIGNER_SPOTLIGHT', key: 'designer-spotlight', name: 'Designer Spotlight' },
-  { templateKey: 'RTW_FTB', key: 'rtw-ftb', name: 'RTW & FTB' },
+  { templateKey: 'RTW_FTB', key: 'rtw', name: 'RTW' },
+  { templateKey: 'FTB_SPOTLIGHT', key: 'ftb', name: 'FTB' },
   { templateKey: 'HERITAGE', key: 'heritage', name: 'Heritage' },
   { templateKey: 'CUSTOMER_REVIEWS', key: 'customer-reviews', name: 'From Our Customers' },
   { templateKey: 'NEWSLETTER_FOOTER', key: 'newsletter-footer', name: 'Newsletter and Footer' },
@@ -680,6 +683,7 @@ const updateSchema = z.object({
   freshDrops: z.unknown().optional(),
   designerSpotlight: z.unknown().optional(),
   rtwFtb: z.unknown().optional(),
+  ftbSpotlight: z.unknown().optional(),
   heritage: z.unknown().optional(),
   customerReviews: z.unknown().optional(),
   newsletterFooter: z.unknown().optional(),
@@ -1678,24 +1682,73 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         {
           id: randomUUID(),
           image: '',
-          tag: 'RTW & FTB',
+          tag: 'RTW',
           showTag: true,
           countryCode: 'NG',
           country: 'Nigeria',
           showCountry: true,
           price: '$0.00',
           showPrice: true,
-          designerName: 'RTW & FTB Collection',
+          designerName: 'RTW Collection',
           showDesignerName: true,
-          title: 'Ready To Wear & Fabrics',
+          title: 'Ready To Wear',
           specialty: 'Curated product spotlight',
           showSpecialty: true,
-          description: 'Highlight RTW and FTB collections in one dedicated section.',
+          description: 'Highlight RTW collections in a dedicated section.',
           showDescription: true,
-          ctaText: 'Shop Collection',
-          ctaLink: '/Shop',
+          ctaText: 'Shop RTW',
+          ctaLink: '/readytowear',
           ctaMode: 'PAGE',
-          ctaPageKey: 'SHOP',
+          ctaPageKey: 'READY_TO_WEAR',
+          ctaStyle: defaultCtaStyle({
+            backgroundColor: 'transparent',
+            textColor: '#ffffff',
+            borderColor: 'transparent',
+            borderWidth: 0,
+            fontSize: 14,
+          }),
+          enabled: true,
+          displayOrder: 1,
+        },
+      ],
+    },
+    ftbSpotlight: {
+      rows: 1,
+      columns: 3,
+      overlayEnabled: true,
+      overlayBackgroundColor: 'rgba(0,0,0,0.36)',
+      countryFontSize: 18,
+      nameColor: '#ffffff',
+      nameHoverColor: '#e66045',
+      priceFontSize: 20,
+      priceColor: '#ffffff',
+      priceHoverColor: '#e66045',
+      nameFontSize: 52,
+      specialtyFontSize: 24,
+      descriptionFontSize: 24,
+      descriptionWordLimit: 25,
+      cards: [
+        {
+          id: randomUUID(),
+          image: '',
+          tag: 'FTB',
+          showTag: true,
+          countryCode: 'NG',
+          country: 'Nigeria',
+          showCountry: true,
+          price: '$0.00',
+          showPrice: true,
+          designerName: 'FTB Collection',
+          showDesignerName: true,
+          title: 'Fabrics To Buy',
+          specialty: 'Curated fabric spotlight',
+          showSpecialty: true,
+          description: 'Highlight FTB collections in a dedicated section.',
+          showDescription: true,
+          ctaText: 'Shop FTB',
+          ctaLink: '/fabricstobuy',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'FABRICS',
           ctaStyle: defaultCtaStyle({
             backgroundColor: 'transparent',
             textColor: '#ffffff',
@@ -3072,6 +3125,8 @@ const buildTemplateSnapshot = (
       return cloneJson(asRecord(settings.designerSpotlight));
     case 'RTW_FTB':
       return cloneJson(asRecord(settings.rtwFtb));
+    case 'FTB_SPOTLIGHT':
+      return cloneJson(asRecord(settings.ftbSpotlight));
     case 'HERITAGE':
       return cloneJson(asRecord(settings.heritage));
     case 'CUSTOMER_REVIEWS':
@@ -3409,6 +3464,9 @@ const applyTemplateSnapshotToSettings = (
     case 'RTW_FTB':
       next.rtwFtb = normalizeDesignerSpotlight(snapshotRecord, next.rtwFtb, { includePrice: true });
       break;
+    case 'FTB_SPOTLIGHT':
+      next.ftbSpotlight = normalizeDesignerSpotlight(snapshotRecord, next.ftbSpotlight, { includePrice: true });
+      break;
     case 'HERITAGE':
       next.heritage = normalizeHeritage(snapshotRecord, next.heritage);
       break;
@@ -3449,6 +3507,13 @@ const normalizeSettings = (
   const rtwFtb = normalizeDesignerSpotlight((row as Record<string, unknown>).rtwFtb, fallback.rtwFtb, {
     includePrice: true,
   });
+  const ftbSpotlight = normalizeDesignerSpotlight(
+    (row as Record<string, unknown>).ftbSpotlight ?? (row as Record<string, unknown>).rtwFtb,
+    fallback.ftbSpotlight,
+    {
+      includePrice: true,
+    }
+  );
   const heritage = normalizeHeritage(row.heritage, fallback.heritage);
   const customerReviews = normalizeCustomerReviews(row.customerReviews, fallback.customerReviews);
   const newsletterFooter = normalizeNewsletterFooter(row.newsletterFooter, fallback.newsletterFooter);
@@ -3464,6 +3529,7 @@ const normalizeSettings = (
     freshDrops,
     designerSpotlight,
     rtwFtb,
+    ftbSpotlight,
     heritage,
     customerReviews,
     newsletterFooter,
@@ -3557,6 +3623,10 @@ const saveSettings = async (next: Partial<JenksV2FrontpageManagerSettings>) => {
       rtwFtb: {
         ...existing.settings.rtwFtb,
         ...asRecord((next as Record<string, unknown>).rtwFtb),
+      },
+      ftbSpotlight: {
+        ...existing.settings.ftbSpotlight,
+        ...asRecord((next as Record<string, unknown>).ftbSpotlight),
       },
       heritage: {
         ...existing.settings.heritage,

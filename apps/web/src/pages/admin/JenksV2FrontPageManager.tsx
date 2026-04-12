@@ -25,6 +25,7 @@ type TemplateKey =
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
   | 'RTW_FTB'
+  | 'FTB_SPOTLIGHT'
   | 'HERITAGE'
   | 'CUSTOMER_REVIEWS'
   | 'NEWSLETTER_FOOTER';
@@ -581,6 +582,7 @@ type JenksV2FrontpageConfig = {
   freshDrops: FreshDrops;
   designerSpotlight: DesignerSpotlight;
   rtwFtb: DesignerSpotlight;
+  ftbSpotlight: DesignerSpotlight;
   heritage: Heritage;
   customerReviews: CustomerReviews;
   newsletterFooter: NewsletterFooter;
@@ -615,7 +617,8 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'INSTANT_BUY', label: 'Instant Buy' },
   { key: 'FRESH_DROPS', label: 'Fresh Drops' },
   { key: 'DESIGNER_SPOTLIGHT', label: 'Designer Spotlight' },
-  { key: 'RTW_FTB', label: 'RTW & FTB' },
+  { key: 'RTW_FTB', label: 'RTW' },
+  { key: 'FTB_SPOTLIGHT', label: 'FTB' },
   { key: 'HERITAGE', label: 'Heritage' },
   { key: 'CUSTOMER_REVIEWS', label: 'From Our Customers' },
   { key: 'NEWSLETTER_FOOTER', label: 'Newsletter and Footer' },
@@ -1748,7 +1751,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       {
         id: uid(),
         image: '',
-        tag: 'RTW & FTB',
+        tag: 'RTW',
         countryCode: 'NG',
         country: countryNameFromCode('NG'),
         price: '$0.00',
@@ -1758,14 +1761,63 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         showTag: true,
         showDescription: true,
         showPrice: true,
-        designerName: 'RTW & FTB Collection',
+        designerName: 'RTW Collection',
         specialty: 'Curated product spotlight',
-        title: 'Ready To Wear & Fabrics',
-        description: 'Highlight RTW and FTB collections in one dedicated section.',
-        ctaText: 'Shop Collection',
-        ctaLink: '/Shop',
+        title: 'Ready To Wear',
+        description: 'Highlight RTW collections in a dedicated section.',
+        ctaText: 'Shop RTW',
+        ctaLink: '/readytowear',
         ctaMode: 'PAGE',
-        ctaPageKey: 'SHOP',
+        ctaPageKey: 'READY_TO_WEAR',
+        ctaStyle: createCtaStyle({
+          backgroundColor: 'transparent',
+          textColor: '#ffffff',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          fontSize: 14,
+        }),
+        enabled: true,
+        displayOrder: 1,
+      },
+    ],
+  },
+  ftbSpotlight: {
+    rows: 1,
+    columns: 3,
+    countryFontSize: 22,
+    designerNameFontSize: 52,
+    designerNameColor: '#ffffff',
+    designerNameHoverColor: '#e66045',
+    specialtyFontSize: 22,
+    descriptionFontSize: 24,
+    descriptionWordLimit: 25,
+    priceFontSize: 20,
+    priceColor: '#ffffff',
+    priceHoverColor: '#e66045',
+    textAreaBackgroundEnabled: true,
+    textAreaBackgroundColor: 'rgba(0,0,0,0.45)',
+    cards: [
+      {
+        id: uid(),
+        image: '',
+        tag: 'FTB',
+        countryCode: 'NG',
+        country: countryNameFromCode('NG'),
+        price: '$0.00',
+        showCountry: true,
+        showDesignerName: true,
+        showSpecialty: true,
+        showTag: true,
+        showDescription: true,
+        showPrice: true,
+        designerName: 'FTB Collection',
+        specialty: 'Curated product spotlight',
+        title: 'Fabrics To Buy',
+        description: 'Highlight FTB collections in a dedicated section.',
+        ctaText: 'Shop FTB',
+        ctaLink: '/fabricstobuy',
+        ctaMode: 'PAGE',
+        ctaPageKey: 'FABRICS',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
           textColor: '#ffffff',
@@ -1908,6 +1960,7 @@ type TabKey =
   | 'freshDrops'
   | 'designerSpotlight'
   | 'rtwFtb'
+  | 'ftbSpotlight'
   | 'heritage'
   | 'customerReviews'
   | 'newsletterFooter'
@@ -1923,7 +1976,8 @@ const TAB_META: Array<{ key: TabKey; label: string }> = [
   { key: 'instantBuy', label: 'Instant Buy' },
   { key: 'freshDrops', label: 'Fresh Drops' },
   { key: 'designerSpotlight', label: 'Designer Spotlight' },
-  { key: 'rtwFtb', label: 'RTW & FTB' },
+  { key: 'rtwFtb', label: 'RTW' },
+  { key: 'ftbSpotlight', label: 'FTB' },
   { key: 'heritage', label: 'Heritage' },
   { key: 'customerReviews', label: 'From Our Customers' },
   { key: 'newsletterFooter', label: 'Newsletter & Footer' },
@@ -1940,6 +1994,8 @@ const SUBMENU_TO_TAB: Record<string, TabKey> = {
   'fresh-drops': 'freshDrops',
   'designer-spotlight': 'designerSpotlight',
   'rtw-ftb': 'rtwFtb',
+  rtw: 'rtwFtb',
+  ftb: 'ftbSpotlight',
   heritage: 'heritage',
   'customer-reviews': 'customerReviews',
   'newsletter-footer': 'newsletterFooter',
@@ -1955,7 +2011,8 @@ const TAB_TO_SUBMENU: Record<TabKey, string> = {
   instantBuy: 'instant-buy',
   freshDrops: 'fresh-drops',
   designerSpotlight: 'designer-spotlight',
-  rtwFtb: 'rtw-ftb',
+  rtwFtb: 'rtw',
+  ftbSpotlight: 'ftb',
   heritage: 'heritage',
   customerReviews: 'customer-reviews',
   newsletterFooter: 'newsletter-footer',
@@ -2012,6 +2069,30 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
     overlayEnabled: config.rtwFtb.textAreaBackgroundEnabled,
     overlayBackgroundColor: config.rtwFtb.textAreaBackgroundColor,
     cards: config.rtwFtb.cards.map((card) => {
+      const countryCode = countryCodeFromToken(card.countryCode || card.country, 'NG');
+      return {
+        ...card,
+        price: String(card.price || ''),
+        showCountry: toBoolean(card.showCountry, true),
+        showDesignerName: toBoolean(card.showDesignerName, true),
+        showSpecialty: toBoolean(card.showSpecialty, true),
+        showTag: toBoolean(card.showTag, true),
+        showDescription: toBoolean(card.showDescription, true),
+        showPrice: toBoolean(card.showPrice, true),
+        countryCode,
+        country: countryNameFromCode(countryCode),
+      };
+    }),
+  },
+  ftbSpotlight: {
+    ...config.ftbSpotlight,
+    nameFontSize: config.ftbSpotlight.designerNameFontSize,
+    priceFontSize: config.ftbSpotlight.priceFontSize,
+    priceColor: config.ftbSpotlight.priceColor,
+    priceHoverColor: config.ftbSpotlight.priceHoverColor,
+    overlayEnabled: config.ftbSpotlight.textAreaBackgroundEnabled,
+    overlayBackgroundColor: config.ftbSpotlight.textAreaBackgroundColor,
+    cards: config.ftbSpotlight.cards.map((card) => {
       const countryCode = countryCodeFromToken(card.countryCode || card.country, 'NG');
       return {
         ...card,
@@ -2264,8 +2345,29 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
       ctaLink:
         normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
-          ? resolvePageHrefForKey(item.ctaPageKey, '/shop')
-          : normalizeManagerHref(item.ctaLink, '/shop'),
+          ? resolvePageHrefForKey(item.ctaPageKey, '/readytowear')
+          : normalizeManagerHref(item.ctaLink, '/readytowear'),
+    })),
+  };
+  next.ftbSpotlight = {
+    ...next.ftbSpotlight,
+    designerNameColor: String(next.ftbSpotlight.designerNameColor || '#ffffff'),
+    designerNameHoverColor: String(next.ftbSpotlight.designerNameHoverColor || next.ftbSpotlight.designerNameColor || '#ffffff'),
+    descriptionWordLimit: clamp(toNumber(String(next.ftbSpotlight.descriptionWordLimit || 25), 25), 5, 80),
+    priceColor: String(next.ftbSpotlight.priceColor || '#ffffff'),
+    priceHoverColor: String(next.ftbSpotlight.priceHoverColor || next.ftbSpotlight.priceColor || '#ffffff'),
+    cards: next.ftbSpotlight.cards.map((item) => ({
+      ...item,
+      countryCode: countryCodeFromToken(item.countryCode || item.country, 'NG'),
+      country: countryNameFromCode(countryCodeFromToken(item.countryCode || item.country, 'NG')),
+      designerName: String(item.designerName || item.title || '').slice(0, 120),
+      specialty: String(item.specialty || '').slice(0, 120),
+      ctaMode: normalizeCtaMode(item.ctaMode, 'PAGE'),
+      ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
+      ctaLink:
+        normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
+          ? resolvePageHrefForKey(item.ctaPageKey, '/fabricstobuy')
+          : normalizeManagerHref(item.ctaLink, '/fabricstobuy'),
     })),
   };
   next.newsletterFooter = {
@@ -2467,6 +2569,16 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     (data as any).rtwFtb && typeof (data as any).rtwFtb === 'object'
       ? ((data as any).rtwFtb as Record<string, unknown>)
       : {};
+  const ftbSpotlight = {
+    ...DEFAULT_CONFIG.ftbSpotlight,
+    ...((data as any).ftbSpotlight || (data as any).rtwFtb || {}),
+  };
+  const ftbSpotlightRaw =
+    (data as any).ftbSpotlight && typeof (data as any).ftbSpotlight === 'object'
+      ? ((data as any).ftbSpotlight as Record<string, unknown>)
+      : (data as any).rtwFtb && typeof (data as any).rtwFtb === 'object'
+        ? ((data as any).rtwFtb as Record<string, unknown>)
+        : {};
   const fallbackHero = DEFAULT_CONFIG.topNavigations.heroBanners[0];
   const fallbackCategory = DEFAULT_CONFIG.categoryManage.sections[0];
   const fallbackFeatured = DEFAULT_CONFIG.featured.cards[0];
@@ -2474,6 +2586,7 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
   const fallbackInstantBuyProductSlot = DEFAULT_CONFIG.instantBuy.productSlots[0];
   const fallbackSpotlight = DEFAULT_CONFIG.designerSpotlight.cards[0];
   const fallbackRtwFtbSpotlight = DEFAULT_CONFIG.rtwFtb.cards[0];
+  const fallbackFtbSpotlight = DEFAULT_CONFIG.ftbSpotlight.cards[0];
   const textIconCards = data.textIconCards as Partial<JenksV2FrontpageConfig['textIconCards']> | undefined;
   return {
     ...DEFAULT_CONFIG,
@@ -3207,7 +3320,7 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
                 .trim()
                 .toUpperCase();
               if (explicit) return explicit;
-              return 'SHOP';
+              return 'READY_TO_WEAR';
             })(),
             ctaLink:
               normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackRtwFtbSpotlight.ctaMode) === 'PAGE'
@@ -3219,6 +3332,187 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackRtwFtbSpotlight.ctaStyle),
           }))
         : DEFAULT_CONFIG.rtwFtb.cards,
+    },
+    ftbSpotlight: {
+      ...ftbSpotlight,
+      countryFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((ftbSpotlight as DesignerSpotlight | undefined)?.countryFontSize ?? DEFAULT_CONFIG.ftbSpotlight.countryFontSize),
+            DEFAULT_CONFIG.ftbSpotlight.countryFontSize
+          )
+        ),
+        10,
+        72
+      ),
+      designerNameFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (Object.prototype.hasOwnProperty.call(ftbSpotlightRaw, 'designerNameFontSize')
+                ? (ftbSpotlightRaw as Record<string, unknown>).designerNameFontSize
+                : undefined) ??
+                (ftbSpotlightRaw as Record<string, unknown>).nameFontSize ??
+                (ftbSpotlight as DesignerSpotlight | undefined)?.designerNameFontSize ??
+                DEFAULT_CONFIG.ftbSpotlight.designerNameFontSize
+            ),
+            DEFAULT_CONFIG.ftbSpotlight.designerNameFontSize
+          )
+        ),
+        16,
+        140
+      ),
+      designerNameColor: String(
+        (ftbSpotlightRaw as Record<string, unknown>).designerNameColor ||
+          (ftbSpotlightRaw as Record<string, unknown>).nameColor ||
+          (ftbSpotlight as DesignerSpotlight | undefined)?.designerNameColor ||
+          '#ffffff'
+      ).slice(0, 64),
+      designerNameHoverColor: String(
+        (ftbSpotlightRaw as Record<string, unknown>).designerNameHoverColor ||
+          (ftbSpotlightRaw as Record<string, unknown>).nameHoverColor ||
+          (ftbSpotlight as DesignerSpotlight | undefined)?.designerNameHoverColor ||
+          (ftbSpotlight as DesignerSpotlight | undefined)?.designerNameColor ||
+          '#ffffff'
+      ).slice(0, 64),
+      specialtyFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (ftbSpotlight as DesignerSpotlight | undefined)?.specialtyFontSize ??
+                DEFAULT_CONFIG.ftbSpotlight.specialtyFontSize
+            ),
+            DEFAULT_CONFIG.ftbSpotlight.specialtyFontSize
+          )
+        ),
+        10,
+        72
+      ),
+      descriptionFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (ftbSpotlight as DesignerSpotlight | undefined)?.descriptionFontSize ??
+                DEFAULT_CONFIG.ftbSpotlight.descriptionFontSize
+            ),
+            DEFAULT_CONFIG.ftbSpotlight.descriptionFontSize
+          )
+        ),
+        10,
+        96
+      ),
+      descriptionWordLimit: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (ftbSpotlightRaw as Record<string, unknown>).descriptionWordLimit ??
+                (ftbSpotlightRaw as Record<string, unknown>).descriptionMaxWords ??
+                (ftbSpotlight as DesignerSpotlight | undefined)?.descriptionWordLimit ??
+                25
+            ),
+            25
+          )
+        ),
+        5,
+        80
+      ),
+      priceFontSize: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (ftbSpotlightRaw as Record<string, unknown>).priceFontSize ??
+                (ftbSpotlight as DesignerSpotlight | undefined)?.priceFontSize ??
+                DEFAULT_CONFIG.ftbSpotlight.priceFontSize
+            ),
+            DEFAULT_CONFIG.ftbSpotlight.priceFontSize
+          )
+        ),
+        10,
+        96
+      ),
+      priceColor: String(
+        (ftbSpotlightRaw as Record<string, unknown>).priceColor ||
+          (ftbSpotlight as DesignerSpotlight | undefined)?.priceColor ||
+          DEFAULT_CONFIG.ftbSpotlight.priceColor ||
+          '#ffffff'
+      ).slice(0, 64),
+      priceHoverColor: String(
+        (ftbSpotlightRaw as Record<string, unknown>).priceHoverColor ||
+          (ftbSpotlightRaw as Record<string, unknown>).priceHoverTextColor ||
+          (ftbSpotlight as DesignerSpotlight | undefined)?.priceHoverColor ||
+          (ftbSpotlight as DesignerSpotlight | undefined)?.priceColor ||
+          DEFAULT_CONFIG.ftbSpotlight.priceHoverColor ||
+          DEFAULT_CONFIG.ftbSpotlight.priceColor ||
+          '#ffffff'
+      ).slice(0, 64),
+      textAreaBackgroundEnabled: toBoolean(
+        (ftbSpotlightRaw as Record<string, unknown>).textAreaBackgroundEnabled ??
+          (ftbSpotlightRaw as Record<string, unknown>).overlayEnabled,
+        DEFAULT_CONFIG.ftbSpotlight.textAreaBackgroundEnabled
+      ),
+      textAreaBackgroundColor: String(
+        (ftbSpotlightRaw as Record<string, unknown>).textAreaBackgroundColor ||
+          (ftbSpotlightRaw as Record<string, unknown>).overlayBackgroundColor ||
+          DEFAULT_CONFIG.ftbSpotlight.textAreaBackgroundColor
+      ),
+      cards: Array.isArray(ftbSpotlight.cards)
+        ? ftbSpotlight.cards.map((card) => ({
+            ...fallbackFtbSpotlight,
+            ...card,
+            countryCode: countryCodeFromToken(
+              (card as DesignerSpotlightCard)?.countryCode || (card as DesignerSpotlightCard)?.country,
+              fallbackFtbSpotlight.countryCode || 'NG'
+            ),
+            country: countryNameFromCode(
+              countryCodeFromToken(
+                (card as DesignerSpotlightCard)?.countryCode || (card as DesignerSpotlightCard)?.country,
+                fallbackFtbSpotlight.countryCode || 'NG'
+              )
+            ),
+            designerName: String(
+              (card as DesignerSpotlightCard)?.designerName ||
+                (card as DesignerSpotlightCard)?.title ||
+                fallbackFtbSpotlight.designerName ||
+                ''
+            ).slice(0, 120),
+            price: String((card as DesignerSpotlightCard)?.price || fallbackFtbSpotlight.price || '').slice(0, 80),
+            showCountry: toBoolean((card as DesignerSpotlightCard)?.showCountry, fallbackFtbSpotlight.showCountry),
+            showDesignerName: toBoolean(
+              (card as DesignerSpotlightCard)?.showDesignerName,
+              fallbackFtbSpotlight.showDesignerName
+            ),
+            showSpecialty: toBoolean(
+              (card as DesignerSpotlightCard)?.showSpecialty,
+              fallbackFtbSpotlight.showSpecialty
+            ),
+            showTag: toBoolean((card as DesignerSpotlightCard)?.showTag, fallbackFtbSpotlight.showTag),
+            showDescription: toBoolean(
+              (card as DesignerSpotlightCard)?.showDescription,
+              fallbackFtbSpotlight.showDescription
+            ),
+            showPrice: toBoolean((card as DesignerSpotlightCard)?.showPrice, fallbackFtbSpotlight.showPrice),
+            specialty: String((card as DesignerSpotlightCard)?.specialty || fallbackFtbSpotlight.specialty || '').slice(
+              0,
+              120
+            ),
+            ctaMode: normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackFtbSpotlight.ctaMode),
+            ctaPageKey: ((): string => {
+              const explicit = String((card as DesignerSpotlightCard)?.ctaPageKey || fallbackFtbSpotlight.ctaPageKey || '')
+                .trim()
+                .toUpperCase();
+              if (explicit) return explicit;
+              return 'FABRICS';
+            })(),
+            ctaLink:
+              normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackFtbSpotlight.ctaMode) === 'PAGE'
+                ? resolvePageHrefForKey(
+                    (card as DesignerSpotlightCard)?.ctaPageKey,
+                    (card as DesignerSpotlightCard)?.ctaLink || fallbackFtbSpotlight.ctaLink
+                  )
+                : normalizeManagerHref((card as DesignerSpotlightCard)?.ctaLink, fallbackFtbSpotlight.ctaLink),
+            ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackFtbSpotlight.ctaStyle),
+          }))
+        : DEFAULT_CONFIG.ftbSpotlight.cards,
     },
     heritage: {
       ...DEFAULT_CONFIG.heritage,
@@ -3728,6 +4022,7 @@ export default function JenksV2FrontPageManager() {
   const heritageImageUploadRef = useRef<HTMLInputElement | null>(null);
   const spotlightImageUploadRef = useRef<HTMLInputElement | null>(null);
   const rtwFtbImageUploadRef = useRef<HTMLInputElement | null>(null);
+  const ftbSpotlightImageUploadRef = useRef<HTMLInputElement | null>(null);
 
   const [heroUploadIndex, setHeroUploadIndex] = useState<number | null>(null);
   const [shopByCategoryUploadIndex, setShopByCategoryUploadIndex] = useState<number | null>(null);
@@ -3737,6 +4032,7 @@ export default function JenksV2FrontPageManager() {
   const [instantBuyProductUploadIndex, setInstantBuyProductUploadIndex] = useState<number | null>(null);
   const [spotlightUploadIndex, setSpotlightUploadIndex] = useState<number | null>(null);
   const [rtwFtbUploadIndex, setRtwFtbUploadIndex] = useState<number | null>(null);
+  const [ftbSpotlightUploadIndex, setFtbSpotlightUploadIndex] = useState<number | null>(null);
 
   const updatedAtLabel = useMemo(() => {
     if (!config.updatedAt) return 'Never';
@@ -4080,7 +4376,7 @@ export default function JenksV2FrontPageManager() {
   const handleRtwFtbImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || rtwFtbUploadIndex === null) return;
-    triggerUpload('rtw-ftb');
+    triggerUpload('rtw-spotlight');
     try {
       const url = await uploadImage(file);
       setConfig((prev) => ({
@@ -4092,11 +4388,36 @@ export default function JenksV2FrontPageManager() {
           ),
         },
       }));
-      setSuccess('RTW & FTB image uploaded.');
+      setSuccess('RTW image uploaded.');
     } catch (uploadError: any) {
-      setError(uploadError?.message || 'Failed to upload RTW & FTB image.');
+      setError(uploadError?.message || 'Failed to upload RTW image.');
     } finally {
       setRtwFtbUploadIndex(null);
+      setUploadingTarget(null);
+      event.target.value = '';
+    }
+  };
+
+  const handleFtbSpotlightImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || ftbSpotlightUploadIndex === null) return;
+    triggerUpload('ftb-spotlight');
+    try {
+      const url = await uploadImage(file);
+      setConfig((prev) => ({
+        ...prev,
+        ftbSpotlight: {
+          ...prev.ftbSpotlight,
+          cards: prev.ftbSpotlight.cards.map((card, index) =>
+            index === ftbSpotlightUploadIndex ? { ...card, image: url } : card
+          ),
+        },
+      }));
+      setSuccess('FTB spotlight image uploaded.');
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload FTB spotlight image.');
+    } finally {
+      setFtbSpotlightUploadIndex(null);
       setUploadingTarget(null);
       event.target.value = '';
     }
@@ -4232,9 +4553,12 @@ export default function JenksV2FrontPageManager() {
   }
 
   const activeSection = TAB_META.find((item) => item.key === activeTab);
-  const isRtwFtbTab = activeTab === 'rtwFtb';
-  const spotlightConfigKey: 'designerSpotlight' | 'rtwFtb' = isRtwFtbTab ? 'rtwFtb' : 'designerSpotlight';
-  const spotlightTabLabel = isRtwFtbTab ? 'RTW & FTB' : 'Designer Spotlight';
+  const isRtwTab = activeTab === 'rtwFtb';
+  const isFtbTab = activeTab === 'ftbSpotlight';
+  const isProductSpotlightTab = isRtwTab || isFtbTab;
+  const spotlightConfigKey: 'designerSpotlight' | 'rtwFtb' | 'ftbSpotlight' =
+    isRtwTab ? 'rtwFtb' : isFtbTab ? 'ftbSpotlight' : 'designerSpotlight';
+  const spotlightTabLabel = isRtwTab ? 'RTW' : isFtbTab ? 'FTB' : 'Designer Spotlight';
   const spotlightConfig = config[spotlightConfigKey];
   const updateSpotlightConfig = (updater: (current: DesignerSpotlight) => DesignerSpotlight) => {
     setConfig((prev) => ({
@@ -10051,7 +10375,7 @@ export default function JenksV2FrontPageManager() {
         </section>
       ) : null}
 
-      {activeTab === 'designerSpotlight' || activeTab === 'rtwFtb' ? (
+      {activeTab === 'designerSpotlight' || activeTab === 'rtwFtb' || activeTab === 'ftbSpotlight' ? (
         <section className="rounded-lg border bg-white p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">{spotlightTabLabel}</h2>
@@ -10066,24 +10390,24 @@ export default function JenksV2FrontPageManager() {
                     {
                       id: uid(),
                       image: '',
-                      tag: isRtwFtbTab ? 'RTW & FTB' : '',
+                      tag: isProductSpotlightTab ? (isRtwTab ? 'RTW' : 'FTB') : '',
                       countryCode: 'NG',
                       country: countryNameFromCode('NG'),
-                      ...(isRtwFtbTab ? { price: '' } : {}),
+                      ...(isProductSpotlightTab ? { price: '' } : {}),
                       showCountry: true,
                       showDesignerName: true,
                       showSpecialty: true,
                       showTag: true,
                       showDescription: true,
-                      ...(isRtwFtbTab ? { showPrice: true } : {}),
+                      ...(isProductSpotlightTab ? { showPrice: true } : {}),
                       designerName: '',
                       specialty: '',
                       title: 'New Spotlight Card',
                       description: '',
-                      ctaText: isRtwFtbTab ? 'Shop Collection' : 'View Designer',
-                      ctaLink: isRtwFtbTab ? '/Shop' : '/customtowear',
+                      ctaText: isProductSpotlightTab ? 'Shop Collection' : 'View Designer',
+                      ctaLink: isProductSpotlightTab ? '/shop' : '/customtowear',
                       ctaMode: 'PAGE',
-                      ctaPageKey: isRtwFtbTab ? 'SHOP' : 'CUSTOM_TO_WEAR',
+                      ctaPageKey: isProductSpotlightTab ? 'SHOP' : 'CUSTOM_TO_WEAR',
                       ctaStyle: createCtaStyle({
                         backgroundColor: 'transparent',
                         textColor: '#ffffff',
@@ -10213,7 +10537,7 @@ export default function JenksV2FrontPageManager() {
                 }
               />
             </label>
-            {isRtwFtbTab ? (
+            {isProductSpotlightTab ? (
               <label className="text-xs">
                 Description Max Words
                 <input
@@ -10229,7 +10553,7 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
             ) : null}
-            {isRtwFtbTab ? (
+            {isProductSpotlightTab ? (
               <label className="text-xs">
                 Price Text Size (px)
                 <input
@@ -10245,7 +10569,7 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
             ) : null}
-            {isRtwFtbTab ? (
+            {isProductSpotlightTab ? (
               <label className="text-xs">
                 Price Text Color
                 <input
@@ -10260,7 +10584,7 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
             ) : null}
-            {isRtwFtbTab ? (
+            {isProductSpotlightTab ? (
               <label className="text-xs">
                 Price Hover Color
                 <input
@@ -10353,7 +10677,7 @@ export default function JenksV2FrontPageManager() {
                   />
                   Show Country
                 </label>
-                {isRtwFtbTab ? (
+                {isProductSpotlightTab ? (
                   <>
                     <label className="md:col-span-2 text-[11px]">
                       Price
@@ -10684,15 +11008,20 @@ export default function JenksV2FrontPageManager() {
                   <Button
                     type="button"
                     variant="outline"
-                    isLoading={uploadingTarget === (isRtwFtbTab ? 'rtw-ftb' : 'spotlight')}
+                    isLoading={uploadingTarget === (isRtwTab ? 'rtw-spotlight' : isFtbTab ? 'ftb-spotlight' : 'spotlight')}
                     onClick={() => {
-                      if (isRtwFtbTab) {
+                      if (isRtwTab) {
                         setRtwFtbUploadIndex(index);
                         rtwFtbImageUploadRef.current?.click();
-                      } else {
-                        setSpotlightUploadIndex(index);
-                        spotlightImageUploadRef.current?.click();
+                        return;
                       }
+                      if (isFtbTab) {
+                        setFtbSpotlightUploadIndex(index);
+                        ftbSpotlightImageUploadRef.current?.click();
+                        return;
+                      }
+                      setSpotlightUploadIndex(index);
+                      spotlightImageUploadRef.current?.click();
                     }}
                   >
                     <Upload className="h-3.5 w-3.5" />
@@ -10766,11 +11095,23 @@ export default function JenksV2FrontPageManager() {
             </div>
           ))}
           <input
-            ref={isRtwFtbTab ? rtwFtbImageUploadRef : spotlightImageUploadRef}
+            ref={
+              isRtwTab
+                ? rtwFtbImageUploadRef
+                : isFtbTab
+                  ? ftbSpotlightImageUploadRef
+                  : spotlightImageUploadRef
+            }
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={isRtwFtbTab ? handleRtwFtbImageUpload : handleSpotlightImageUpload}
+            onChange={
+              isRtwTab
+                ? handleRtwFtbImageUpload
+                : isFtbTab
+                  ? handleFtbSpotlightImageUpload
+                  : handleSpotlightImageUpload
+            }
           />
         </section>
       ) : null}

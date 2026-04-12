@@ -294,6 +294,7 @@ type TemplateKey =
   | 'FRESH_DROPS'
   | 'DESIGNER_SPOTLIGHT'
   | 'RTW_FTB'
+  | 'FTB_SPOTLIGHT'
   | 'HERITAGE'
   | 'CUSTOMER_REVIEWS'
   | 'NEWSLETTER_FOOTER';
@@ -325,6 +326,7 @@ const TEMPLATE_KEYS: TemplateKey[] = [
   'FRESH_DROPS',
   'DESIGNER_SPOTLIGHT',
   'RTW_FTB',
+  'FTB_SPOTLIGHT',
   'HERITAGE',
   'CUSTOMER_REVIEWS',
   'NEWSLETTER_FOOTER',
@@ -1336,39 +1338,75 @@ const DESIGNER_SPOTLIGHT = [
   },
 ] as const;
 
-const RTW_FTB_SPOTLIGHT = [
+const RTW_SPOTLIGHT = [
   {
-    id: 'rtw-ftb-1',
+    id: 'rtw-spotlight-1',
     image: `${ASSET_BASE}/featured_rw_left.jpg`,
-    title: 'RTW & FTB CURATION',
+    title: 'RTW CURATION',
     country: 'NIGERIA',
-    specialty: 'Ready-to-Wear & Fabric Curation',
-    description: 'Hand-picked ready-to-wear looks and premium fabrics curated for immediate shopping.',
-    cta: 'SHOP COLLECTION',
-    href: '/shop',
-    tag: 'RTW & FTB',
+    specialty: 'Ready-to-Wear Curation',
+    description: 'Hand-picked ready-to-wear looks curated for immediate shopping.',
+    cta: 'SHOP RTW',
+    href: '/readytowear',
+    tag: 'RTW',
   },
   {
-    id: 'rtw-ftb-2',
+    id: 'rtw-spotlight-2',
+    image: `${ASSET_BASE}/featured_rw_right.jpg`,
+    title: 'FEATURED RTW EDIT',
+    country: 'GHANA',
+    specialty: 'Ready-to-Wear Selection',
+    description: 'Discover bold RTW silhouettes selected for modern African wardrobes.',
+    cta: 'SHOP RTW',
+    href: '/readytowear',
+    tag: 'RTW',
+  },
+  {
+    id: 'rtw-spotlight-3',
+    image: `${ASSET_BASE}/featured_rw_left.jpg`,
+    title: 'READY-TO-WEAR PICKS',
+    country: 'SENEGAL',
+    specialty: 'Ready-to-Wear Styling',
+    description: 'From statement silhouettes to everyday staples, shop latest RTW selections instantly.',
+    cta: 'SHOP RTW',
+    href: '/readytowear',
+    tag: 'RTW',
+  },
+] as const;
+
+const FTB_SPOTLIGHT = [
+  {
+    id: 'ftb-spotlight-1',
     image: `${ASSET_BASE}/fabrics_full.jpg`,
     title: 'PREMIUM FABRIC EDIT',
     country: 'GHANA',
     specialty: 'Fabric Selection',
     description: 'Discover bold prints and artisan materials selected for modern African wardrobes.',
-    cta: 'SHOP COLLECTION',
-    href: '/shop',
-    tag: 'RTW & FTB',
+    cta: 'SHOP FTB',
+    href: '/fabricstobuy',
+    tag: 'FTB',
   },
   {
-    id: 'rtw-ftb-3',
-    image: `${ASSET_BASE}/featured_rw_right.jpg`,
-    title: 'READY-TO-WEAR PICKS',
+    id: 'ftb-spotlight-2',
+    image: `${ASSET_BASE}/fabrics_full.jpg`,
+    title: 'FABRIC COLLECTION',
     country: 'SENEGAL',
-    specialty: 'Ready-to-Wear Styling',
-    description: 'From statement silhouettes to everyday staples, shop latest RTW selections instantly.',
-    cta: 'SHOP COLLECTION',
-    href: '/shop',
-    tag: 'RTW & FTB',
+    specialty: 'Textile Curation',
+    description: 'Explore premium fabric collections selected for distinctive custom and ready looks.',
+    cta: 'SHOP FTB',
+    href: '/fabricstobuy',
+    tag: 'FTB',
+  },
+  {
+    id: 'ftb-spotlight-3',
+    image: `${ASSET_BASE}/fabrics_full.jpg`,
+    title: 'ARTISAN FABRICS',
+    country: 'NIGERIA',
+    specialty: 'Fabric Styling',
+    description: 'Find fabrics built for ceremonies, statement outfits, and everyday elegance.',
+    cta: 'SHOP FTB',
+    href: '/fabricstobuy',
+    tag: 'FTB',
   },
 ] as const;
 
@@ -1539,6 +1577,10 @@ export default function JenksFrontpageV2() {
   const freshDropsCfg = useMemo(() => asRecord(asRecord(managerConfig).freshDrops), [managerConfig]);
   const designerSpotlightCfg = useMemo(() => asRecord(asRecord(managerConfig).designerSpotlight), [managerConfig]);
   const rtwFtbCfg = useMemo(() => asRecord(asRecord(managerConfig).rtwFtb), [managerConfig]);
+  const ftbSpotlightCfg = useMemo(
+    () => asRecord(asRecord(managerConfig).ftbSpotlight || asRecord(managerConfig).rtwFtb),
+    [managerConfig]
+  );
   const heritageCfg = useMemo(() => asRecord(asRecord(managerConfig).heritage), [managerConfig]);
   const customerReviewsCfg = useMemo(() => asRecord(asRecord(managerConfig).customerReviews), [managerConfig]);
   const newsletterFooterCfg = useMemo(() => asRecord(asRecord(managerConfig).newsletterFooter), [managerConfig]);
@@ -2239,13 +2281,14 @@ export default function JenksFrontpageV2() {
   };
 
   const buildSpotlightModel = useCallback(
-    (cfg: Record<string, unknown>, variant: 'DESIGNER' | 'RTW_FTB') => {
-      const fallbackRows = variant === 'RTW_FTB' ? RTW_FTB_SPOTLIGHT : DESIGNER_SPOTLIGHT;
+    (cfg: Record<string, unknown>, variant: 'DESIGNER' | 'RTW' | 'FTB') => {
+      const fallbackRows =
+        variant === 'RTW' ? RTW_SPOTLIGHT : variant === 'FTB' ? FTB_SPOTLIGHT : DESIGNER_SPOTLIGHT;
       const rows = Math.max(1, Math.round(asNumber(cfg.rows, 1)));
       const columns = Math.max(1, Math.min(12, Math.round(asNumber(cfg.columns, 3))));
       const descriptionWordLimit = Math.max(
         5,
-        Math.min(80, Math.round(asNumber(cfg.descriptionWordLimit, variant === 'RTW_FTB' ? 25 : 25)))
+        Math.min(80, Math.round(asNumber(cfg.descriptionWordLimit, variant === 'DESIGNER' ? 25 : 25)))
       );
       const typography: SpotlightTypography = {
         countryFontSize: Math.max(10, Math.min(72, Math.round(asNumber(cfg.countryFontSize, 22)))),
@@ -2254,7 +2297,7 @@ export default function JenksFrontpageV2() {
         nameHoverColor: asString(cfg.designerNameHoverColor ?? cfg.nameHoverColor, asString(cfg.designerNameColor ?? cfg.nameColor, '#ffffff')),
         specialtyFontSize: Math.max(10, Math.min(72, Math.round(asNumber(cfg.specialtyFontSize, 22)))),
         descriptionFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.descriptionFontSize, 24)))),
-        ...(variant === 'RTW_FTB'
+        ...(variant !== 'DESIGNER'
           ? {
               priceFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.priceFontSize, 18)))),
               priceColor: asString(cfg.priceColor, '#ffffff'),
@@ -2283,7 +2326,8 @@ export default function JenksFrontpageV2() {
         .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0))
         .map((entry, idx) => {
           const fallbackRow = fallbackRows[idx % fallbackRows.length];
-          const fallbackHref = fallbackRow?.href || (variant === 'RTW_FTB' ? '/shop' : '/customtowear');
+          const fallbackHref =
+            fallbackRow?.href || (variant === 'RTW' ? '/readytowear' : variant === 'FTB' ? '/fabricstobuy' : '/customtowear');
           const fallbackTitle = fallbackRow?.title || 'OLUWASEUN ADEYEMI';
           const fallbackSpecialty = fallbackRow?.specialty || 'Contemporary African Designer';
           const fallbackDescription =
@@ -2291,8 +2335,13 @@ export default function JenksFrontpageV2() {
             'With over 15 years of experience, Oluwaseun blends traditional Nigerian craftsmanship with modern silhouettes, creating pieces that honor heritage while embracing contemporary elegance.';
           const fallbackCountry = fallbackRow?.country || 'NIGERIA';
           const fallbackTag =
-            variant === 'RTW_FTB' ? asString((fallbackRow as any)?.tag, 'RTW & FTB') : asString((fallbackRow as any)?.tag, 'DESIGNER SPOTLIGHT');
-          const fallbackCta = fallbackRow?.cta || (variant === 'RTW_FTB' ? 'SHOP COLLECTION' : 'VIEW COLLECTION');
+            variant === 'RTW'
+              ? asString((fallbackRow as any)?.tag, 'RTW')
+              : variant === 'FTB'
+                ? asString((fallbackRow as any)?.tag, 'FTB')
+                : asString((fallbackRow as any)?.tag, 'DESIGNER SPOTLIGHT');
+          const fallbackCta =
+            fallbackRow?.cta || (variant === 'RTW' ? 'SHOP RTW' : variant === 'FTB' ? 'SHOP FTB' : 'VIEW COLLECTION');
           const countryToken = resolveDesignerCountryCode(
             (entry as Record<string, unknown>).countryCode,
             asString(entry.country, asString(entry.designerCountry, ''))
@@ -2318,13 +2367,13 @@ export default function JenksFrontpageV2() {
             designerCountry: country,
             designerSpecialty: asString(entry.specialty, fallbackSpecialty),
             description: truncateWords(asString(entry.description, fallbackDescription), descriptionWordLimit),
-            price: variant === 'RTW_FTB' ? asString(entry.price, '') : '',
+            price: variant !== 'DESIGNER' ? asString(entry.price, '') : '',
             showCountry: asBoolean(entry.showCountry, true),
             showDesignerName: asBoolean(entry.showDesignerName, true),
             showSpecialty: asBoolean(entry.showSpecialty, true),
             showTag: asBoolean(entry.showTag, true),
             showDescription: asBoolean(entry.showDescription, true),
-            showPrice: variant === 'RTW_FTB' ? asBoolean(entry.showPrice, true) : false,
+            showPrice: variant !== 'DESIGNER' ? asBoolean(entry.showPrice, true) : false,
             textBackgroundEnabled,
             textBackgroundColor,
             cta: asString(entry.ctaText, fallbackCta).toUpperCase(),
@@ -2344,16 +2393,21 @@ export default function JenksFrontpageV2() {
               designerCountry: asString((row as any).country, ''),
               designerSpecialty: asString((row as any).specialty, 'Contemporary African Designer'),
               description: truncateWords(asString((row as any).description, ''), descriptionWordLimit),
-              price: variant === 'RTW_FTB' ? asString((row as any).price, '') : '',
+              price: variant !== 'DESIGNER' ? asString((row as any).price, '') : '',
               showCountry: true,
               showDesignerName: true,
               showSpecialty: true,
               showTag: true,
               showDescription: true,
-              showPrice: variant === 'RTW_FTB',
+              showPrice: variant !== 'DESIGNER',
               textBackgroundEnabled: true,
               textBackgroundColor: 'rgba(0,0,0,0.45)',
-              tag: variant === 'RTW_FTB' ? asString((row as any).tag, 'RTW & FTB') : asString((row as any).tag, 'DESIGNER SPOTLIGHT'),
+              tag:
+                variant === 'RTW'
+                  ? asString((row as any).tag, 'RTW')
+                  : variant === 'FTB'
+                    ? asString((row as any).tag, 'FTB')
+                    : asString((row as any).tag, 'DESIGNER SPOTLIGHT'),
               countryCode: resolveDesignerCountryCode('', asString((row as any).country, '')),
             }));
       return {
@@ -2371,8 +2425,12 @@ export default function JenksFrontpageV2() {
     [buildSpotlightModel, designerSpotlightCfg]
   );
   const rtwFtbSpotlightModel = useMemo(
-    () => buildSpotlightModel(rtwFtbCfg, 'RTW_FTB'),
+    () => buildSpotlightModel(rtwFtbCfg, 'RTW'),
     [buildSpotlightModel, rtwFtbCfg]
+  );
+  const ftbSpotlightModel = useMemo(
+    () => buildSpotlightModel(ftbSpotlightCfg, 'FTB'),
+    [buildSpotlightModel, ftbSpotlightCfg]
   );
   const designerSpotlightTypography = useMemo<SpotlightTypography>(
     () => ({
@@ -2385,6 +2443,9 @@ export default function JenksFrontpageV2() {
   const rtwFtbSpotlightCards = rtwFtbSpotlightModel.cards;
   const rtwFtbSpotlightColsClass = rtwFtbSpotlightModel.colsClass;
   const rtwFtbSpotlightTypography = rtwFtbSpotlightModel.typography;
+  const ftbSpotlightCards = ftbSpotlightModel.cards;
+  const ftbSpotlightColsClass = ftbSpotlightModel.colsClass;
+  const ftbSpotlightTypography = ftbSpotlightModel.typography;
   const staticReviewCards = useMemo(() => {
     const rows = asArray(customerReviewsCfg.staticMessages)
       .map((entry) => asRecord(entry))
@@ -4780,7 +4841,7 @@ export default function JenksFrontpageV2() {
         </section>
       ) : null}
 
-      {/* RTW & FTB SPOTLIGHT */}
+      {/* RTW SPOTLIGHT */}
       {isSectionVisible('RTW_FTB') ? (
         <section
           className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] ${rtwFtbSpotlightColsClass}`}
@@ -4867,6 +4928,123 @@ export default function JenksFrontpageV2() {
                   <p
                     className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
                     style={{ fontSize: `${rtwFtbSpotlightTypography.descriptionFontSize}px` }}
+                  >
+                    {spot.description}
+                  </p>
+                ) : null}
+                <span
+                  className="relative mt-5 inline-flex items-center gap-3 border-[var(--cta-border-color)] pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-[var(--cta-text-color)] transition-colors duration-300 group-hover:border-[var(--cta-hover-border-color)] group-hover:text-[var(--cta-hover-text-color)]"
+                  style={buildCTAStyle(spot.ctaStyle, {
+                    ...DEFAULT_INLINE_CTA_STYLE,
+                    textColor: '#ffffff',
+                    hoverTextColor: '#ffffff',
+                    borderColor: 'transparent',
+                    hoverBorderColor: 'transparent',
+                  })}
+                  onMouseEnter={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, true)
+                  }
+                  onMouseLeave={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, false)
+                  }
+                >
+                  {spot.cta}
+                  <ArrowRight className="h-4 w-4" />
+                  <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
+                </span>
+              </div>
+            </Link>
+          ))}
+        </section>
+      ) : null}
+
+      {/* FTB SPOTLIGHT */}
+      {isSectionVisible('FTB_SPOTLIGHT') ? (
+        <section
+          className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] ${ftbSpotlightColsClass}`}
+          style={{ order: getSectionOrder('FTB_SPOTLIGHT') }}
+        >
+          {ftbSpotlightCards.map((spot) => (
+            <Link key={`ftb-${spot.id}`} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
+              <BrandImageWithFallback
+                src={spot.image}
+                alt={spot.title}
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                spinnerClassName="h-8 w-8"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
+              {spot.showTag ? (
+                <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
+                  {spot.tag}
+                </p>
+              ) : null}
+              {spot.showCountry ? (
+                <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
+                  {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
+                </p>
+              ) : null}
+              <div
+                className="absolute bottom-6 left-6 right-6 text-white"
+                style={{
+                  backgroundColor: spot.textBackgroundEnabled ? spot.textBackgroundColor : 'transparent',
+                  padding: spot.textBackgroundEnabled ? '10px 12px' : '0px',
+                  borderRadius: spot.textBackgroundEnabled ? '2px' : '0px',
+                }}
+              >
+                {spot.showPrice ? (
+                  <p
+                    className="font-semibold uppercase tracking-[0.08em] text-[var(--ftb-price-color)] transition-colors duration-300 group-hover:text-[var(--ftb-price-hover-color)]"
+                    style={
+                      {
+                        fontSize: `${ftbSpotlightTypography.priceFontSize}px`,
+                        '--ftb-price-color': asString(ftbSpotlightTypography.priceColor, '#ffffff'),
+                        '--ftb-price-hover-color': asString(
+                          ftbSpotlightTypography.priceHoverColor,
+                          asString(ftbSpotlightTypography.priceColor, '#ffffff')
+                        ),
+                      } as CSSProperties
+                    }
+                  >
+                    {spot.price || ''}
+                  </p>
+                ) : null}
+                {spot.showCountry ? (
+                  <p
+                    className="font-medium uppercase tracking-[0.08em] text-white/78"
+                    style={{ fontSize: `${ftbSpotlightTypography.countryFontSize}px` }}
+                  >
+                    {spot.designerCountry || spot.tag}
+                  </p>
+                ) : null}
+                {spot.showDesignerName ? (
+                  <h3
+                    className="font-['Oswald'] font-bold uppercase leading-[0.95] text-[var(--ftb-name-color)] transition-colors duration-300 group-hover:text-[var(--ftb-name-hover-color)]"
+                    style={
+                      {
+                        fontSize: `${ftbSpotlightTypography.nameFontSize}px`,
+                        '--ftb-name-color': asString(ftbSpotlightTypography.nameColor, '#ffffff'),
+                        '--ftb-name-hover-color': asString(
+                          ftbSpotlightTypography.nameHoverColor,
+                          asString(ftbSpotlightTypography.nameColor, '#ffffff')
+                        ),
+                      } as CSSProperties
+                    }
+                  >
+                    {spot.designerName || spot.title}
+                  </h3>
+                ) : null}
+                {spot.showSpecialty ? (
+                  <p
+                    className="mt-2 leading-[1.25] text-white/78"
+                    style={{ fontSize: `${ftbSpotlightTypography.specialtyFontSize}px` }}
+                  >
+                    {spot.designerSpecialty || 'Contemporary African Designer'}
+                  </p>
+                ) : null}
+                {spot.showDescription ? (
+                  <p
+                    className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
+                    style={{ fontSize: `${ftbSpotlightTypography.descriptionFontSize}px` }}
                   >
                     {spot.description}
                   </p>
