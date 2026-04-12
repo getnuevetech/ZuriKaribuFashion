@@ -502,62 +502,82 @@ export default function CustomerServiceChatWidget() {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="max-h-[280px] space-y-2 overflow-auto rounded border bg-gray-50 p-2">
+                <div className="space-y-3 p-1">
+                  <div className="max-h-[320px] space-y-2 overflow-auto rounded-[22px] border border-[#e6e9f0] bg-white p-3 shadow-[0_10px_24px_rgba(31,42,61,0.08)]">
                     {Array.isArray(thread?.messages) && thread.messages.length > 0 ? (
-                      thread.messages.map((row: any) => (
-                        <div key={row.id} className={`rounded border p-2 ${row.senderRole === 'CUSTOMER' ? 'bg-white' : 'bg-amber-50'}`}>
-                          <div className="flex items-center justify-between text-[11px] text-gray-500">
-                            <span>{row.senderDisplayName || row.senderRole || 'Agent'}</span>
-                            <span>{row.createdAt ? new Date(row.createdAt).toLocaleTimeString() : ''}</span>
-                          </div>
-                          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{row.body || ''}</p>
-                          {row?.translated ? (
-                            <p className="mt-1 text-[11px] text-gray-500">
-                              Translated from {String(row.sourceLanguage || '').toUpperCase()} to{' '}
-                              {String(row.translatedToLanguage || '').toUpperCase()}
-                            </p>
-                          ) : null}
-                          {Array.isArray(row.attachments) && row.attachments.length > 0 ? (
-                            <div className="mt-1 flex flex-wrap gap-2">
-                              {row.attachments.map((url: string) => (
-                                <a key={url} href={url} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 underline">
-                                  Attachment
-                                </a>
-                              ))}
+                      thread.messages.map((row: any) => {
+                        const isCustomer = row.senderRole === 'CUSTOMER';
+                        return (
+                          <div
+                            key={row.id}
+                            className={`rounded-[16px] border px-3 py-2 ${
+                              isCustomer ? 'ml-8 border-[#d9e5ff] bg-[#eef4ff]' : 'mr-8 border-[#f3e4cb] bg-[#fff6e7]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-[11px] text-[#7b8496]">
+                              <span>{row.senderDisplayName || row.senderRole || 'Agent'}</span>
+                              <span>{row.createdAt ? new Date(row.createdAt).toLocaleTimeString() : ''}</span>
                             </div>
-                          ) : null}
-                        </div>
-                      ))
+                            <p className="mt-1 whitespace-pre-wrap text-[13px] text-[#252c3c]">{row.body || ''}</p>
+                            {row?.translated ? (
+                              <p className="mt-1 text-[11px] text-[#8a93a6]">
+                                Translated from {String(row.sourceLanguage || '').toUpperCase()} to{' '}
+                                {String(row.translatedToLanguage || '').toUpperCase()}
+                              </p>
+                            ) : null}
+                            {Array.isArray(row.attachments) && row.attachments.length > 0 ? (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {row.attachments.map((url: string) => (
+                                  <a
+                                    key={url}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full border border-[#d7def2] bg-white px-2.5 py-1 text-[11px] text-[#415272] hover:border-[var(--accent,#8a63f8)]"
+                                  >
+                                    Attachment
+                                  </a>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })
                     ) : (
-                      <p className="text-xs text-gray-500">No messages yet.</p>
+                      <p className="py-6 text-center text-xs text-[#8c95a7]">No messages yet.</p>
                     )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    <select
-                      value={preferredLanguage}
-                      onChange={(event) => setPreferredLanguage(event.target.value)}
-                      className="rounded border px-2 py-2 text-xs"
-                    >
-                      {languages.map((language) => (
-                        <option key={language.code} value={language.code}>
-                          View: {language.label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={messageSourceLanguage}
-                      onChange={(event) => setMessageSourceLanguage(event.target.value)}
-                      className="rounded border px-2 py-2 text-xs"
-                    >
-                      <option value="auto">Message language: Auto detect</option>
-                      {languages.map((language) => (
-                        <option key={language.code} value={language.code}>
-                          Message language: {language.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={preferredLanguage}
+                        onChange={(event) => setPreferredLanguage(event.target.value)}
+                        className={`${fieldClass} appearance-none pr-10 text-xs`}
+                      >
+                        {languages.map((language) => (
+                          <option key={language.code} value={language.code}>
+                            View: {language.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+                    </div>
+                    <div className="relative">
+                      <select
+                        value={messageSourceLanguage}
+                        onChange={(event) => setMessageSourceLanguage(event.target.value)}
+                        className={`${fieldClass} appearance-none pr-10 text-xs`}
+                      >
+                        <option value="auto">Message language: Auto detect</option>
+                        {languages.map((language) => (
+                          <option key={language.code} value={language.code}>
+                            Message language: {language.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+                    </div>
                   </div>
 
                   <div className="flex items-end gap-2">
@@ -566,9 +586,9 @@ export default function CustomerServiceChatWidget() {
                       onChange={(event) => setComposer(event.target.value)}
                       rows={3}
                       placeholder="Type your message..."
-                      className="flex-1 rounded border px-3 py-2 text-sm"
+                      className={`${fieldClass} min-h-[86px] flex-1 resize-none`}
                     />
-                    <label className="inline-flex cursor-pointer items-center justify-center rounded border px-2 py-2 text-gray-600 hover:bg-gray-50">
+                    <label className="inline-flex h-[46px] w-[46px] cursor-pointer items-center justify-center rounded-full border border-[#d9deea] bg-white text-[#697284] shadow-[0_6px_20px_rgba(31,42,61,0.12)] hover:text-[var(--accent,#8a63f8)]">
                       <Paperclip className="h-4 w-4" />
                       <input
                         type="file"
@@ -583,13 +603,14 @@ export default function CustomerServiceChatWidget() {
                     <button
                       type="button"
                       onClick={() => void sendSupportMessage()}
-                      className="inline-flex items-center justify-center rounded bg-black px-3 py-2 text-white hover:bg-gray-900 disabled:opacity-50"
+                      className="inline-flex h-[46px] w-[46px] items-center justify-center rounded-full text-white shadow-[0_12px_24px_rgba(83,119,237,0.35)] disabled:opacity-50"
+                      style={{ background: panelGradient }}
                       disabled={!composer.trim()}
                     >
                       <Send className="h-4 w-4" />
                     </button>
                   </div>
-                  {uploading ? <p className="text-[11px] text-gray-500">Uploading attachment...</p> : null}
+                  {uploading ? <p className="text-[11px] text-[#7f8798]">Uploading attachment...</p> : null}
                   {attachments.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {attachments.map((url) => (
@@ -597,7 +618,7 @@ export default function CustomerServiceChatWidget() {
                           key={url}
                           type="button"
                           onClick={() => setAttachments((prev) => prev.filter((entry) => entry !== url))}
-                          className="rounded bg-gray-100 px-2 py-1 text-[11px] text-gray-700"
+                          className="rounded-full border border-[#d7def2] bg-white px-2.5 py-1 text-[11px] text-[#52607f]"
                         >
                           Attached file ×
                         </button>
@@ -608,24 +629,29 @@ export default function CustomerServiceChatWidget() {
               )}
             </div>
           ) : (
-            <div className="space-y-2 p-3">
-              <div className="max-h-[320px] space-y-2 overflow-auto rounded border bg-gray-50 p-2">
+            <div className="space-y-3 p-3">
+              <div className="max-h-[320px] space-y-2 overflow-auto rounded-[22px] border border-[#e6e9f0] bg-white p-3 shadow-[0_10px_24px_rgba(31,42,61,0.08)]">
                 {shoppingMessages.length === 0 ? (
-                  <p className="text-xs text-gray-500">Ask the shopping bot to recommend products.</p>
+                  <p className="py-6 text-center text-xs text-[#8c95a7]">Ask the shopping bot to recommend products.</p>
                 ) : (
                   shoppingMessages.map((row) => (
-                    <div key={row.id} className={`rounded border p-2 ${row.from === 'USER' ? 'bg-white' : 'bg-amber-50'}`}>
-                      <p className="text-[11px] text-gray-500">{row.from === 'USER' ? 'You' : 'Shopping Bot'}</p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{row.text}</p>
+                    <div
+                      key={row.id}
+                      className={`rounded-[16px] border px-3 py-2 ${
+                        row.from === 'USER' ? 'ml-8 border-[#d9e5ff] bg-[#eef4ff]' : 'mr-8 border-[#f3e4cb] bg-[#fff6e7]'
+                      }`}
+                    >
+                      <p className="text-[11px] text-[#7b8496]">{row.from === 'USER' ? 'You' : 'Shopping Bot'}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-[13px] text-[#252c3c]">{row.text}</p>
                       {Array.isArray(row.suggestions) && row.suggestions.length > 0 ? (
-                        <div className="mt-2 space-y-1">
+                        <div className="mt-2 space-y-1.5">
                           {row.suggestions.map((item: any) => (
                             <a
                               key={`${item.type}-${item.id}`}
                               href={String(item.href || '#')}
                               target="_blank"
                               rel="noreferrer"
-                              className="block rounded border bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                              className="block rounded-[12px] border border-[#d7def2] bg-white px-3 py-2 text-xs text-[#374564] hover:border-[var(--accent,#8a63f8)]"
                             >
                               {item.type} • {item.name} • ${Number(item.price || 0).toFixed(2)}
                             </a>
@@ -636,18 +662,19 @@ export default function CustomerServiceChatWidget() {
                   ))
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-end gap-2">
                 <textarea
                   value={shoppingComposer}
                   onChange={(event) => setShoppingComposer(event.target.value)}
                   rows={3}
                   placeholder="Describe what you want to shop for..."
-                  className="flex-1 rounded border px-3 py-2 text-sm"
+                  className={`${fieldClass} min-h-[86px] flex-1 resize-none`}
                 />
                 <button
                   type="button"
                   onClick={() => void sendShoppingMessage()}
-                  className="inline-flex items-center justify-center rounded bg-black px-3 py-2 text-white hover:bg-gray-900 disabled:opacity-50"
+                  className="inline-flex h-[46px] w-[46px] items-center justify-center rounded-full text-white shadow-[0_12px_24px_rgba(83,119,237,0.35)] disabled:opacity-50"
+                  style={{ background: panelGradient }}
                   disabled={!shoppingComposer.trim()}
                 >
                   <Send className="h-4 w-4" />

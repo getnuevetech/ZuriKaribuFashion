@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Heart, Loader2, Search, X } from 'lucide-react';
 import { api, resolveAssetUrl } from '../services/api';
@@ -321,7 +321,11 @@ export default function CategoryPageV2({
   const primarySlotCount = Math.max(1, Number(runtime?.settings.primaryGridRows || 1)) * Math.max(1, Number(runtime?.settings.primaryGridColumns || 1));
   const primaryProducts = (runtime?.primaryGridProducts || []).slice(0, primarySlotCount);
   const primaryIds = new Set(primaryProducts.map((row) => row.id));
-  const listingProducts = products.filter((row) => !primaryIds.has(row.id));
+  const hasActiveSearch = appliedSearch.trim().length > 0;
+  const hasActiveFilters = Object.values(appliedFilters).some((values) => Array.isArray(values) && values.length > 0);
+  const hasActiveQuery = hasActiveSearch || hasActiveFilters;
+  const listingProducts = hasActiveQuery ? products : products.filter((row) => !primaryIds.has(row.id));
+  const featuredProducts = hasActiveQuery ? [] : primaryProducts;
   const cardCfg = runtime?.settings.productCard || DEFAULT_PRODUCT_CARD;
 
   const renderCard = (row: CategoryPageProduct, cardKey: string) => {
@@ -445,16 +449,18 @@ export default function CategoryPageV2({
     );
   };
 
-  const submitFilters = () => {
+  const submitFilters = (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    const formData = event?.currentTarget ? new FormData(event.currentTarget) : null;
     const nextApplied: Record<string, string[]> = {};
     for (const row of enabledFilters) {
       const paramKey = FILTER_PARAM_BY_KEY[row.key];
-      const value = String(pendingFilters[row.key] || '').trim();
+      const value = String(formData?.get(`filter-${row.key}`) || pendingFilters[row.key] || '').trim();
       if (!value) continue;
       const tokens = parseFilterTokens(value, row.options || []);
       if (tokens.length > 0) nextApplied[paramKey] = tokens;
     }
-    setAppliedSearch(pendingSearch.trim());
+    setAppliedSearch(String(formData?.get('search') || pendingSearch).trim());
     setAppliedFilters(nextApplied);
     setPage(1);
   };
@@ -512,12 +518,13 @@ export default function CategoryPageV2({
 
             <div className="sticky top-20 z-40 bg-[var(--bg-primary)]/95 backdrop-blur-md border-b border-[var(--border)]">
               <div className="px-8 md:px-[8vw] py-4 space-y-3">
-                <div className="flex items-center gap-2">
+                <form onSubmit={submitFilters} className="flex items-center gap-2">
                   <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 scrollbar-hide">
                     <div className="relative w-[320px] flex-none md:w-[380px]">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
                       <input
                         type="text"
+                        name="search"
                         value={pendingSearch}
                         onChange={(event) => setPendingSearch(event.target.value)}
                         onKeyDown={(event) => {
@@ -535,6 +542,7 @@ export default function CategoryPageV2({
                       return (
                         <div key={row.id} className="w-[156px] flex-none">
                           <input
+                            name={`filter-${row.key}`}
                             value={value}
                             onChange={(event) => setPendingFilters((prev) => ({ ...prev, [row.key]: event.target.value }))}
                             onKeyDown={(event) => {
@@ -557,8 +565,7 @@ export default function CategoryPageV2({
                   </div>
                   <div className="flex flex-none items-center gap-2 pb-1">
                     <button
-                      type="button"
-                      onClick={submitFilters}
+                      type="submit"
                       className="inline-flex h-[42px] w-[42px] flex-none items-center justify-center border border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--bg-primary)]"
                       title="Search and apply filters"
                       aria-label="Search"
@@ -576,7 +583,7 @@ export default function CategoryPageV2({
                       Clear
                     </button>
                   </div>
-                </div>
+                </form>
 
                 <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
                   {(runtime?.countryIcons || []).map((country) => {
@@ -612,14 +619,14 @@ export default function CategoryPageV2({
             <section className="px-8 md:px-[8vw] py-10 space-y-10">
               {error ? <div className="border border-red-300 bg-red-50 text-red-700 px-4 py-3 text-sm">{error}</div> : null}
 
-              {primaryProducts.length > 0 ? (
+              {featuredProducts.length > 0 ? (
                 <div className="space-y-3">
                   <h2 className="headline-lg text-[clamp(22px,3vw,34px)] text-[var(--text-primary)]">Featured Selection</h2>
                   <div
                     className="grid gap-6"
                     style={{ gridTemplateColumns: `repeat(${Math.max(1, Number(runtime?.settings.primaryGridColumns || 3))}, minmax(0, 1fr))` }}
                   >
-                    {primaryProducts.map((row) => (
+                    {featuredProducts.map((row) => (
                       renderCard(row, `primary-${row.id}`)
                     ))}
                   </div>
