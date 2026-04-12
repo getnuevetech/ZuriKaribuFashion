@@ -339,10 +339,9 @@ export default function CustomerServiceChatWidget() {
   };
 
   if (isDashboardPath) return null;
-  const accentColor = 'var(--accent, #8a63f8)';
-  const panelGradient = `linear-gradient(120deg, ${accentColor} 0%, #77c5ff 100%)`;
+  const panelColor = '#e66045';
   const fieldClass =
-    'w-full rounded-[18px] border border-[#e6e9f0] bg-white px-4 py-3 text-sm text-[#20263a] shadow-[0_6px_20px_rgba(31,42,61,0.08)] focus:outline-none focus:ring-2 focus:ring-[var(--accent,#8a63f8)]/20';
+    'w-full rounded-[18px] border border-[#e6e9f0] bg-white px-4 py-3 text-sm text-[#20263a] shadow-[0_6px_20px_rgba(31,42,61,0.08)] focus:outline-none focus:ring-2 focus:ring-[#e66045]/20';
   const issueOptions = [
     { value: 'customer-service', label: 'Customer Service' },
     { value: 'track-order', label: 'Track Order' },
@@ -360,7 +359,7 @@ export default function CustomerServiceChatWidget() {
             ? 'h-16 w-16 border border-[#e3e6ee] bg-[#edf0f6] text-[#97a0af] shadow-[0_16px_30px_rgba(34,45,67,0.18)]'
             : 'h-14 w-14 text-white shadow-[0_18px_40px_rgba(34,45,67,0.35)]'
         }`}
-        style={open ? undefined : { background: panelGradient }}
+        style={open ? undefined : { background: panelColor }}
         aria-label="Open customer service chat"
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
@@ -368,7 +367,7 @@ export default function CustomerServiceChatWidget() {
 
       {open ? (
         <div className="fixed bottom-28 right-5 z-[60] w-[370px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-[34px] border border-[#d9deea] bg-[#f5f7fc] shadow-[0_30px_70px_rgba(20,28,48,0.26)]">
-          <div className="px-4 pb-4 pt-5 text-white" style={{ background: panelGradient }}>
+          <div className="px-4 pb-4 pt-5 text-white" style={{ background: panelColor }}>
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 overflow-hidden rounded-full bg-white/20 p-0.5 shadow-[0_6px_16px_rgba(0,0,0,0.2)]">
                 {shoppingAvatar ? (
@@ -495,8 +494,8 @@ export default function CustomerServiceChatWidget() {
                   <button
                     type="button"
                     onClick={() => void startSupportChat()}
-                    className="inline-flex min-h-[64px] w-full items-center justify-center rounded-full px-6 text-[20px] font-semibold text-white shadow-[0_16px_34px_rgba(83,119,237,0.35)]"
-                    style={{ background: panelGradient }}
+                    className="inline-flex min-h-[64px] w-full items-center justify-center rounded-full px-6 text-[20px] font-semibold text-white shadow-[0_16px_34px_rgba(230,96,69,0.35)]"
+                    style={{ background: panelColor }}
                   >
                     Start Support Chat
                   </button>
@@ -511,7 +510,7 @@ export default function CustomerServiceChatWidget() {
                           <div
                             key={row.id}
                             className={`rounded-[16px] border px-3 py-2 ${
-                              isCustomer ? 'ml-8 border-[#d9e5ff] bg-[#eef4ff]' : 'mr-8 border-[#f3e4cb] bg-[#fff6e7]'
+                              isCustomer ? 'ml-8 border-[#f2c7bd] bg-[#fff3ef]' : 'mr-8 border-[#f6ddd7] bg-[#fff8f6]'
                             }`}
                           >
                             <div className="flex items-center justify-between text-[11px] text-[#7b8496]">
@@ -533,7 +532,7 @@ export default function CustomerServiceChatWidget() {
                                     href={url}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="rounded-full border border-[#d7def2] bg-white px-2.5 py-1 text-[11px] text-[#415272] hover:border-[var(--accent,#8a63f8)]"
+                                    className="rounded-full border border-[#f1d2cb] bg-white px-2.5 py-1 text-[11px] text-[#7a4a41] hover:border-[#e66045]"
                                   >
                                     Attachment
                                   </a>
@@ -588,7 +587,7 @@ export default function CustomerServiceChatWidget() {
                       placeholder="Type your message..."
                       className={`${fieldClass} min-h-[86px] flex-1 resize-none`}
                     />
-                    <label className="inline-flex h-[46px] w-[46px] cursor-pointer items-center justify-center rounded-full border border-[#d9deea] bg-white text-[#697284] shadow-[0_6px_20px_rgba(31,42,61,0.12)] hover:text-[var(--accent,#8a63f8)]">
+                    <label className="inline-flex h-[46px] w-[46px] cursor-pointer items-center justify-center rounded-full border border-[#d9deea] bg-white text-[#697284] shadow-[0_6px_20px_rgba(31,42,61,0.12)] hover:text-[#e66045]">
                       <Paperclip className="h-4 w-4" />
                       <input
                         type="file"
@@ -603,8 +602,8 @@ export default function CustomerServiceChatWidget() {
                     <button
                       type="button"
                       onClick={() => void sendSupportMessage()}
-                      className="inline-flex h-[46px] w-[46px] items-center justify-center rounded-full text-white shadow-[0_12px_24px_rgba(83,119,237,0.35)] disabled:opacity-50"
-                      style={{ background: panelGradient }}
+                      className="inline-flex h-[46px] w-[46px] items-center justify-center rounded-full text-white shadow-[0_12px_24px_rgba(230,96,69,0.35)] disabled:opacity-50"
+                      style={{ background: panelColor }}
                       disabled={!composer.trim()}
                     >
                       <Send className="h-4 w-4" />
@@ -638,7 +637,7 @@ export default function CustomerServiceChatWidget() {
                     <div
                       key={row.id}
                       className={`rounded-[16px] border px-3 py-2 ${
-                        row.from === 'USER' ? 'ml-8 border-[#d9e5ff] bg-[#eef4ff]' : 'mr-8 border-[#f3e4cb] bg-[#fff6e7]'
+                        row.from === 'USER' ? 'ml-8 border-[#f2c7bd] bg-[#fff3ef]' : 'mr-8 border-[#f6ddd7] bg-[#fff8f6]'
                       }`}
                     >
                       <p className="text-[11px] text-[#7b8496]">{row.from === 'USER' ? 'You' : 'Shopping Bot'}</p>
@@ -651,7 +650,7 @@ export default function CustomerServiceChatWidget() {
                               href={String(item.href || '#')}
                               target="_blank"
                               rel="noreferrer"
-                              className="block rounded-[12px] border border-[#d7def2] bg-white px-3 py-2 text-xs text-[#374564] hover:border-[var(--accent,#8a63f8)]"
+                              className="block rounded-[12px] border border-[#f1d2cb] bg-white px-3 py-2 text-xs text-[#7a4a41] hover:border-[#e66045]"
                             >
                               {item.type} • {item.name} • ${Number(item.price || 0).toFixed(2)}
                             </a>
@@ -673,8 +672,8 @@ export default function CustomerServiceChatWidget() {
                 <button
                   type="button"
                   onClick={() => void sendShoppingMessage()}
-                  className="inline-flex h-[46px] w-[46px] items-center justify-center rounded-full text-white shadow-[0_12px_24px_rgba(83,119,237,0.35)] disabled:opacity-50"
-                  style={{ background: panelGradient }}
+                  className="inline-flex h-[46px] w-[46px] items-center justify-center rounded-full text-white shadow-[0_12px_24px_rgba(230,96,69,0.35)] disabled:opacity-50"
+                  style={{ background: panelColor }}
                   disabled={!shoppingComposer.trim()}
                 >
                   <Send className="h-4 w-4" />

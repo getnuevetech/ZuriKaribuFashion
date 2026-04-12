@@ -79,6 +79,7 @@ const defaultAllowedOrigins = [
 ];
 const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredOrigins]);
 const vercelOriginPattern = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
+const requestBodyLimit = String(process.env.API_REQUEST_BODY_LIMIT || '10mb').trim() || '10mb';
 
 // Middleware
 app.use(cors({
@@ -105,8 +106,8 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: requestBodyLimit }));
+app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 app.use(morgan('dev'));
 app.use(activityAuditMiddleware);
 
