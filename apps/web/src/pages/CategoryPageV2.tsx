@@ -513,55 +513,59 @@ export default function CategoryPageV2({
 
             <div className="sticky top-20 z-40 bg-[var(--bg-primary)]/95 backdrop-blur-md border-b border-[var(--border)]">
               <div className="px-8 md:px-[8vw] py-4 space-y-3">
-                <form onSubmit={submitFilters} className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 scrollbar-hide">
-                  <div className="relative w-[320px] flex-none md:w-[380px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
-                    <input
-                      type="text"
-                      value={pendingSearch}
-                      onChange={(event) => setPendingSearch(event.target.value)}
-                      placeholder={runtime?.settings.searchPlaceholder || 'Search products...'}
-                      className="w-full pl-10 pr-4 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors text-sm"
-                    />
+                <form onSubmit={submitFilters} className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 scrollbar-hide">
+                    <div className="relative w-[320px] flex-none md:w-[380px]">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
+                      <input
+                        type="text"
+                        value={pendingSearch}
+                        onChange={(event) => setPendingSearch(event.target.value)}
+                        placeholder={runtime?.settings.searchPlaceholder || 'Search products...'}
+                        className="w-full pl-10 pr-4 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors text-sm"
+                      />
+                    </div>
+                    {enabledFilters.map((row) => {
+                      const value = String(pendingFilters[row.key] || '');
+                      const listId = `filter-suggest-${pageType}-${row.key}`;
+                      return (
+                        <div key={row.id} className="w-[156px] flex-none">
+                          <input
+                            value={value}
+                            onChange={(event) => setPendingFilters((prev) => ({ ...prev, [row.key]: event.target.value }))}
+                            placeholder={row.label}
+                            list={listId}
+                            className="w-full px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:outline-none focus:border-[var(--accent)]"
+                          />
+                          <datalist id={listId}>
+                            {(row.options || []).map((option) => (
+                              <option key={`${listId}-${option}`} value={option} />
+                            ))}
+                          </datalist>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {enabledFilters.map((row) => {
-                    const value = String(pendingFilters[row.key] || '');
-                    const listId = `filter-suggest-${pageType}-${row.key}`;
-                    return (
-                      <div key={row.id} className="w-[156px] flex-none">
-                        <input
-                          value={value}
-                          onChange={(event) => setPendingFilters((prev) => ({ ...prev, [row.key]: event.target.value }))}
-                          placeholder={row.label}
-                          list={listId}
-                          className="w-full px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:outline-none focus:border-[var(--accent)]"
-                        />
-                        <datalist id={listId}>
-                          {(row.options || []).map((option) => (
-                            <option key={`${listId}-${option}`} value={option} />
-                          ))}
-                        </datalist>
-                      </div>
-                    );
-                  })}
-                  <button
-                    type="submit"
-                    className="inline-flex h-[42px] w-[42px] flex-none items-center justify-center border border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--bg-primary)]"
-                    title="Search and apply filters"
-                    aria-label="Search"
-                  >
-                    <Search className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border border-[var(--border)] text-[var(--text-secondary)]"
-                    title="Clear search and filters"
-                    aria-label="Clear filters"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Clear
-                  </button>
+                  <div className="flex flex-none items-center gap-2 pb-1">
+                    <button
+                      type="submit"
+                      className="inline-flex h-[42px] w-[42px] flex-none items-center justify-center border border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--bg-primary)]"
+                      title="Search and apply filters"
+                      aria-label="Search"
+                    >
+                      <Search className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="inline-flex flex-none items-center gap-1.5 px-3 py-2.5 text-sm border border-[var(--border)] text-[var(--text-secondary)]"
+                      title="Clear search and filters"
+                      aria-label="Clear filters"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Clear
+                    </button>
+                  </div>
                 </form>
 
                 <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
