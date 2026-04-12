@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Heart, Loader2, Search } from 'lucide-react';
+import { Heart, Loader2, Search, X } from 'lucide-react';
 import { api, resolveAssetUrl } from '../services/api';
 import { resolveCountryCode } from '../data/locationOptions';
 import { ThemeProvider } from './jenks-v14/context/ThemeContext';
@@ -552,7 +552,14 @@ export default function CategoryPageV2({
                   >
                     <Search className="h-4 w-4" />
                   </button>
-                  <button type="button" onClick={clearFilters} className="px-3 py-2.5 text-sm border border-[var(--border)] text-[var(--text-secondary)]">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border border-[var(--border)] text-[var(--text-secondary)]"
+                    title="Clear search and filters"
+                    aria-label="Clear filters"
+                  >
+                    <X className="h-3.5 w-3.5" />
                     Clear
                   </button>
                 </form>

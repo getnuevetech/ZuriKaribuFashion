@@ -874,6 +874,7 @@ const normalizeFilters = (pageType: CategoryPageV2Type, rows: unknown): Category
     if (!CATEGORY_PAGE_V2_FILTER_KEYS.includes(keyToken as CategoryPageV2FilterKey)) continue;
     const key = keyToken as CategoryPageV2FilterKey;
     const fallbackRow = fallback.find((entry) => entry.key === key) || fallback[index] || fallback[0];
+    const enabled = typeof row.enabled === 'boolean' ? row.enabled : fallbackRow.enabled;
     nextByKey.set(key, {
       id: normalizeText(row.id || fallbackRow.id || randomUUID()).slice(0, 120),
       key,
@@ -882,7 +883,7 @@ const normalizeFilters = (pageType: CategoryPageV2Type, rows: unknown): Category
         normalizeText(row.inputType || fallbackRow.inputType).toUpperCase() === 'SUGGESTIVE_SEARCH'
           ? 'SUGGESTIVE_SEARCH'
           : 'DROPDOWN',
-      enabled: typeof row.enabled === 'boolean' ? row.enabled : fallbackRow.enabled,
+      enabled: pageType === 'SHOP' && key === 'PRICE' ? true : enabled,
       options: Array.isArray(row.options)
         ? row.options.map((entry) => normalizeText(entry)).filter(Boolean).slice(0, 100)
         : fallbackRow.options,
