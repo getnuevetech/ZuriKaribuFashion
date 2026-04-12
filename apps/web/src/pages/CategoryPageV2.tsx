@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Heart, Loader2, Search, X } from 'lucide-react';
 import { api, resolveAssetUrl } from '../services/api';
@@ -445,8 +445,7 @@ export default function CategoryPageV2({
     );
   };
 
-  const submitFilters = (event?: FormEvent) => {
-    event?.preventDefault();
+  const submitFilters = () => {
     const nextApplied: Record<string, string[]> = {};
     for (const row of enabledFilters) {
       const paramKey = FILTER_PARAM_BY_KEY[row.key];
@@ -513,7 +512,7 @@ export default function CategoryPageV2({
 
             <div className="sticky top-20 z-40 bg-[var(--bg-primary)]/95 backdrop-blur-md border-b border-[var(--border)]">
               <div className="px-8 md:px-[8vw] py-4 space-y-3">
-                <form onSubmit={submitFilters} className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 scrollbar-hide">
                     <div className="relative w-[320px] flex-none md:w-[380px]">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
@@ -521,6 +520,11 @@ export default function CategoryPageV2({
                         type="text"
                         value={pendingSearch}
                         onChange={(event) => setPendingSearch(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter') return;
+                          event.preventDefault();
+                          submitFilters();
+                        }}
                         placeholder={runtime?.settings.searchPlaceholder || 'Search products...'}
                         className="w-full pl-10 pr-4 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors text-sm"
                       />
@@ -533,6 +537,11 @@ export default function CategoryPageV2({
                           <input
                             value={value}
                             onChange={(event) => setPendingFilters((prev) => ({ ...prev, [row.key]: event.target.value }))}
+                            onKeyDown={(event) => {
+                              if (event.key !== 'Enter') return;
+                              event.preventDefault();
+                              submitFilters();
+                            }}
                             placeholder={row.label}
                             list={listId}
                             className="w-full px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:outline-none focus:border-[var(--accent)]"
@@ -548,7 +557,8 @@ export default function CategoryPageV2({
                   </div>
                   <div className="flex flex-none items-center gap-2 pb-1">
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={submitFilters}
                       className="inline-flex h-[42px] w-[42px] flex-none items-center justify-center border border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--bg-primary)]"
                       title="Search and apply filters"
                       aria-label="Search"
@@ -566,7 +576,7 @@ export default function CategoryPageV2({
                       Clear
                     </button>
                   </div>
-                </form>
+                </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
                   {(runtime?.countryIcons || []).map((country) => {
