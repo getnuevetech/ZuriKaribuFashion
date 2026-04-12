@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Bot, ShoppingBag, Paperclip } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, ShoppingBag, Paperclip, ChevronDown, Globe } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
-import Button from '../ui/Button';
 
 const STORAGE_KEY = 'af_customer_service_chat_session_v1';
 const SHOPPING_STORAGE_KEY = 'af_customer_service_shopping_chat_v1';
@@ -340,63 +339,73 @@ export default function CustomerServiceChatWidget() {
   };
 
   if (isDashboardPath) return null;
+  const accentColor = 'var(--accent, #8a63f8)';
+  const panelGradient = `linear-gradient(120deg, ${accentColor} 0%, #77c5ff 100%)`;
+  const fieldClass =
+    'w-full rounded-[18px] border border-[#e6e9f0] bg-white px-4 py-3 text-sm text-[#20263a] shadow-[0_6px_20px_rgba(31,42,61,0.08)] focus:outline-none focus:ring-2 focus:ring-[var(--accent,#8a63f8)]/20';
+  const issueOptions = [
+    { value: 'customer-service', label: 'Customer Service' },
+    { value: 'track-order', label: 'Track Order' },
+    { value: 'account-refund', label: 'Account / Refund' },
+    { value: 'other', label: 'Other' },
+  ];
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="fixed bottom-5 right-5 z-[60] inline-flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#0f1218] to-[#1f2a3a] text-white shadow-[0_18px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/15 hover:from-[#111725] hover:to-[#28374d]"
+        className={`fixed bottom-6 right-6 z-[60] inline-flex items-center justify-center rounded-full transition-all ${
+          open
+            ? 'h-16 w-16 border border-[#e3e6ee] bg-[#edf0f6] text-[#97a0af] shadow-[0_16px_30px_rgba(34,45,67,0.18)]'
+            : 'h-14 w-14 text-white shadow-[0_18px_40px_rgba(34,45,67,0.35)]'
+        }`}
+        style={open ? undefined : { background: panelGradient }}
         aria-label="Open customer service chat"
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
       </button>
 
       {open ? (
-        <div className="fixed bottom-24 right-5 z-[60] w-[370px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-[#d7dce5] bg-white shadow-[0_26px_70px_rgba(0,0,0,0.28)]">
-          <div className="flex items-center justify-between border-b border-[#e4e8ef] bg-gradient-to-r from-[#10131b] to-[#1f2634] px-4 py-3 text-white">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 overflow-hidden rounded-full bg-gray-100">
+        <div className="fixed bottom-28 right-5 z-[60] w-[370px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-[34px] border border-[#d9deea] bg-[#f5f7fc] shadow-[0_30px_70px_rgba(20,28,48,0.26)]">
+          <div className="px-4 pb-4 pt-5 text-white" style={{ background: panelGradient }}>
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 overflow-hidden rounded-full bg-white/20 p-0.5 shadow-[0_6px_16px_rgba(0,0,0,0.2)]">
                 {shoppingAvatar ? (
                   <img src={shoppingAvatar} alt="Shopping assistant avatar" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-gray-600">Z</div>
+                  <div className="flex h-full w-full items-center justify-center rounded-full bg-white/20 text-lg font-semibold text-white">Z</div>
                 )}
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">Zuri</p>
-                <p className="text-[11px] text-white/75">Live support + shopping helper</p>
+                <p className="text-[52px] leading-none font-semibold tracking-tight text-white">Zuri</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded p-1 text-white/80 hover:bg-white/10 hover:text-white"
-              aria-label="Close chat widget"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
 
-          <div className="flex items-center gap-2 border-b px-3 py-2">
+          <div className="mx-4 mt-[-14px] flex items-center gap-3 rounded-[30px] bg-[#f8f9fc] p-2 shadow-[0_8px_24px_rgba(15,23,42,0.11)]">
             <button
               type="button"
               onClick={() => setMode('support')}
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${
-                mode === 'support' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'
+              className={`inline-flex min-h-[46px] flex-1 items-center justify-center gap-1 rounded-full px-4 py-2 text-[15px] font-semibold transition ${
+                mode === 'support'
+                  ? 'bg-white text-[#1f2433] shadow-[0_8px_20px_rgba(41,54,79,0.14)] ring-1 ring-[#e2e7f0]'
+                  : 'bg-transparent text-[#9ca3af] hover:text-[#545f73]'
               }`}
             >
-              <Bot className="h-3.5 w-3.5" />
+              <Bot className="h-4 w-4" />
               Support Chat
             </button>
             <button
               type="button"
               onClick={() => setMode('shopping')}
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${
-                mode === 'shopping' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'
+              className={`inline-flex min-h-[46px] flex-1 items-center justify-center gap-1 rounded-full px-4 py-2 text-[15px] font-semibold transition ${
+                mode === 'shopping'
+                  ? 'bg-white text-[#1f2433] shadow-[0_8px_20px_rgba(41,54,79,0.14)] ring-1 ring-[#e2e7f0]'
+                  : 'bg-transparent text-[#9ca3af] hover:text-[#545f73]'
               }`}
             >
-              <ShoppingBag className="h-3.5 w-3.5" />
+              <ShoppingBag className="h-4 w-4" />
               Shopping Bot
             </button>
           </div>
@@ -408,63 +417,89 @@ export default function CustomerServiceChatWidget() {
               {loading ? (
                 <div className="py-8 text-center text-xs text-gray-500">Loading support settings...</div>
               ) : !sessionId ? (
-                <div className="space-y-2">
-                  {!isAuthenticated ? (
+                <div className="space-y-3 p-1">
+                  {isAuthenticated ? (
+                    <div className="flex items-center gap-3 rounded-[18px] border border-[#e6e9f0] bg-white px-4 py-3 text-[17px] text-[#6b7383] shadow-[0_6px_20px_rgba(31,42,61,0.08)]">
+                      <span className="h-3 w-3 rounded-full bg-[#61c46b]" />
+                      <span>Logged in as {user?.firstName || user?.email}</span>
+                    </div>
+                  ) : (
                     <>
                       <input
                         value={guestName}
                         onChange={(event) => setGuestName(event.target.value)}
                         placeholder="Your name"
-                        className="w-full rounded border px-3 py-2 text-sm"
+                        className={fieldClass}
                       />
                       <input
                         value={guestEmail}
                         onChange={(event) => setGuestEmail(event.target.value)}
                         placeholder="Your email"
-                        className="w-full rounded border px-3 py-2 text-sm"
+                        className={fieldClass}
                       />
                       <input
                         value={guestPhone}
                         onChange={(event) => setGuestPhone(event.target.value)}
                         placeholder="Your phone"
-                        className="w-full rounded border px-3 py-2 text-sm"
+                        className={fieldClass}
                       />
                     </>
-                  ) : (
-                    <p className="rounded border bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                      Logged in as {user?.firstName || user?.email}. Contact info is already available.
-                    </p>
                   )}
-                  <select
-                    value={departmentId}
-                    onChange={(event) => setDepartmentId(event.target.value)}
-                    className="w-full rounded border px-3 py-2 text-sm"
+                  {departments.length > 0 ? (
+                    <div className="relative">
+                      <select
+                        value={departmentId}
+                        onChange={(event) => setDepartmentId(event.target.value)}
+                        className={`${fieldClass} appearance-none pr-10`}
+                      >
+                        <option value="">Select department</option>
+                        {departments.map((department) => (
+                          <option key={department.id} value={department.id}>
+                            {department.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+                    </div>
+                  ) : null}
+                  <div className="relative">
+                    <select
+                      value={issueType}
+                      onChange={(event) => setIssueType(event.target.value)}
+                      className={`${fieldClass} appearance-none pr-10`}
+                    >
+                      {issueOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+                  </div>
+                  <div className="relative">
+                    <Globe className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#b0b7c4]" />
+                    <select
+                      value={preferredLanguage}
+                      onChange={(event) => setPreferredLanguage(event.target.value)}
+                      className={`${fieldClass} appearance-none pl-11 pr-10`}
+                    >
+                      {languages.map((language) => (
+                        <option key={language.code} value={language.code}>
+                          {language.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
+                  </div>
+                  <div className="h-[62px] rounded-[20px] bg-[#e6e9ef]" />
+                  <button
+                    type="button"
+                    onClick={() => void startSupportChat()}
+                    className="inline-flex min-h-[64px] w-full items-center justify-center rounded-full px-6 text-[20px] font-semibold text-white shadow-[0_16px_34px_rgba(83,119,237,0.35)]"
+                    style={{ background: panelGradient }}
                   >
-                    <option value="">Select department</option>
-                    {departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={issueType}
-                    onChange={(event) => setIssueType(event.target.value)}
-                    placeholder="Issue type (track order, account/refund, etc.)"
-                    className="w-full rounded border px-3 py-2 text-sm"
-                  />
-                  <select
-                    value={preferredLanguage}
-                    onChange={(event) => setPreferredLanguage(event.target.value)}
-                    className="w-full rounded border px-3 py-2 text-sm"
-                  >
-                    {languages.map((language) => (
-                      <option key={language.code} value={language.code}>
-                        Preferred language: {language.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Button onClick={() => void startSupportChat()}>Start Support Chat</Button>
+                    Start Support Chat
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-2">
