@@ -198,8 +198,7 @@ export default function CategoryPageV2({
   allowCountryQuery?: boolean;
 }) {
   const [searchParams] = useSearchParams();
-  const queryCountry = allowCountryQuery ? String(searchParams.get('country') || '').trim() : '';
-  const queryCategory = allowCountryQuery ? String(searchParams.get('category') || '').trim() : '';
+  const querySearch = String(searchParams.get('search') || '').trim();
   const [runtime, setRuntime] = useState<CategoryPageRuntime | null>(null);
   const [products, setProducts] = useState<CategoryPageProduct[]>([]);
   const [loadingRuntime, setLoadingRuntime] = useState(true);
@@ -229,22 +228,32 @@ export default function CategoryPageV2({
         }
         setRuntime(data);
         const initialFilters: Record<string, string> = {};
+        const nextApplied: Record<string, string[]> = {};
         for (const row of data.settings.filterDefinitions || []) {
           initialFilters[row.key] = '';
+          const paramKey = FILTER_PARAM_BY_KEY[row.key];
+          const queryValue = String(searchParams.get(paramKey) || '').trim();
+          if (!queryValue) continue;
+          initialFilters[row.key] = queryValue;
+          const tokens = parseFilterTokens(queryValue, row.options || []);
+          if (tokens.length > 0) nextApplied[paramKey] = tokens;
+        }
+        if (allowCountryQuery) {
+          const queryCountry = String(searchParams.get('country') || '').trim();
+          const queryCategory = String(searchParams.get('category') || '').trim();
+          if (queryCountry) {
+            initialFilters.COUNTRY = queryCountry;
+            nextApplied.country = [queryCountry];
+          }
+          if (queryCategory) {
+            initialFilters.CATEGORY = queryCategory;
+            nextApplied.category = [queryCategory];
+          }
         }
         setPendingFilters(initialFilters);
-        const nextApplied: Record<string, string[]> = {};
-        if (queryCountry) {
-          initialFilters.COUNTRY = queryCountry;
-          nextApplied.country = [queryCountry];
-        }
-        if (queryCategory) {
-          initialFilters.CATEGORY = queryCategory;
-          nextApplied.category = [queryCategory];
-        }
         setAppliedFilters(nextApplied);
-        setPendingSearch('');
-        setAppliedSearch('');
+        setPendingSearch(querySearch);
+        setAppliedSearch(querySearch);
         setPage(1);
       } catch {
         if (!active) return;
@@ -258,7 +267,7 @@ export default function CategoryPageV2({
     return () => {
       active = false;
     };
-  }, [pageType, allowCountryQuery, queryCountry, queryCategory]);
+  }, [pageType, allowCountryQuery, querySearch, searchParams]);
 
   useEffect(() => {
     if (!runtime?.settings) return;

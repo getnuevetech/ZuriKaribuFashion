@@ -144,6 +144,8 @@ type CategorySectionRuntime = {
   key: string;
   sectionName: string;
   title: string;
+  titleColor: string;
+  titleHoverColor: string;
   description: string;
   cta: string;
   href: string;
@@ -201,6 +203,8 @@ type SpotlightRuntime = {
 type SpotlightTypography = {
   countryFontSize: number;
   nameFontSize: number;
+  nameColor: string;
+  nameHoverColor: string;
   specialtyFontSize: number;
   descriptionFontSize: number;
   priceFontSize?: number;
@@ -906,17 +910,28 @@ const formatMoneyLabel = (value: unknown, fallback = '$0.00') => {
 
 const buildCTAStyle = (raw: unknown, fallback: CTAStyle): CSSProperties => {
   const row = asRecord(raw);
+  const baseTextColor = asString(row.textColor, fallback.textColor);
+  const baseBorderColor = asString(row.borderColor, fallback.borderColor);
+  const hoverTextColor = asString(row.hoverTextColor, fallback.hoverTextColor);
+  const hoverBorderColor = asString(row.hoverBorderColor, fallback.hoverBorderColor);
   return {
     backgroundColor: asString(row.backgroundColor, fallback.backgroundColor),
-    color: asString(row.textColor, fallback.textColor),
-    borderColor: asString(row.borderColor, fallback.borderColor),
+    color: 'var(--cta-text-color)',
+    borderColor: 'var(--cta-border-color)',
     borderWidth: `${Math.max(0, Math.min(12, Math.round(asNumber(row.borderWidth, fallback.borderWidth))))}px`,
     borderStyle: 'solid',
     fontFamily: asString(row.fontFamily, fallback.fontFamily),
     fontSize: `${Math.max(8, Math.min(72, Math.round(asNumber(row.fontSize, fallback.fontSize))))}px`,
     fontWeight: Math.max(100, Math.min(900, Math.round(asNumber(row.fontWeight, fallback.fontWeight)))),
+    '--cta-text-color': baseTextColor,
+    '--cta-hover-text-color': hoverTextColor,
+    '--cta-border-color': baseBorderColor,
+    '--cta-hover-border-color': hoverBorderColor,
   };
 };
+
+const buildShopFilterHref = (filterKey: 'style' | 'price', value: string) =>
+  `/shop?${filterKey}=${encodeURIComponent(value.trim())}`;
 
 const resolveCTAHoverStyle = (raw: unknown, fallback: CTAStyle) => {
   const row = asRecord(raw);
@@ -927,7 +942,7 @@ const resolveCTAHoverStyle = (raw: unknown, fallback: CTAStyle) => {
 };
 
 const applyHeroCtaHoverState = (
-  element: HTMLAnchorElement,
+  element: HTMLElement,
   raw: unknown,
   fallback: CTAStyle,
   isHovering: boolean
@@ -1758,11 +1773,16 @@ export default function JenksFrontpageV2() {
       .map((entry) => asRecord(entry))
       .filter((entry) => asBoolean(entry.enabled, true))
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0));
-    if (rows.length === 0) return SHOP_BY_STYLE;
+    if (rows.length === 0) {
+      return SHOP_BY_STYLE.map((row) => ({
+        ...row,
+        href: buildShopFilterHref('style', row.name),
+      }));
+    }
     return rows.map((row) => ({
       name: asString(row.title, 'Style'),
       sub: asString(row.description, ''),
-      href: normalizeHref(row.href, '/readytowear'),
+      href: buildShopFilterHref('style', asString(row.title, 'Style')),
       Icon: iconFromKey(row.icon, CalendarDays),
       titleFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.titleFontSize, 15)))),
       descriptionFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.descriptionFontSize, 14)))),
@@ -1774,11 +1794,16 @@ export default function JenksFrontpageV2() {
       .map((entry) => asRecord(entry))
       .filter((entry) => asBoolean(entry.enabled, true))
       .sort((a, b) => asNumber(a.displayOrder, 0) - asNumber(b.displayOrder, 0));
-    if (rows.length === 0) return SHOP_BY_PRICE;
+    if (rows.length === 0) {
+      return SHOP_BY_PRICE.map((row) => ({
+        ...row,
+        href: buildShopFilterHref('price', row.range),
+      }));
+    }
     return rows.map((row) => ({
       range: asString(row.priceLabel, asString(row.title, '$0 - $100')),
       sub: asString(row.description, ''),
-      href: normalizeHref(row.href, '/readytowear'),
+      href: buildShopFilterHref('price', asString(row.title, asString(row.priceLabel, '$0 - $100'))),
       Icon: iconFromKey(row.icon, Tag),
       titleFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.titleFontSize, 24)))),
       descriptionFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.descriptionFontSize, 14)))),
@@ -1815,7 +1840,13 @@ export default function JenksFrontpageV2() {
   }, [shopByCountriesData]);
 
   const sectionsRtwFtbCtw = useMemo<CategorySectionRuntime[]>(() => {
-    if (categorySections.length === 0) return RTW_FTB_CTW_SECTIONS;
+    if (categorySections.length === 0) {
+      return RTW_FTB_CTW_SECTIONS.map((entry) => ({
+        ...entry,
+        titleColor: '#ffffff',
+        titleHoverColor: '#ffffff',
+      }));
+    }
     const mapped = categorySections.map((entry, idx) => {
       const key = asString(entry.key, '').toUpperCase();
       const matchingCategory = shopByCategoryCards.find((row) => row.title.includes(key) || row.id.toUpperCase().includes(key));
@@ -1831,6 +1862,8 @@ export default function JenksFrontpageV2() {
         key,
         sectionName: asString(entry.tag, asString(entry.title, key || 'CATEGORY')).toUpperCase(),
         title: asString(entry.title, key || 'Category').toUpperCase(),
+        titleColor: asString(entry.titleColor, '#ffffff'),
+        titleHoverColor: asString(entry.titleHoverColor, asString(entry.titleColor, '#ffffff')),
         description: asString(entry.description, ''),
         cta: asString(entry.ctaText, FEATURED_CTA_BY_KEY[key] || 'SHOP NOW').toUpperCase(),
         href,
@@ -2210,9 +2243,15 @@ export default function JenksFrontpageV2() {
       const fallbackRows = variant === 'RTW_FTB' ? RTW_FTB_SPOTLIGHT : DESIGNER_SPOTLIGHT;
       const rows = Math.max(1, Math.round(asNumber(cfg.rows, 1)));
       const columns = Math.max(1, Math.min(12, Math.round(asNumber(cfg.columns, 3))));
+      const descriptionWordLimit = Math.max(
+        5,
+        Math.min(80, Math.round(asNumber(cfg.descriptionWordLimit, variant === 'RTW_FTB' ? 25 : 25)))
+      );
       const typography: SpotlightTypography = {
         countryFontSize: Math.max(10, Math.min(72, Math.round(asNumber(cfg.countryFontSize, 22)))),
         nameFontSize: Math.max(16, Math.min(140, Math.round(asNumber(cfg.designerNameFontSize ?? cfg.nameFontSize, 52)))),
+        nameColor: asString(cfg.designerNameColor ?? cfg.nameColor, '#ffffff'),
+        nameHoverColor: asString(cfg.designerNameHoverColor ?? cfg.nameHoverColor, asString(cfg.designerNameColor ?? cfg.nameColor, '#ffffff')),
         specialtyFontSize: Math.max(10, Math.min(72, Math.round(asNumber(cfg.specialtyFontSize, 22)))),
         descriptionFontSize: Math.max(10, Math.min(96, Math.round(asNumber(cfg.descriptionFontSize, 24)))),
         ...(variant === 'RTW_FTB'
@@ -2278,7 +2317,7 @@ export default function JenksFrontpageV2() {
             designerName,
             designerCountry: country,
             designerSpecialty: asString(entry.specialty, fallbackSpecialty),
-            description: truncateWords(asString(entry.description, fallbackDescription), 25),
+            description: truncateWords(asString(entry.description, fallbackDescription), descriptionWordLimit),
             price: variant === 'RTW_FTB' ? asString(entry.price, '') : '',
             showCountry: asBoolean(entry.showCountry, true),
             showDesignerName: asBoolean(entry.showDesignerName, true),
@@ -2304,7 +2343,7 @@ export default function JenksFrontpageV2() {
               title: row.title,
               designerCountry: asString((row as any).country, ''),
               designerSpecialty: asString((row as any).specialty, 'Contemporary African Designer'),
-              description: truncateWords(asString((row as any).description, ''), 25),
+              description: truncateWords(asString((row as any).description, ''), descriptionWordLimit),
               price: variant === 'RTW_FTB' ? asString((row as any).price, '') : '',
               showCountry: true,
               showDesignerName: true,
@@ -4208,7 +4247,7 @@ export default function JenksFrontpageV2() {
         return (
           <section key={section.id} className="space-y-0" style={{ order: getSectionOrder(sectionTemplateKey, 'CATEGORY_MANAGE') }}>
             <div
-              className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 ${
+              className={`group grid ${HERO_HEIGHT_CLASS} grid-cols-1 ${
                 section.textOnLeft ? 'md:grid-cols-[32%_68%]' : 'md:grid-cols-[68%_32%]'
               }`}
             >
@@ -4223,12 +4262,28 @@ export default function JenksFrontpageV2() {
                     <div className="relative flex h-full items-center">
                       <div className="flex h-full max-w-[560px] flex-col items-start justify-center text-left">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
-                        <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
+                        <h3
+                          className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] text-[var(--featured-title-color)] transition-colors duration-300 group-hover:text-[var(--featured-title-hover-color)] lg:text-[72px]"
+                          style={
+                            {
+                              '--featured-title-color': asString(section.titleColor, '#ffffff'),
+                              '--featured-title-hover-color': asString(section.titleHoverColor, asString(section.titleColor, '#ffffff')),
+                            } as CSSProperties
+                          }
+                        >
+                          {section.title}
+                        </h3>
                         <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                       <Link
                         to={sectionCtaHref(section)}
                         style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                        className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
+                        className="mt-9 inline-flex items-center border-[var(--cta-border-color)] px-0 py-2.5 text-[var(--cta-text-color)] text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-300 hover:border-[var(--cta-hover-border-color)] hover:text-[var(--cta-hover-text-color)] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
+                        onMouseEnter={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, section.ctaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                        }
+                        onMouseLeave={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, section.ctaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                        }
                       >
                           {section.cta}
                       </Link>
@@ -4267,12 +4322,28 @@ export default function JenksFrontpageV2() {
                     <div className="relative flex h-full items-center">
                       <div className="flex h-full max-w-[560px] flex-col items-start justify-center text-left">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/72">{section.sectionName}</p>
-                        <h3 className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] lg:text-[72px]">{section.title}</h3>
+                        <h3
+                          className="mt-5 font-['Oswald'] text-[54px] font-bold uppercase leading-[0.92] text-[var(--featured-title-color)] transition-colors duration-300 group-hover:text-[var(--featured-title-hover-color)] lg:text-[72px]"
+                          style={
+                            {
+                              '--featured-title-color': asString(section.titleColor, '#ffffff'),
+                              '--featured-title-hover-color': asString(section.titleHoverColor, asString(section.titleColor, '#ffffff')),
+                            } as CSSProperties
+                          }
+                        >
+                          {section.title}
+                        </h3>
                         <p className="mt-5 max-w-[560px] text-base leading-relaxed text-white/74 sm:text-lg">{section.description}</p>
                       <Link
                         to={sectionCtaHref(section)}
                         style={buildCTAStyle(section.ctaStyle, DEFAULT_SOLID_CTA_STYLE)}
-                        className="mt-9 inline-flex items-center px-0 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
+                        className="mt-9 inline-flex items-center border-[var(--cta-border-color)] px-0 py-2.5 text-[var(--cta-text-color)] text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-300 hover:border-[var(--cta-hover-border-color)] hover:text-[var(--cta-hover-text-color)] hover:underline hover:decoration-[#d40000] hover:underline-offset-[6px]"
+                        onMouseEnter={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, section.ctaStyle, DEFAULT_SOLID_CTA_STYLE, true)
+                        }
+                        onMouseLeave={(event) =>
+                          applyHeroCtaHoverState(event.currentTarget, section.ctaStyle, DEFAULT_SOLID_CTA_STYLE, false)
+                        }
                       >
                           {section.cta}
                       </Link>
@@ -4652,8 +4723,17 @@ export default function JenksFrontpageV2() {
                 ) : null}
                 {spot.showDesignerName ? (
                   <h3
-                    className="font-['Oswald'] font-bold uppercase leading-[0.95]"
-                    style={{ fontSize: `${designerSpotlightTypography.nameFontSize}px` }}
+                    className="font-['Oswald'] font-bold uppercase leading-[0.95] text-[var(--spotlight-name-color)] transition-colors duration-300 group-hover:text-[var(--spotlight-name-hover-color)]"
+                    style={
+                      {
+                        fontSize: `${designerSpotlightTypography.nameFontSize}px`,
+                        '--spotlight-name-color': asString(designerSpotlightTypography.nameColor, '#ffffff'),
+                        '--spotlight-name-hover-color': asString(
+                          designerSpotlightTypography.nameHoverColor,
+                          asString(designerSpotlightTypography.nameColor, '#ffffff')
+                        ),
+                      } as CSSProperties
+                    }
                   >
                     {spot.designerName || spot.title}
                   </h3>
@@ -4675,7 +4755,7 @@ export default function JenksFrontpageV2() {
                   </p>
                 ) : null}
                 <span
-                  className="relative mt-5 inline-flex items-center gap-3 pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-white"
+                  className="relative mt-5 inline-flex items-center gap-3 border-[var(--cta-border-color)] pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-[var(--cta-text-color)] transition-colors duration-300 group-hover:border-[var(--cta-hover-border-color)] group-hover:text-[var(--cta-hover-text-color)]"
                   style={buildCTAStyle(spot.ctaStyle, {
                     ...DEFAULT_INLINE_CTA_STYLE,
                     textColor: '#ffffff',
@@ -4683,6 +4763,12 @@ export default function JenksFrontpageV2() {
                     borderColor: 'transparent',
                     hoverBorderColor: 'transparent',
                   })}
+                  onMouseEnter={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, true)
+                  }
+                  onMouseLeave={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, false)
+                  }
                 >
                   {spot.cta}
                   <ArrowRight className="h-4 w-4" />
@@ -4729,11 +4815,11 @@ export default function JenksFrontpageV2() {
               >
                 {spot.showPrice ? (
                   <p
-                    className="font-semibold uppercase tracking-[0.08em] transition-colors duration-300 group-hover:text-[var(--rtw-ftb-price-hover-color)]"
+                    className="font-semibold uppercase tracking-[0.08em] text-[var(--rtw-ftb-price-color)] transition-colors duration-300 group-hover:text-[var(--rtw-ftb-price-hover-color)]"
                     style={
                       {
                         fontSize: `${rtwFtbSpotlightTypography.priceFontSize}px`,
-                        color: asString(rtwFtbSpotlightTypography.priceColor, '#ffffff'),
+                        '--rtw-ftb-price-color': asString(rtwFtbSpotlightTypography.priceColor, '#ffffff'),
                         '--rtw-ftb-price-hover-color': asString(
                           rtwFtbSpotlightTypography.priceHoverColor,
                           asString(rtwFtbSpotlightTypography.priceColor, '#ffffff')
@@ -4754,8 +4840,17 @@ export default function JenksFrontpageV2() {
                 ) : null}
                 {spot.showDesignerName ? (
                   <h3
-                    className="font-['Oswald'] font-bold uppercase leading-[0.95]"
-                    style={{ fontSize: `${rtwFtbSpotlightTypography.nameFontSize}px` }}
+                    className="font-['Oswald'] font-bold uppercase leading-[0.95] text-[var(--rtw-ftb-name-color)] transition-colors duration-300 group-hover:text-[var(--rtw-ftb-name-hover-color)]"
+                    style={
+                      {
+                        fontSize: `${rtwFtbSpotlightTypography.nameFontSize}px`,
+                        '--rtw-ftb-name-color': asString(rtwFtbSpotlightTypography.nameColor, '#ffffff'),
+                        '--rtw-ftb-name-hover-color': asString(
+                          rtwFtbSpotlightTypography.nameHoverColor,
+                          asString(rtwFtbSpotlightTypography.nameColor, '#ffffff')
+                        ),
+                      } as CSSProperties
+                    }
                   >
                     {spot.designerName || spot.title}
                   </h3>
@@ -4777,7 +4872,7 @@ export default function JenksFrontpageV2() {
                   </p>
                 ) : null}
                 <span
-                  className="relative mt-5 inline-flex items-center gap-3 pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-white"
+                  className="relative mt-5 inline-flex items-center gap-3 border-[var(--cta-border-color)] pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-[var(--cta-text-color)] transition-colors duration-300 group-hover:border-[var(--cta-hover-border-color)] group-hover:text-[var(--cta-hover-text-color)]"
                   style={buildCTAStyle(spot.ctaStyle, {
                     ...DEFAULT_INLINE_CTA_STYLE,
                     textColor: '#ffffff',
@@ -4785,6 +4880,12 @@ export default function JenksFrontpageV2() {
                     borderColor: 'transparent',
                     hoverBorderColor: 'transparent',
                   })}
+                  onMouseEnter={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, true)
+                  }
+                  onMouseLeave={(event) =>
+                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, false)
+                  }
                 >
                   {spot.cta}
                   <ArrowRight className="h-4 w-4" />

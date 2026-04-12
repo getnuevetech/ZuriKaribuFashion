@@ -296,6 +296,8 @@ type FeaturedCard = {
   image: string;
   tag: string;
   title: string;
+  titleColor: string;
+  titleHoverColor: string;
   description: string;
   ctaText: string;
   ctaLink: string;
@@ -421,6 +423,9 @@ type DesignerSpotlightSettings = {
   overlayEnabled?: boolean;
   overlayBackgroundColor?: string;
   countryFontSize: number;
+  nameColor?: string;
+  nameHoverColor?: string;
+  descriptionWordLimit?: number;
   priceFontSize?: number;
   priceColor?: string;
   priceHoverColor?: string;
@@ -1442,6 +1447,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           image: '',
           tag: 'Featured RTW',
           title: 'Featured Ready To Wear',
+          titleColor: '#ffffff',
+          titleHoverColor: '#e66045',
           description: 'Spotlight featured RTW products.',
           ctaText: 'Shop RTW',
           ctaLink: '/readytowear',
@@ -1464,6 +1471,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           image: '',
           tag: 'Featured CTW',
           title: 'Featured Custom To Wear',
+          titleColor: '#ffffff',
+          titleHoverColor: '#e66045',
           description: 'Spotlight featured CTW products.',
           ctaText: 'Explore CTW',
           ctaLink: '/cystomtowear',
@@ -1486,6 +1495,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           image: '',
           tag: 'Featured FTB',
           title: 'Featured Fabric To Buy',
+          titleColor: '#ffffff',
+          titleHoverColor: '#e66045',
           description: 'Spotlight featured fabric products.',
           ctaText: 'Shop FTB',
           ctaLink: '/fabricstobuy',
@@ -1611,6 +1622,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       overlayEnabled: true,
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
+      nameColor: '#ffffff',
+      nameHoverColor: '#e66045',
       nameFontSize: 52,
       specialtyFontSize: 24,
       descriptionFontSize: 24,
@@ -1652,12 +1665,15 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       overlayEnabled: true,
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
+      nameColor: '#ffffff',
+      nameHoverColor: '#e66045',
       priceFontSize: 20,
       priceColor: '#ffffff',
       priceHoverColor: '#e66045',
       nameFontSize: 52,
       specialtyFontSize: 24,
       descriptionFontSize: 24,
+      descriptionWordLimit: 25,
       cards: [
         {
           id: randomUUID(),
@@ -2497,6 +2513,13 @@ const normalizeFeatured = (
         image: (getString(item.image) || fallbackItem.image).slice(0, 2000),
         tag: (getString(item.tag) || fallbackItem.tag).slice(0, 80),
         title: (getString(item.title) || fallbackItem.title).slice(0, 140),
+        titleColor: (getString(item.titleColor) || fallbackItem.titleColor || '#ffffff').slice(0, 64),
+        titleHoverColor:
+          (getString(item.titleHoverColor) ||
+            getString(item.titleColor) ||
+            fallbackItem.titleHoverColor ||
+            fallbackItem.titleColor ||
+            '#ffffff').slice(0, 64),
         description: (getString(item.description) || fallbackItem.description).slice(0, 320),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaLink:
@@ -2784,6 +2807,27 @@ const normalizeDesignerSpotlight = (
         'rgba(0,0,0,0.36)')
         .slice(0, 64),
     countryFontSize: clamp(Math.round(getNumber(row.countryFontSize) ?? fallback.countryFontSize), 10, 72),
+    nameColor:
+      (getString((row as Record<string, unknown>).nameColor) ||
+        getString((row as Record<string, unknown>).designerNameColor) ||
+        fallback.nameColor ||
+        '#ffffff').slice(0, 64),
+    nameHoverColor:
+      (getString((row as Record<string, unknown>).nameHoverColor) ||
+        getString((row as Record<string, unknown>).designerNameHoverColor) ||
+        fallback.nameHoverColor ||
+        fallback.nameColor ||
+        '#ffffff').slice(0, 64),
+    descriptionWordLimit: clamp(
+      Math.round(
+        getNumber((row as Record<string, unknown>).descriptionWordLimit) ??
+          getNumber((row as Record<string, unknown>).descriptionMaxWords) ??
+          fallback.descriptionWordLimit ??
+          25
+      ),
+      5,
+      80
+    ),
     ...(includePrice
       ? {
           priceFontSize: clamp(Math.round(getNumber(row.priceFontSize) ?? fallback.priceFontSize ?? 20), 10, 96),

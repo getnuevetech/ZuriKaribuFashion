@@ -268,6 +268,8 @@ type FeaturedCard = {
   image: string;
   tag: string;
   title: string;
+  titleColor: string;
+  titleHoverColor: string;
   description: string;
   ctaText: string;
   ctaLink: string;
@@ -414,8 +416,11 @@ type DesignerSpotlight = {
   columns: number;
   countryFontSize: number;
   designerNameFontSize: number;
+  designerNameColor: string;
+  designerNameHoverColor: string;
   specialtyFontSize: number;
   descriptionFontSize: number;
+  descriptionWordLimit?: number;
   priceFontSize?: number;
   priceColor?: string;
   priceHoverColor?: string;
@@ -1512,6 +1517,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         image: '',
         tag: 'Featured RTW',
         title: 'Featured Ready To Wear',
+        titleColor: '#ffffff',
+        titleHoverColor: '#e66045',
         description: 'Spotlight featured RTW products.',
         ctaText: 'Shop RTW',
         ctaLink: '/readytowear',
@@ -1534,6 +1541,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         image: '',
         tag: 'Featured CTW',
         title: 'Featured Custom To Wear',
+        titleColor: '#ffffff',
+        titleHoverColor: '#e66045',
         description: 'Spotlight featured CTW products.',
         ctaText: 'Explore CTW',
         ctaLink: '/customtowear',
@@ -1556,6 +1565,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         image: '',
         tag: 'Featured FTB',
         title: 'Featured Fabric To Buy',
+        titleColor: '#ffffff',
+        titleHoverColor: '#e66045',
         description: 'Spotlight featured fabric products.',
         ctaText: 'Shop FTB',
         ctaLink: '/fabricstobuy',
@@ -1680,6 +1691,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     columns: 3,
     countryFontSize: 22,
     designerNameFontSize: 52,
+    designerNameColor: '#ffffff',
+    designerNameHoverColor: '#e66045',
     specialtyFontSize: 22,
     descriptionFontSize: 24,
     textAreaBackgroundEnabled: true,
@@ -1721,8 +1734,11 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     columns: 3,
     countryFontSize: 22,
     designerNameFontSize: 52,
+    designerNameColor: '#ffffff',
+    designerNameHoverColor: '#e66045',
     specialtyFontSize: 22,
     descriptionFontSize: 24,
+    descriptionWordLimit: 25,
     priceFontSize: 20,
     priceColor: '#ffffff',
     priceHoverColor: '#e66045',
@@ -1962,8 +1978,11 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
       columns: ds.columns,
       countryFontSize: ds.countryFontSize,
       nameFontSize: ds.designerNameFontSize,
+      nameColor: ds.designerNameColor,
+      nameHoverColor: ds.designerNameHoverColor,
       specialtyFontSize: ds.specialtyFontSize,
       descriptionFontSize: ds.descriptionFontSize,
+      descriptionWordLimit: ds.descriptionWordLimit,
       overlayEnabled: ds.textAreaBackgroundEnabled,
       overlayBackgroundColor: ds.textAreaBackgroundColor,
       cards: ds.cards.map((card) => {
@@ -2230,6 +2249,9 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
   };
   next.rtwFtb = {
     ...next.rtwFtb,
+    designerNameColor: String(next.rtwFtb.designerNameColor || '#ffffff'),
+    designerNameHoverColor: String(next.rtwFtb.designerNameHoverColor || next.rtwFtb.designerNameColor || '#ffffff'),
+    descriptionWordLimit: clamp(toNumber(String(next.rtwFtb.descriptionWordLimit || 25), 25), 5, 80),
     priceColor: String(next.rtwFtb.priceColor || '#ffffff'),
     priceHoverColor: String(next.rtwFtb.priceHoverColor || next.rtwFtb.priceColor || '#ffffff'),
     cards: next.rtwFtb.cards.map((item) => ({
@@ -2772,6 +2794,14 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ? featured.cards.map((card) => ({
             ...fallbackFeatured,
             ...card,
+            titleColor: String((card as FeaturedCard)?.titleColor || fallbackFeatured.titleColor || '#ffffff'),
+            titleHoverColor: String(
+              (card as FeaturedCard)?.titleHoverColor ||
+                (card as FeaturedCard)?.titleColor ||
+                fallbackFeatured.titleHoverColor ||
+                fallbackFeatured.titleColor ||
+                '#ffffff'
+            ),
             ctaMode: ((): FeaturedCard['ctaMode'] => {
               const token = String((card as FeaturedCard)?.ctaMode || '').trim().toUpperCase();
               if (token === 'PAGE') return 'PAGE';
@@ -2907,6 +2937,19 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         16,
         140
       ),
+      designerNameColor: String(
+        (designerSpotlightRaw as Record<string, unknown>).designerNameColor ||
+          (designerSpotlightRaw as Record<string, unknown>).nameColor ||
+          (designerSpotlight as DesignerSpotlight | undefined)?.designerNameColor ||
+          '#ffffff'
+      ).slice(0, 64),
+      designerNameHoverColor: String(
+        (designerSpotlightRaw as Record<string, unknown>).designerNameHoverColor ||
+          (designerSpotlightRaw as Record<string, unknown>).nameHoverColor ||
+          (designerSpotlight as DesignerSpotlight | undefined)?.designerNameHoverColor ||
+          (designerSpotlight as DesignerSpotlight | undefined)?.designerNameColor ||
+          '#ffffff'
+      ).slice(0, 64),
       specialtyFontSize: clamp(
         Math.round(
           toNumber(
@@ -3025,6 +3068,19 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         16,
         140
       ),
+      designerNameColor: String(
+        (rtwFtbRaw as Record<string, unknown>).designerNameColor ||
+          (rtwFtbRaw as Record<string, unknown>).nameColor ||
+          (rtwFtb as DesignerSpotlight | undefined)?.designerNameColor ||
+          '#ffffff'
+      ).slice(0, 64),
+      designerNameHoverColor: String(
+        (rtwFtbRaw as Record<string, unknown>).designerNameHoverColor ||
+          (rtwFtbRaw as Record<string, unknown>).nameHoverColor ||
+          (rtwFtb as DesignerSpotlight | undefined)?.designerNameHoverColor ||
+          (rtwFtb as DesignerSpotlight | undefined)?.designerNameColor ||
+          '#ffffff'
+      ).slice(0, 64),
       specialtyFontSize: clamp(
         Math.round(
           toNumber(
@@ -3050,6 +3106,21 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         ),
         10,
         96
+      ),
+      descriptionWordLimit: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (rtwFtbRaw as Record<string, unknown>).descriptionWordLimit ??
+                (rtwFtbRaw as Record<string, unknown>).descriptionMaxWords ??
+                (rtwFtb as DesignerSpotlight | undefined)?.descriptionWordLimit ??
+                25
+            ),
+            25
+          )
+        ),
+        5,
+        80
       ),
       priceFontSize: clamp(
         Math.round(
@@ -8667,6 +8738,8 @@ export default function JenksV2FrontPageManager() {
                         image: '',
                         tag: '',
                         title: 'New Featured Section',
+                        titleColor: '#ffffff',
+                        titleHoverColor: '#e66045',
                         description: '',
                         ctaText: 'View',
                         ctaLink: '/readytowear',
@@ -8823,6 +8896,42 @@ export default function JenksV2FrontPageManager() {
                           ...prev.featured,
                           cards: prev.featured.cards.map((entry, entryIndex) =>
                             entryIndex === index ? { ...entry, title: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Section Title Color
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.titleColor}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          ...prev.featured,
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, titleColor: event.target.value } : entry
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="md:col-span-2 text-[11px]">
+                  Section Title Hover Color
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={card.titleHoverColor}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        featured: {
+                          ...prev.featured,
+                          cards: prev.featured.cards.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, titleHoverColor: event.target.value } : entry
                           ),
                         },
                       }))
@@ -10051,6 +10160,32 @@ export default function JenksV2FrontPageManager() {
               />
             </label>
             <label className="text-xs">
+              Designer Name Text Color
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={spotlightConfig.designerNameColor}
+                onChange={(event) =>
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    designerNameColor: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Designer Name Hover Color
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={spotlightConfig.designerNameHoverColor}
+                onChange={(event) =>
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    designerNameHoverColor: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
               Specialty Text Size (px)
               <input
                 type="number"
@@ -10078,6 +10213,22 @@ export default function JenksV2FrontPageManager() {
                 }
               />
             </label>
+            {isRtwFtbTab ? (
+              <label className="text-xs">
+                Description Max Words
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={spotlightConfig.descriptionWordLimit ?? 25}
+                  onChange={(event) =>
+                    updateSpotlightConfig((current) => ({
+                      ...current,
+                      descriptionWordLimit: clamp(toNumber(event.target.value, current.descriptionWordLimit ?? 25), 5, 80),
+                    }))
+                  }
+                />
+              </label>
+            ) : null}
             {isRtwFtbTab ? (
               <label className="text-xs">
                 Price Text Size (px)
