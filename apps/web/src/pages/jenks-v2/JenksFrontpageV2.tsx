@@ -2137,6 +2137,12 @@ export default function JenksFrontpageV2() {
     };
   };
   const renderCategoryStepCards = (section: CategorySectionRuntime) => (
+    (() => {
+      const isCtwSection = String(section.key || '').trim().toUpperCase() === 'CTW';
+      const stepCardHoverClass = isCtwSection
+        ? 'hover:scale-[1.03] hover:z-10 hover:shadow-[0_28px_56px_rgba(0,0,0,0.52)]'
+        : 'hover:-translate-y-0.5 hover:shadow-[0_20px_38px_rgba(0,0,0,0.42)]';
+      return (
     <div
       className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden overflow-y-auto pr-1 md:block"
       style={{ width: `${section.stepCardPanelWidth}px` }}
@@ -2181,7 +2187,7 @@ export default function JenksFrontpageV2() {
             return (
               <div
                 key={step.id}
-                className="group relative overflow-hidden border backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_38px_rgba(0,0,0,0.42)]"
+                className={`group relative overflow-hidden border backdrop-blur-md transform-gpu transition-all duration-300 ${stepCardHoverClass}`}
                 style={{
                   ...categoryStepCardOverlayStyle(section),
                   borderRadius: '0.08rem',
@@ -2224,6 +2230,8 @@ export default function JenksFrontpageV2() {
           })}
       </div>
     </div>
+      );
+    })()
   );
 
   const featuredHrefForCountry = (key: 'RTW' | 'CTW' | 'FTB') => {
