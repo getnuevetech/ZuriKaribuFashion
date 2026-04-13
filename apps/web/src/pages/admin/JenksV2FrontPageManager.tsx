@@ -10646,6 +10646,22 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
             ) : null}
+            {isFtbTab ? (
+              <label className="text-xs">
+                FTB Card Image Height (px, 0 = auto)
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={spotlightConfig.imageHeightPx ?? 0}
+                  onChange={(event) =>
+                    updateSpotlightConfig((current) => ({
+                      ...current,
+                      imageHeightPx: clamp(toNumber(event.target.value, current.imageHeightPx ?? 0), 0, 2400),
+                    }))
+                  }
+                />
+              </label>
+            ) : null}
             <label className="text-xs">
               Country Text Size (px)
               <input
