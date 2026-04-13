@@ -10614,7 +10614,7 @@ export default function JenksV2FrontPageManager() {
                 }
               />
             </label>
-            {isFtbTab ? (
+            {isProductSpotlightTab ? (
               <label className="text-xs">
                 Section Height (px, 0 = default)
                 <input
@@ -10630,7 +10630,7 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
             ) : null}
-            {isFtbTab ? (
+            {isProductSpotlightTab ? (
               <label className="text-xs">
                 Column Height (px, 0 = section/default)
                 <input
@@ -10646,9 +10646,9 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
             ) : null}
-            {isFtbTab ? (
+            {isProductSpotlightTab ? (
               <label className="text-xs">
-                FTB Card Image Height (px, 0 = auto)
+                {isRtwTab ? 'RTW Card Image Height (px, 0 = auto)' : 'FTB Card Image Height (px, 0 = auto)'}
                 <input
                   type="number"
                   className="mt-1 w-full rounded border px-2 py-1.5"
