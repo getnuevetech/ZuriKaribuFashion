@@ -10614,54 +10614,52 @@ export default function JenksV2FrontPageManager() {
                 }
               />
             </label>
-            {isProductSpotlightTab ? (
-              <label className="text-xs">
-                Section Height (px, 0 = default)
-                <input
-                  type="number"
-                  className="mt-1 w-full rounded border px-2 py-1.5"
-                  value={spotlightConfig.sectionHeightPx ?? 0}
-                  onChange={(event) =>
-                    updateSpotlightConfig((current) => ({
-                      ...current,
-                      sectionHeightPx: clamp(toNumber(event.target.value, current.sectionHeightPx ?? 0), 0, 2400),
-                    }))
-                  }
-                />
-              </label>
-            ) : null}
-            {isProductSpotlightTab ? (
-              <label className="text-xs">
-                Column Height (px, 0 = section/default)
-                <input
-                  type="number"
-                  className="mt-1 w-full rounded border px-2 py-1.5"
-                  value={spotlightConfig.columnHeightPx ?? 0}
-                  onChange={(event) =>
-                    updateSpotlightConfig((current) => ({
-                      ...current,
-                      columnHeightPx: clamp(toNumber(event.target.value, current.columnHeightPx ?? 0), 0, 2400),
-                    }))
-                  }
-                />
-              </label>
-            ) : null}
-            {isProductSpotlightTab ? (
-              <label className="text-xs">
-                {isRtwTab ? 'RTW Card Image Height (px, 0 = auto)' : 'FTB Card Image Height (px, 0 = auto)'}
-                <input
-                  type="number"
-                  className="mt-1 w-full rounded border px-2 py-1.5"
-                  value={spotlightConfig.imageHeightPx ?? 0}
-                  onChange={(event) =>
-                    updateSpotlightConfig((current) => ({
-                      ...current,
-                      imageHeightPx: clamp(toNumber(event.target.value, current.imageHeightPx ?? 0), 0, 2400),
-                    }))
-                  }
-                />
-              </label>
-            ) : null}
+            <label className="text-xs">
+              Section Height (px, 0 = default)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={spotlightConfig.sectionHeightPx ?? 0}
+                onChange={(event) =>
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    sectionHeightPx: clamp(toNumber(event.target.value, current.sectionHeightPx ?? 0), 0, 2400),
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              Column Height (px, 0 = section/default)
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={spotlightConfig.columnHeightPx ?? 0}
+                onChange={(event) =>
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    columnHeightPx: clamp(toNumber(event.target.value, current.columnHeightPx ?? 0), 0, 2400),
+                  }))
+                }
+              />
+            </label>
+            <label className="text-xs">
+              {isRtwTab
+                ? 'RTW Card Image Height (px, 0 = auto)'
+                : isFtbTab
+                  ? 'FTB Card Image Height (px, 0 = auto)'
+                  : 'Card Image Height (px, 0 = auto)'}
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={spotlightConfig.imageHeightPx ?? 0}
+                onChange={(event) =>
+                  updateSpotlightConfig((current) => ({
+                    ...current,
+                    imageHeightPx: clamp(toNumber(event.target.value, current.imageHeightPx ?? 0), 0, 2400),
+                  }))
+                }
+              />
+            </label>
             <label className="text-xs">
               Country Text Size (px)
               <input

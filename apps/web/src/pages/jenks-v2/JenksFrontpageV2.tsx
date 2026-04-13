@@ -1568,6 +1568,9 @@ export default function JenksFrontpageV2() {
     if (target) window.location.assign(target);
   };
   const freshDropsStripRef = useRef<HTMLDivElement | null>(null);
+  const designerSpotlightStripRef = useRef<HTMLDivElement | null>(null);
+  const [designerCanScrollLeft, setDesignerCanScrollLeft] = useState(false);
+  const [designerCanScrollRight, setDesignerCanScrollRight] = useState(false);
   const rtwSpotlightStripRef = useRef<HTMLDivElement | null>(null);
   const [rtwCanScrollLeft, setRtwCanScrollLeft] = useState(false);
   const [rtwCanScrollRight, setRtwCanScrollRight] = useState(false);
@@ -5099,100 +5102,49 @@ export default function JenksFrontpageV2() {
       {/* SPOTLIGHT */}
       {isSectionVisible('DESIGNER_SPOTLIGHT') ? (
         <section
-          className={`grid ${HERO_HEIGHT_CLASS} grid-cols-1 gap-0 bg-[#101010] ${designerSpotlightColsClass}`}
-          style={{ order: getSectionOrder('DESIGNER_SPOTLIGHT') }}
+          className={`${HERO_HEIGHT_CLASS} bg-[#101010] ${designerSpotlightNeedsHorizontalScroll ? 'relative' : `grid grid-cols-1 gap-0 ${designerSpotlightColsClass}`}`}
+          style={{ order: getSectionOrder('DESIGNER_SPOTLIGHT'), minHeight: designerSpotlightSectionMinHeight }}
         >
-          {spotlightCards.map((spot) => (
-            <Link key={spot.id} to={spot.href} className="group relative overflow-hidden" data-kimi-anim="zoom-in">
-              <BrandImageWithFallback
-                src={spot.image}
-                alt={spot.title}
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                spinnerClassName="h-8 w-8"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
-              {spot.showTag ? (
-                <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
-                  {spot.tag}
-                </p>
-              ) : null}
-              {spot.showCountry ? (
-                <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
-                  {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
-                </p>
-              ) : null}
-              <div
-                className="absolute bottom-6 left-6 right-6 text-white"
-                style={{
-                  backgroundColor: spot.textBackgroundEnabled ? spot.textBackgroundColor : 'transparent',
-                  padding: spot.textBackgroundEnabled ? '10px 12px' : '0px',
-                  borderRadius: spot.textBackgroundEnabled ? '2px' : '0px',
-                }}
+          {designerSpotlightNeedsHorizontalScroll ? (
+            <>
+              <button
+                type="button"
+                onClick={() => scrollDesignerSpotlight('LEFT')}
+                disabled={!designerCanScrollLeft}
+                className="absolute left-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center border border-white/30 bg-black/45 text-white transition-colors hover:border-white/60 hover:bg-black/65 disabled:cursor-not-allowed disabled:opacity-40 md:inline-flex"
+                aria-label="Scroll designer spotlight left"
               >
-                {spot.showCountry ? (
-                  <p
-                    className="font-medium uppercase tracking-[0.08em] text-white/78"
-                    style={{ fontSize: `${designerSpotlightTypography.countryFontSize}px` }}
-                  >
-                    {spot.designerCountry || spot.tag}
-                  </p>
-                ) : null}
-                {spot.showDesignerName ? (
-                  <h3
-                    className="font-['Oswald'] font-bold uppercase leading-[0.95] text-[var(--spotlight-name-color)] transition-colors duration-300 group-hover:text-[var(--spotlight-name-hover-color)]"
-                    style={
-                      {
-                        fontSize: `${designerSpotlightTypography.nameFontSize}px`,
-                        '--spotlight-name-color': asString(designerSpotlightTypography.nameColor, '#ffffff'),
-                        '--spotlight-name-hover-color': asString(
-                          designerSpotlightTypography.nameHoverColor,
-                          asString(designerSpotlightTypography.nameColor, '#ffffff')
-                        ),
-                      } as CSSProperties
-                    }
-                  >
-                    {spot.designerName || spot.title}
-                  </h3>
-                ) : null}
-                {spot.showSpecialty ? (
-                  <p
-                    className="mt-2 leading-[1.25] text-white/78"
-                    style={{ fontSize: `${designerSpotlightTypography.specialtyFontSize}px` }}
-                  >
-                    {spot.designerSpecialty || 'Contemporary African Designer'}
-                  </p>
-                ) : null}
-                {spot.showDescription ? (
-                  <p
-                    className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
-                    style={{ fontSize: `${designerSpotlightTypography.descriptionFontSize}px` }}
-                  >
-                    {spot.description}
-                  </p>
-                ) : null}
-                <span
-                  className="relative mt-5 inline-flex items-center gap-3 border-[var(--cta-border-color)] pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-[var(--cta-text-color)] transition-colors duration-300 group-hover:border-[var(--cta-hover-border-color)] group-hover:text-[var(--cta-hover-text-color)]"
-                  style={buildCTAStyle(spot.ctaStyle, {
-                    ...DEFAULT_INLINE_CTA_STYLE,
-                    textColor: '#ffffff',
-                    hoverTextColor: '#ffffff',
-                    borderColor: 'transparent',
-                    hoverBorderColor: 'transparent',
-                  })}
-                  onMouseEnter={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, true)
-                  }
-                  onMouseLeave={(event) =>
-                    applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, false)
-                  }
-                >
-                  {spot.cta}
-                  <ArrowRight className="h-4 w-4" />
-                  <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
-                </span>
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollDesignerSpotlight('RIGHT')}
+                disabled={!designerCanScrollRight}
+                className="absolute right-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center border border-white/30 bg-black/45 text-white transition-colors hover:border-white/60 hover:bg-black/65 disabled:cursor-not-allowed disabled:opacity-40 md:inline-flex"
+                aria-label="Scroll designer spotlight right"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+              <div
+                ref={designerSpotlightStripRef}
+                className="flex h-full items-stretch overflow-x-auto scroll-smooth scrollbar-hide"
+                style={{ '--designer-card-basis': designerSpotlightCardBasis, minHeight: designerSpotlightSectionMinHeight } as CSSProperties}
+              >
+                {spotlightCards.map((spot) =>
+                  renderDesignerSpotlightCard(
+                    spot,
+                    `designer-${spot.id}`,
+                    'h-full shrink-0 basis-full self-stretch md:[flex-basis:var(--designer-card-basis)]',
+                    { minHeight: designerSpotlightCardMinHeight }
+                  )
+                )}
               </div>
-            </Link>
-          ))}
+            </>
+          ) : (
+            spotlightCards.map((spot) =>
+              renderDesignerSpotlightCard(spot, `designer-${spot.id}`, '', { minHeight: designerSpotlightCardMinHeight })
+            )
+          )}
         </section>
       ) : null}
 
