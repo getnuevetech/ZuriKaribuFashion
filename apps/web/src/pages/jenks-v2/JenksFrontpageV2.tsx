@@ -2464,6 +2464,40 @@ export default function JenksFrontpageV2() {
   );
   const spotlightCards = designerSpotlightModel.cards;
   const designerSpotlightColsClass = designerSpotlightModel.colsClass;
+  const designerSpotlightSectionHeightPx = Math.max(0, Math.round(asNumber(designerSpotlightModel.sectionHeightPx, 0)));
+  const designerSpotlightColumnHeightPx = Math.max(0, Math.round(asNumber(designerSpotlightModel.columnHeightPx, 0)));
+  const designerSpotlightSectionMinHeight =
+    designerSpotlightSectionHeightPx > 0 ? `${designerSpotlightSectionHeightPx}px` : '106vh';
+  const designerSpotlightCardMinHeight =
+    designerSpotlightColumnHeightPx > 0 ? `${designerSpotlightColumnHeightPx}px` : designerSpotlightSectionMinHeight;
+  const designerSpotlightImageHeightPx = Math.max(0, Math.round(asNumber(designerSpotlightModel.imageHeightPx, 0)));
+  const designerSpotlightImageHeight = designerSpotlightImageHeightPx > 0 ? `${designerSpotlightImageHeightPx}px` : '100%';
+  const designerSpotlightVisibleColumns = Math.max(1, Math.round(asNumber(designerSpotlightModel.columns, 3)));
+  const designerSpotlightNeedsHorizontalScroll = spotlightCards.length > designerSpotlightVisibleColumns;
+  const syncDesignerSpotlightScrollButtons = useCallback(() => {
+    const node = designerSpotlightStripRef.current;
+    if (!node || !designerSpotlightNeedsHorizontalScroll) {
+      setDesignerCanScrollLeft(false);
+      setDesignerCanScrollRight(false);
+      return;
+    }
+    const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+    setDesignerCanScrollLeft(node.scrollLeft > 4);
+    setDesignerCanScrollRight(node.scrollLeft < maxScrollLeft - 4);
+  }, [designerSpotlightNeedsHorizontalScroll]);
+  const scrollDesignerSpotlight = useCallback(
+    (direction: 'LEFT' | 'RIGHT') => {
+      const node = designerSpotlightStripRef.current;
+      if (!node) return;
+      const cardWidth = node.clientWidth / Math.max(1, designerSpotlightVisibleColumns);
+      node.scrollBy({
+        left: (direction === 'LEFT' ? -1 : 1) * cardWidth,
+        behavior: 'smooth',
+      });
+    },
+    [designerSpotlightVisibleColumns]
+  );
+  const designerSpotlightCardBasis = `${100 / designerSpotlightVisibleColumns}%`;
   const rtwFtbSpotlightCards = rtwFtbSpotlightModel.cards;
   const rtwFtbSpotlightColsClass = rtwFtbSpotlightModel.colsClass;
   const rtwFtbSpotlightTypography = rtwFtbSpotlightModel.typography;
@@ -3712,6 +3746,24 @@ export default function JenksFrontpageV2() {
     showCustomerReviewsSection,
   ]);
   useEffect(() => {
+    const node = designerSpotlightStripRef.current;
+    syncDesignerSpotlightScrollButtons();
+    if (!node || !designerSpotlightNeedsHorizontalScroll) return;
+    const handleScroll = () => syncDesignerSpotlightScrollButtons();
+    const handleResize = () => syncDesignerSpotlightScrollButtons();
+    node.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleResize);
+    return () => {
+      node.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [
+    designerSpotlightNeedsHorizontalScroll,
+    spotlightCards.length,
+    designerSpotlightVisibleColumns,
+    syncDesignerSpotlightScrollButtons,
+  ]);
+  useEffect(() => {
     const node = rtwSpotlightStripRef.current;
     syncRtwSpotlightScrollButtons();
     if (!node || !rtwSpotlightNeedsHorizontalScroll) return;
@@ -3765,6 +3817,105 @@ export default function JenksFrontpageV2() {
       style.remove();
     };
   }, []);
+
+  const renderDesignerSpotlightCard = (spot: any, key: string, cardClassName = '', cardStyle?: CSSProperties) => (
+    <Link
+      key={key}
+      to={spot.href}
+      className={`group relative block h-full w-full overflow-hidden ${cardClassName}`}
+      style={cardStyle}
+      data-kimi-anim="zoom-in"
+    >
+      <BrandImageWithFallback
+        src={spot.image}
+        alt={spot.title}
+        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+        style={{ height: designerSpotlightImageHeight }}
+        spinnerClassName="h-8 w-8"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
+      {spot.showTag ? (
+        <p className="absolute left-6 top-6 text-[12px] font-semibold uppercase tracking-[0.2em] text-black">
+          {spot.tag}
+        </p>
+      ) : null}
+      {spot.showCountry ? (
+        <p className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-xl">
+          {countryCodeToFlagEmoji(resolveDesignerCountryCode(spot.countryCode, spot.designerCountry))}
+        </p>
+      ) : null}
+      <div
+        className="absolute bottom-6 left-6 right-6 text-white"
+        style={{
+          backgroundColor: spot.textBackgroundEnabled ? spot.textBackgroundColor : 'transparent',
+          padding: spot.textBackgroundEnabled ? '10px 12px' : '0px',
+          borderRadius: spot.textBackgroundEnabled ? '2px' : '0px',
+        }}
+      >
+        {spot.showCountry ? (
+          <p
+            className="font-medium uppercase tracking-[0.08em] text-white/78"
+            style={{ fontSize: `${designerSpotlightTypography.countryFontSize}px` }}
+          >
+            {spot.designerCountry || spot.tag}
+          </p>
+        ) : null}
+        {spot.showDesignerName ? (
+          <h3
+            className="font-['Oswald'] font-bold uppercase leading-[0.95] text-[var(--spotlight-name-color)] transition-colors duration-300 group-hover:text-[var(--spotlight-name-hover-color)]"
+            style={
+              {
+                fontSize: `${designerSpotlightTypography.nameFontSize}px`,
+                '--spotlight-name-color': asString(designerSpotlightTypography.nameColor, '#ffffff'),
+                '--spotlight-name-hover-color': asString(
+                  designerSpotlightTypography.nameHoverColor,
+                  asString(designerSpotlightTypography.nameColor, '#ffffff')
+                ),
+              } as CSSProperties
+            }
+          >
+            {spot.designerName || spot.title}
+          </h3>
+        ) : null}
+        {spot.showSpecialty ? (
+          <p
+            className="mt-2 leading-[1.25] text-white/78"
+            style={{ fontSize: `${designerSpotlightTypography.specialtyFontSize}px` }}
+          >
+            {spot.designerSpecialty || 'Contemporary African Designer'}
+          </p>
+        ) : null}
+        {spot.showDescription ? (
+          <p
+            className="mt-3 max-w-[42ch] leading-[1.35] text-white/88"
+            style={{ fontSize: `${designerSpotlightTypography.descriptionFontSize}px` }}
+          >
+            {spot.description}
+          </p>
+        ) : null}
+        <span
+          className="relative mt-5 inline-flex items-center gap-3 border-[var(--cta-border-color)] pb-1 text-[clamp(18px,1.05vw,26px)] font-semibold uppercase tracking-[0.12em] text-[var(--cta-text-color)] transition-colors duration-300 group-hover:border-[var(--cta-hover-border-color)] group-hover:text-[var(--cta-hover-text-color)]"
+          style={buildCTAStyle(spot.ctaStyle, {
+            ...DEFAULT_INLINE_CTA_STYLE,
+            textColor: '#ffffff',
+            hoverTextColor: '#ffffff',
+            borderColor: 'transparent',
+            hoverBorderColor: 'transparent',
+          })}
+          onMouseEnter={(event) =>
+            applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, true)
+          }
+          onMouseLeave={(event) =>
+            applyHeroCtaHoverState(event.currentTarget, spot.ctaStyle, DEFAULT_INLINE_CTA_STYLE, false)
+          }
+        >
+          {spot.cta}
+          <ArrowRight className="h-4 w-4" />
+          <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-[#e66045] transition-all duration-300 group-hover:w-full" />
+        </span>
+      </div>
+    </Link>
+  );
 
   const renderRtwSpotlightCard = (spot: any, key: string, cardClassName = '', cardStyle?: CSSProperties) => (
     <Link
