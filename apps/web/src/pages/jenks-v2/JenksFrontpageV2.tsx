@@ -2297,6 +2297,10 @@ export default function JenksFrontpageV2() {
         0,
         Math.min(2400, Math.round(asNumber(cfg.columnHeightPx ?? cfg.cardHeightPx, 0)))
       );
+      const imageHeightPx = Math.max(
+        0,
+        Math.min(2400, Math.round(asNumber(cfg.imageHeightPx ?? cfg.cardImageHeightPx, 0)))
+      );
       const descriptionWordLimit = Math.max(
         5,
         Math.min(80, Math.round(asNumber(cfg.descriptionWordLimit, variant === 'DESIGNER' ? 25 : 25)))
@@ -2426,6 +2430,7 @@ export default function JenksFrontpageV2() {
         columns,
         sectionHeightPx,
         columnHeightPx,
+        imageHeightPx,
         typography,
         colsClass,
         cards: variant === 'FTB' ? source : source.slice(0, maxItems),
@@ -2464,6 +2469,8 @@ export default function JenksFrontpageV2() {
   const ftbSpotlightSectionMinHeight = ftbSpotlightSectionHeightPx > 0 ? `${ftbSpotlightSectionHeightPx}px` : '106vh';
   const ftbSpotlightCardMinHeight =
     ftbSpotlightColumnHeightPx > 0 ? `${ftbSpotlightColumnHeightPx}px` : ftbSpotlightSectionMinHeight;
+  const ftbSpotlightImageHeightPx = Math.max(0, Math.round(asNumber(ftbSpotlightModel.imageHeightPx, 0)));
+  const ftbSpotlightImageHeight = ftbSpotlightImageHeightPx > 0 ? `${ftbSpotlightImageHeightPx}px` : '100%';
   const ftbSpotlightVisibleColumns = Math.max(1, Math.round(asNumber(ftbSpotlightModel.columns, 3)));
   const ftbSpotlightNeedsHorizontalScroll = ftbSpotlightCards.length > ftbSpotlightVisibleColumns;
   const syncFtbSpotlightScrollButtons = useCallback(() => {
@@ -3714,6 +3721,7 @@ export default function JenksFrontpageV2() {
         src={spot.image}
         alt={spot.title}
         className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+        style={{ height: ftbSpotlightImageHeight }}
         spinnerClassName="h-8 w-8"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />

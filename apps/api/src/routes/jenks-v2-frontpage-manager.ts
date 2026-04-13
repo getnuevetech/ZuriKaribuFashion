@@ -423,6 +423,7 @@ type DesignerSpotlightSettings = {
   columns: number;
   sectionHeightPx?: number;
   columnHeightPx?: number;
+  imageHeightPx?: number;
   overlayEnabled?: boolean;
   overlayBackgroundColor?: string;
   countryFontSize: number;
@@ -1627,6 +1628,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       columns: 3,
       sectionHeightPx: 0,
       columnHeightPx: 0,
+      imageHeightPx: 0,
       overlayEnabled: true,
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
@@ -1672,6 +1674,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       columns: 3,
       sectionHeightPx: 0,
       columnHeightPx: 0,
+      imageHeightPx: 0,
       overlayEnabled: true,
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
@@ -1723,6 +1726,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       columns: 3,
       sectionHeightPx: 0,
       columnHeightPx: 0,
+      imageHeightPx: 0,
       overlayEnabled: true,
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
@@ -2875,6 +2879,16 @@ const normalizeDesignerSpotlight = (
         getNumber((row as Record<string, unknown>).columnHeightPx) ??
           getNumber((row as Record<string, unknown>).cardHeightPx) ??
           fallback.columnHeightPx ??
+          0
+      ),
+      0,
+      2400
+    ),
+    imageHeightPx: clamp(
+      Math.round(
+        getNumber((row as Record<string, unknown>).imageHeightPx) ??
+          getNumber((row as Record<string, unknown>).imageMinHeightPx) ??
+          fallback.imageHeightPx ??
           0
       ),
       0,

@@ -417,6 +417,7 @@ type DesignerSpotlight = {
   columns: number;
   sectionHeightPx?: number;
   columnHeightPx?: number;
+  imageHeightPx?: number;
   countryFontSize: number;
   designerNameFontSize: number;
   designerNameColor: string;
@@ -1696,6 +1697,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     columns: 3,
     sectionHeightPx: 0,
     columnHeightPx: 0,
+    imageHeightPx: 0,
     countryFontSize: 22,
     designerNameFontSize: 52,
     designerNameColor: '#ffffff',
@@ -1741,6 +1743,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     columns: 3,
     sectionHeightPx: 0,
     columnHeightPx: 0,
+    imageHeightPx: 0,
     countryFontSize: 22,
     designerNameFontSize: 52,
     designerNameColor: '#ffffff',
@@ -1792,6 +1795,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     columns: 3,
     sectionHeightPx: 0,
     columnHeightPx: 0,
+    imageHeightPx: 0,
     countryFontSize: 22,
     designerNameFontSize: 52,
     designerNameColor: '#ffffff',
@@ -2043,6 +2047,7 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
       columns: ds.columns,
       sectionHeightPx: ds.sectionHeightPx,
       columnHeightPx: ds.columnHeightPx,
+      imageHeightPx: ds.imageHeightPx,
       countryFontSize: ds.countryFontSize,
       nameFontSize: ds.designerNameFontSize,
       nameColor: ds.designerNameColor,
@@ -3065,6 +3070,22 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         0,
         2400
       ),
+      imageHeightPx: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (designerSpotlightRaw as Record<string, unknown>).imageHeightPx ??
+                (designerSpotlightRaw as Record<string, unknown>).cardImageHeightPx ??
+                (designerSpotlight as DesignerSpotlight | undefined)?.imageHeightPx ??
+                DEFAULT_CONFIG.designerSpotlight.imageHeightPx ??
+                0
+            ),
+            DEFAULT_CONFIG.designerSpotlight.imageHeightPx ?? 0
+          )
+        ),
+        0,
+        2400
+      ),
       countryFontSize: clamp(
         Math.round(
           toNumber(
@@ -3223,6 +3244,22 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
                 0
             ),
             DEFAULT_CONFIG.rtwFtb.columnHeightPx ?? 0
+          )
+        ),
+        0,
+        2400
+      ),
+      imageHeightPx: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (rtwFtbRaw as Record<string, unknown>).imageHeightPx ??
+                (rtwFtbRaw as Record<string, unknown>).cardImageHeightPx ??
+                (rtwFtb as DesignerSpotlight | undefined)?.imageHeightPx ??
+                DEFAULT_CONFIG.rtwFtb.imageHeightPx ??
+                0
+            ),
+            DEFAULT_CONFIG.rtwFtb.imageHeightPx ?? 0
           )
         ),
         0,
@@ -3436,6 +3473,22 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
                 0
             ),
             DEFAULT_CONFIG.ftbSpotlight.columnHeightPx ?? 0
+          )
+        ),
+        0,
+        2400
+      ),
+      imageHeightPx: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (ftbSpotlightRaw as Record<string, unknown>).imageHeightPx ??
+                (ftbSpotlightRaw as Record<string, unknown>).cardImageHeightPx ??
+                (ftbSpotlight as DesignerSpotlight | undefined)?.imageHeightPx ??
+                DEFAULT_CONFIG.ftbSpotlight.imageHeightPx ??
+                0
+            ),
+            DEFAULT_CONFIG.ftbSpotlight.imageHeightPx ?? 0
           )
         ),
         0,
