@@ -393,8 +393,9 @@ type DesignerSpotlightCard = {
   description: string;
   ctaText: string;
   ctaLink: string;
-  ctaMode: 'URL' | 'PAGE';
+  ctaMode: 'URL' | 'PAGE' | 'PRODUCT_ID';
   ctaPageKey?: string;
+  ctaProductId?: string;
   ctaStyle: CTAStyle;
   enabled: boolean;
   displayOrder: number;
@@ -653,8 +654,12 @@ const resolvePageHrefForKey = (pageKey: unknown, fallbackHref: string) => {
   return mapLegacyManagerHref(fallbackHref);
 };
 
-const normalizeCtaMode = (value: unknown, fallback: 'URL' | 'PAGE' = 'PAGE'): 'URL' | 'PAGE' =>
-  String(value || fallback).trim().toUpperCase() === 'PAGE' ? 'PAGE' : 'URL';
+const normalizeCtaMode = (value: unknown, fallback: 'URL' | 'PAGE' | 'PRODUCT_ID' = 'PAGE'): 'URL' | 'PAGE' | 'PRODUCT_ID' => {
+  const token = String(value || fallback).trim().toUpperCase();
+  if (token === 'PAGE') return 'PAGE';
+  if (token === 'PRODUCT_ID') return 'PRODUCT_ID';
+  return 'URL';
+};
 
 const ROUTE_OPTIONS: RouteOption[] = [
   { key: 'HOME', label: 'Home', href: '/' },
@@ -2337,6 +2342,7 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       specialty: String(item.specialty || '').slice(0, 120),
       ctaMode: normalizeCtaMode(item.ctaMode, 'PAGE'),
       ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
+      ctaProductId: '',
       ctaLink:
         normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
           ? resolvePageHrefForKey(item.ctaPageKey, '/customtowear')
@@ -2358,9 +2364,14 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       specialty: String(item.specialty || '').slice(0, 120),
       ctaMode: normalizeCtaMode(item.ctaMode, 'PAGE'),
       ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
+      ctaProductId: String(item.ctaProductId || '').trim().slice(0, 120),
       ctaLink:
         normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
           ? resolvePageHrefForKey(item.ctaPageKey, '/readytowear')
+          : normalizeCtaMode(item.ctaMode, 'PAGE') === 'PRODUCT_ID'
+            ? String(item.ctaProductId || '').trim()
+              ? `/readytowear/${String(item.ctaProductId || '').trim()}`
+              : '/readytowear'
           : normalizeManagerHref(item.ctaLink, '/readytowear'),
     })),
   };
@@ -2379,9 +2390,14 @@ const sanitizeConfigHrefs = (input: JenksV2FrontpageConfig): JenksV2FrontpageCon
       specialty: String(item.specialty || '').slice(0, 120),
       ctaMode: normalizeCtaMode(item.ctaMode, 'PAGE'),
       ctaPageKey: String(item.ctaPageKey || '').trim().toUpperCase(),
+      ctaProductId: String(item.ctaProductId || '').trim().slice(0, 120),
       ctaLink:
         normalizeCtaMode(item.ctaMode, 'PAGE') === 'PAGE'
           ? resolvePageHrefForKey(item.ctaPageKey, '/fabricstobuy')
+          : normalizeCtaMode(item.ctaMode, 'PAGE') === 'PRODUCT_ID'
+            ? String(item.ctaProductId || '').trim()
+              ? `/fabricstobuy/${String(item.ctaProductId || '').trim()}`
+              : '/fabricstobuy'
           : normalizeManagerHref(item.ctaLink, '/fabricstobuy'),
     })),
   };
@@ -3199,6 +3215,7 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             specialty: String((card as DesignerSpotlightCard)?.specialty || fallbackSpotlight.specialty || '')
               .slice(0, 120),
             ctaMode: normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackSpotlight.ctaMode),
+            ctaProductId: '',
             ctaPageKey: ((): string => {
               const explicit = String((card as DesignerSpotlightCard)?.ctaPageKey || fallbackSpotlight.ctaPageKey || '').trim().toUpperCase();
               if (explicit) return explicit;
@@ -3426,6 +3443,11 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
               120
             ),
             ctaMode: normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackRtwFtbSpotlight.ctaMode),
+            ctaProductId: String(
+              (card as DesignerSpotlightCard)?.ctaProductId || fallbackRtwFtbSpotlight.ctaProductId || ''
+            )
+              .trim()
+              .slice(0, 120),
             ctaPageKey: ((): string => {
               const explicit = String((card as DesignerSpotlightCard)?.ctaPageKey || fallbackRtwFtbSpotlight.ctaPageKey || '')
                 .trim()
@@ -3439,6 +3461,9 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
                     (card as DesignerSpotlightCard)?.ctaPageKey,
                     (card as DesignerSpotlightCard)?.ctaLink || fallbackRtwFtbSpotlight.ctaLink
                   )
+                : normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackRtwFtbSpotlight.ctaMode) ===
+                    'PRODUCT_ID'
+                  ? ''
                 : normalizeManagerHref((card as DesignerSpotlightCard)?.ctaLink, fallbackRtwFtbSpotlight.ctaLink),
             ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackRtwFtbSpotlight.ctaStyle),
           }))
@@ -3655,6 +3680,11 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
               120
             ),
             ctaMode: normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackFtbSpotlight.ctaMode),
+            ctaProductId: String(
+              (card as DesignerSpotlightCard)?.ctaProductId || fallbackFtbSpotlight.ctaProductId || ''
+            )
+              .trim()
+              .slice(0, 120),
             ctaPageKey: ((): string => {
               const explicit = String((card as DesignerSpotlightCard)?.ctaPageKey || fallbackFtbSpotlight.ctaPageKey || '')
                 .trim()
@@ -3668,6 +3698,9 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
                     (card as DesignerSpotlightCard)?.ctaPageKey,
                     (card as DesignerSpotlightCard)?.ctaLink || fallbackFtbSpotlight.ctaLink
                   )
+                : normalizeCtaMode((card as DesignerSpotlightCard)?.ctaMode, fallbackFtbSpotlight.ctaMode) ===
+                    'PRODUCT_ID'
+                  ? ''
                 : normalizeManagerHref((card as DesignerSpotlightCard)?.ctaLink, fallbackFtbSpotlight.ctaLink),
             ctaStyle: normalizeCtaStyle((card as DesignerSpotlightCard)?.ctaStyle, fallbackFtbSpotlight.ctaStyle),
           }))
@@ -11136,7 +11169,12 @@ export default function JenksV2FrontPageManager() {
                           ...prev[spotlightConfigKey],
                           cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) => {
                             if (entryIndex !== index) return entry;
-                            const nextMode: 'URL' | 'PAGE' = event.target.value === 'URL' ? 'URL' : 'PAGE';
+                            const nextMode: 'URL' | 'PAGE' | 'PRODUCT_ID' =
+                              event.target.value === 'URL'
+                                ? 'URL'
+                                : event.target.value === 'PRODUCT_ID'
+                                  ? 'PRODUCT_ID'
+                                  : 'PAGE';
                             if (nextMode === 'PAGE') {
                               const fallbackRoute =
                                 pageRouteOptions.find((route) => route.key === (entry.ctaPageKey || 'CUSTOM_TO_WEAR')) ||
@@ -11145,13 +11183,24 @@ export default function JenksV2FrontPageManager() {
                               return {
                                 ...entry,
                                 ctaMode: 'PAGE',
+                                ctaProductId: '',
                                 ctaPageKey: fallbackRoute?.key || 'CUSTOM_TO_WEAR',
                                 ctaLink: fallbackRoute?.href || '/customtowear',
+                              };
+                            }
+                            if (nextMode === 'PRODUCT_ID') {
+                              return {
+                                ...entry,
+                                ctaMode: 'PRODUCT_ID',
+                                ctaPageKey: '',
+                                ctaProductId: String(entry.ctaProductId || '').trim(),
+                                ctaLink: '',
                               };
                             }
                             return {
                               ...entry,
                               ctaMode: 'URL',
+                              ctaProductId: '',
                               ctaPageKey: '',
                             };
                           }),
@@ -11160,11 +11209,16 @@ export default function JenksV2FrontPageManager() {
                     }
                   >
                     <option value="PAGE">Pages dropdown</option>
+                    {isProductSpotlightTab ? <option value="PRODUCT_ID">Product ID</option> : null}
                     <option value="URL">Custom URL</option>
                   </select>
                 </label>
                 <label className="md:col-span-2 text-[11px]">
-                  {(card.ctaMode || 'PAGE') === 'PAGE' ? 'CTA Page' : 'CTA URL'}
+                  {(card.ctaMode || 'PAGE') === 'PAGE'
+                    ? 'CTA Page'
+                    : (card.ctaMode || 'PAGE') === 'PRODUCT_ID'
+                      ? 'CTA Product ID'
+                      : 'CTA URL'}
                   {(card.ctaMode || 'PAGE') === 'PAGE' ? (
                     <select
                       className="mt-1 w-full rounded border px-2 py-1 text-xs"
@@ -11194,6 +11248,25 @@ export default function JenksV2FrontPageManager() {
                         </option>
                       ))}
                     </select>
+                  ) : (card.ctaMode || 'PAGE') === 'PRODUCT_ID' ? (
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={String(card.ctaProductId || '')}
+                      placeholder="Enter Product ID"
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          [spotlightConfigKey]: {
+                            ...prev[spotlightConfigKey],
+                            cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, ctaMode: 'PRODUCT_ID', ctaPageKey: '', ctaProductId: event.target.value }
+                                : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
                   ) : (
                     <input
                       className="mt-1 w-full rounded border px-2 py-1 text-xs"
@@ -11206,7 +11279,7 @@ export default function JenksV2FrontPageManager() {
                             ...prev[spotlightConfigKey],
                             cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
                               entryIndex === index
-                                ? { ...entry, ctaMode: 'URL', ctaPageKey: '', ctaLink: event.target.value }
+                                ? { ...entry, ctaMode: 'URL', ctaPageKey: '', ctaProductId: '', ctaLink: event.target.value }
                                 : entry
                             ),
                           },

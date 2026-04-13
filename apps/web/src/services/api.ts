@@ -6508,6 +6508,30 @@ const adminApi = {
       };
     }>('/admin/product-labels'),
 
+  getProductSkuSettings: () =>
+    apiService.get<{
+      success: boolean;
+      data: {
+        enabled: boolean;
+        serialLength: number;
+        prefixes: {
+          READY_TO_WEAR: string;
+          FABRIC: string;
+          DESIGN: string;
+        };
+      };
+    }>('/admin/product-sku-settings'),
+
+  updateProductSkuSettings: (payload: {
+    enabled?: boolean;
+    serialLength?: number;
+    prefixes?: {
+      READY_TO_WEAR?: string;
+      FABRIC?: string;
+      DESIGN?: string;
+    };
+  }) => apiService.put<{ success: boolean; data: any; message?: string }>('/admin/product-sku-settings', payload),
+
   updateProductLabelsSettings: (payload: {
     newTagDays: number;
     autoConditions?: {

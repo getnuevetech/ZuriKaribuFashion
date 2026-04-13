@@ -180,6 +180,8 @@ const parseFilterTokens = (value: string, options: string[]) => {
   const exactOption = (Array.isArray(options) ? options : []).find((option) => normalizeToken(option) === normalizeToken(raw));
   if (exactOption) return [exactOption];
 
+  if (/\$|\d|[-–+]/.test(raw)) return [raw];
+
   const byWhitespace = raw
     .split(/\s+/)
     .map((entry) => entry.trim())

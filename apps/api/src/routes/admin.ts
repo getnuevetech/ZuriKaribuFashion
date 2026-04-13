@@ -39,6 +39,7 @@ import { buildPasswordPolicyErrorMessage, evaluatePasswordSecurity } from '../ut
 import { readProductAutomationOutcomesForProducts } from '../utils/automation-approval';
 import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
 import { isSmtpConfigured, readSmtpSettings, sendEmailWithRuntimeSmtp } from '../utils/smtp-settings';
+import { generateProductSku, normalizeProductSkuSettings, readProductSkuSettings, saveProductSkuSettings, type ProductSkuSettings } from '../utils/product-sku';
 
 const router = Router();
 const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
@@ -463,6 +464,7 @@ const ADMIN_READY_TO_WEAR_SIZES_DEFAULTS = {
   sizes: [...DEFAULT_READY_TO_WEAR_SIZES],
   minVariantStock: 2,
 };
+const ADMIN_PRODUCT_SKU_DEFAULTS: ProductSkuSettings = normalizeProductSkuSettings({});
 const ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS = {
   title: 'Ready-To-Wear Size Guide',
   content:
@@ -552,6 +554,17 @@ const adminReadyToWearSizesUpdateSchema = z.object({
 const adminReadyToWearSizeGuideUpdateSchema = z.object({
   title: z.string().trim().min(3).max(120),
   content: z.string().trim().min(20).max(6000),
+});
+const adminProductSkuSettingsUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  serialLength: z.coerce.number().int().min(4).max(12).optional(),
+  prefixes: z
+    .object({
+      READY_TO_WEAR: z.string().trim().min(1).max(4).optional(),
+      FABRIC: z.string().trim().min(1).max(4).optional(),
+      DESIGN: z.string().trim().min(1).max(4).optional(),
+    })
+    .optional(),
 });
 const adminProductLabelUpdateSchema = z.object({
   newTagDays: z.coerce.number().int().min(1).max(120),
@@ -1295,6 +1308,16 @@ const saveAdminReadyToWearSizesSettings = async (input: unknown) => {
     HOMEPAGE_READY_TO_WEAR_SIZES_SETTINGS_KEY,
     payload
   );
+  return merged;
+};
+const readAdminProductSkuSettings = async () => {
+  const bundle = await readProductSkuSettings();
+  return { settings: bundle.settings };
+};
+const saveAdminProductSkuSettings = async (input: unknown) => {
+  const parsed = adminProductSkuSettingsUpdateSchema.parse(input);
+  const merged = normalizeProductSkuSettings(parsed);
+  await saveProductSkuSettings(merged);
   return merged;
 };
 const readAdminReadyToWearSizeGuideSettings = async () => {
@@ -4971,6 +4994,45 @@ router.patch('/ready-to-wear-size-guide', authorizePermissions(Permissions.MEASU
   }
 });
 
+router.get('/product-sku-settings', authorizePermissions(Permissions.PRODUCTS_MANAGE), async (_req, res) => {
+  try {
+    const { settings } = await readAdminProductSkuSettings();
+    res.json({
+      success: true,
+      data: settings,
+    });
+  } catch (error) {
+    console.error('Error fetching product SKU settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch product SKU settings.' });
+  }
+});
+
+router.put('/product-sku-settings', authorizePermissions(Permissions.PRODUCTS_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminProductSkuSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating product SKU settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update product SKU settings.' });
+  }
+});
+
+router.patch('/product-sku-settings', authorizePermissions(Permissions.PRODUCTS_MANAGE), async (req, res) => {
+  try {
+    const settings = await saveAdminProductSkuSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating product SKU settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update product SKU settings.' });
+  }
+});
+
 router.get('/product-labels', authorizePermissions(Permissions.PRODUCTS_MANAGE), async (_req, res) => {
   try {
     const { settings } = await readAdminProductLabelSettings();
@@ -5461,7 +5523,8 @@ router.get('/products', async (req, res, next) => {
     const pagination = parsePagination(query.page, query.limit, 20);
     const search = String(query.search || '').trim();
 
-    const [fabrics, designs, readyToWear] = await Promise.all([
+    const [{ settings: skuSettings }, fabrics, designs, readyToWear] = await Promise.all([
+      readAdminProductSkuSettings(),
       !query.type || query.type === ProductType.FABRIC
         ? prisma.fabric.findMany({
             where: {
@@ -5545,9 +5608,18 @@ router.get('/products', async (req, res, next) => {
       }),
     ]);
 
+    const generateSkuFor = (productType: 'READY_TO_WEAR' | 'FABRIC' | 'DESIGN', productId: string, existingSku?: string | null) =>
+      generateProductSku({
+        productType,
+        productId,
+        existingSku,
+        settings: skuSettings,
+      });
+
     const rows = [
       ...fabrics.map((item) => ({
         id: item.id,
+        sku: generateSkuFor('FABRIC', item.id),
         type: ProductType.FABRIC,
         name: item.name,
         description: item.description,
@@ -5574,6 +5646,7 @@ router.get('/products', async (req, res, next) => {
       })),
       ...designs.map((item) => ({
         id: item.id,
+        sku: generateSkuFor('DESIGN', item.id),
         type: ProductType.DESIGN,
         name: item.name,
         description: item.description,
@@ -5597,6 +5670,7 @@ router.get('/products', async (req, res, next) => {
       })),
       ...readyToWear.map((item) => ({
         id: item.id,
+        sku: generateSkuFor('READY_TO_WEAR', item.id),
         type: ProductType.READY_TO_WEAR,
         name: item.name,
         description: item.description,

@@ -34,6 +34,7 @@ import {
   saveProductAutomationOutcome,
 } from '../utils/automation-approval';
 import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
+import { generateProductSku, readProductSkuSettings } from '../utils/product-sku';
 
 const router = Router();
 let sellerGovernanceSchemaEnsured = false;
@@ -969,6 +970,7 @@ router.post('/fabrics', async (req, res, next) => {
     });
     const finalPrice = await computeFinalFabricPrice(pricing.usdPrice, profile.country);
 
+    const { settings: skuSettings } = await readProductSkuSettings();
     const fabric = await prisma.fabric.create({
       data: {
         sellerId: profile.id,
@@ -1143,11 +1145,18 @@ router.post('/fabrics', async (req, res, next) => {
       });
     }
 
+    const fabricSku = generateProductSku({
+      productType: 'FABRIC',
+      productId: fabric.id,
+      settings: skuSettings,
+    });
+
     res.status(201).json({
       success: true,
       message: responseMessage,
       data: {
         ...fabric,
+        sku: fabricSku,
         status: responseStatus,
         isAvailable: responseAvailability,
         predominantColor: data.predominantColor ? String(data.predominantColor).trim().toUpperCase() : null,

@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, ProductStatus } from '../db';
 import { applyActivePricingRules, readActivePricingRules, type ActivePricingRule } from './pricing-rules';
+import { generateProductSku, readProductSkuSettings } from './product-sku';
 
 export const CATEGORY_PAGE_V2_TYPES = [
   'READY_TO_WEAR',
@@ -95,6 +96,7 @@ type CategoryPageV2DetailViewSettings = {
 export type CategoryPageV2Product = {
   id: string;
   sourceType: 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
+  sku?: string;
   name: string;
   description?: string;
   image: string;
@@ -613,11 +615,38 @@ const toPriceBucket = (value: number) => {
 const parsePriceBucket = (token: string): { min?: number; max?: number } => {
   const value = String(token || '').trim();
   if (!value) return {};
-  if (value === 'Under $100') return { max: 100 };
-  if (value === '$100 - $249') return { min: 100, max: 250 };
-  if (value === '$250 - $499') return { min: 250, max: 500 };
-  if (value === '$500 - $999') return { min: 500, max: 1000 };
-  if (value === '$1000+') return { min: 1000 };
+  const normalized = value
+    .toLowerCase()
+    .replace(/usd/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (normalized === 'under $100' || normalized === 'under 100' || normalized === '$0 - $100' || normalized === '0-100') {
+    return { max: 100 };
+  }
+  if (normalized === '$100 - $249' || normalized === '$100-$249' || normalized === '$100 - $300' || normalized === '$100-$300') {
+    return { min: 100, max: normalized.includes('300') ? 301 : 250 };
+  }
+  if (normalized === '$250 - $499' || normalized === '$250-$499' || normalized === '$300 - $500' || normalized === '$300-$500') {
+    return { min: normalized.includes('$300') ? 300 : 250, max: 500 };
+  }
+  if (normalized === '$500 - $999' || normalized === '$500-$999' || normalized === '$500+' || normalized === '$500 +' || normalized === '500+') {
+    if (normalized.includes('999')) return { min: 500, max: 1000 };
+    return { min: 500 };
+  }
+  if (normalized === '$1000+' || normalized === '$1000 +' || normalized === '1000+') return { min: 1000 };
+  const underMatch = normalized.match(/^under\s*\$?\s*(\d+(?:\.\d+)?)$/i);
+  if (underMatch) return { max: Number(underMatch[1]) };
+  const plusMatch = normalized.match(/^\$?\s*(\d+(?:\.\d+)?)\s*\+$/);
+  if (plusMatch) return { min: Number(plusMatch[1]) };
+  const rangeMatch = normalized.match(/^\$?\s*(\d+(?:\.\d+)?)\s*[-–]\s*\$?\s*(\d+(?:\.\d+)?)$/);
+  if (rangeMatch) {
+    const min = Number(rangeMatch[1]);
+    const max = Number(rangeMatch[2]);
+    if (Number.isFinite(min) && Number.isFinite(max) && max > min) {
+      // Make upper-bound inclusive for shopper-facing labels.
+      return { min, max: max + 1 };
+    }
+  }
   return {};
 };
 
@@ -1010,8 +1039,11 @@ const mapDesign = (row: any): CategoryPageV2Product => ({
 });
 
 const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promise<CategoryPageV2Product[]> => {
+  const includeReady = pageType === 'READY_TO_WEAR' || pageType === 'SHOP' || pageType === 'COUNTRY';
+  const includeFabric = pageType === 'FABRIC_TO_BUY' || pageType === 'SHOP' || pageType === 'COUNTRY';
+  const includeDesign = pageType === 'CUSTOM_TO_WEAR' || pageType === 'SHOP' || pageType === 'COUNTRY';
   const readyPromise =
-    pageType === 'FABRIC_TO_BUY'
+    !includeReady
       ? Promise.resolve([])
       : prisma.readyToWear.findMany({
           where: {
@@ -1039,7 +1071,7 @@ const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promi
           take: 400,
         });
   const fabricPromise =
-    pageType === 'READY_TO_WEAR' || pageType === 'CUSTOM_TO_WEAR'
+    !includeFabric
       ? Promise.resolve([])
       : prisma.fabric.findMany({
           where: {
@@ -1065,7 +1097,7 @@ const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promi
           take: 400,
         });
   const designPromise =
-    pageType === 'READY_TO_WEAR' || pageType === 'FABRIC_TO_BUY'
+    !includeDesign
       ? Promise.resolve([])
       : prisma.design.findMany({
           where: {
@@ -1091,13 +1123,15 @@ const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promi
           take: 400,
         });
 
-  const [readyRows, fabricRows, designRows, pricingRules, labelSettings] = await Promise.all([
+  const [readyRows, fabricRows, designRows, pricingRules, labelSettings, skuSettingsBundle] = await Promise.all([
     readyPromise,
     fabricPromise,
     designPromise,
     readActivePricingRules(),
     readProductLabelSettings(),
+    readProductSkuSettings(),
   ]);
+  const skuSettings = skuSettingsBundle.settings;
   const markdownRules = extractMarkdownRules(pricingRules);
 
   const readyProducts = (readyRows as any[]).map((row) => {
@@ -1133,6 +1167,7 @@ const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promi
     });
     return {
       ...base,
+      sku: generateProductSku({ productType: 'READY_TO_WEAR', productId: base.id, settings: skuSettings }),
       priceUsd: Math.max(0, adjustedPrice),
       productLabels: toCardLabelPayload(productLabels),
     };
@@ -1160,6 +1195,7 @@ const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promi
     });
     return {
       ...base,
+      sku: generateProductSku({ productType: 'FABRIC', productId: base.id, settings: skuSettings }),
       priceUsd: Math.max(0, adjustedPrice),
       productLabels: toCardLabelPayload(productLabels),
     };
@@ -1187,6 +1223,7 @@ const loadRawProducts = async (pageType: CategoryPageV2Type, search = ''): Promi
     });
     return {
       ...base,
+      sku: generateProductSku({ productType: 'DESIGN', productId: base.id, settings: skuSettings }),
       priceUsd: Math.max(0, adjustedPrice),
       productLabels: toCardLabelPayload(productLabels),
     };

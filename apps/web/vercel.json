@@ -13,8 +13,6 @@
     { "source": "/jenks/", "destination": "/", "permanent": false },
     { "source": "/main", "destination": "/", "permanent": false },
     { "source": "/main/", "destination": "/", "permanent": false },
-    { "source": "/shop", "destination": "/ready-to-wear", "permanent": false },
-    { "source": "/shop/", "destination": "/ready-to-wear", "permanent": false },
     {
       "source": "/login",
       "destination": "/auth/login",

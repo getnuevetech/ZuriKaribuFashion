@@ -46,6 +46,7 @@ import {
   saveProductAutomationOutcome,
 } from '../utils/automation-approval';
 import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
+import { generateProductSku, readProductSkuSettings } from '../utils/product-sku';
 
 const router = Router();
 let designerGovernanceSchemaEnsured = false;
@@ -1649,6 +1650,7 @@ router.post('/designs', async (req, res, next) => {
     });
     const finalPrice = await computeFinalDesignPrice(pricing.usdPrice, profile.country);
 
+    const { settings: skuSettings } = await readProductSkuSettings();
     const design = await prisma.design.create({
       data: {
         designerId: profile.id,
@@ -1827,11 +1829,18 @@ router.post('/designs', async (req, res, next) => {
       });
     }
 
+    const designSku = generateProductSku({
+      productType: 'DESIGN',
+      productId: design.id,
+      settings: skuSettings,
+    });
+
     res.status(201).json({
       success: true,
       message: responseMessage,
       data: {
         ...design,
+        sku: designSku,
         status: responseStatus,
         isAvailable: responseAvailability,
         predominantColor: String(data.predominantColor || '').trim().toUpperCase() || null,
@@ -2392,6 +2401,7 @@ router.post('/ready-to-wear', async (req, res, next) => {
       localPriceInput: data.basePrice,
       requestedCurrencyCode: data.priceCurrencyCode,
     });
+    const { settings: skuSettings } = await readProductSkuSettings();
     const product = await prisma.readyToWear.create({
       data: {
         designerId: profile.id,
@@ -2568,11 +2578,18 @@ router.post('/ready-to-wear', async (req, res, next) => {
       });
     }
 
+    const readyToWearSku = generateProductSku({
+      productType: 'READY_TO_WEAR',
+      productId: product.id,
+      settings: skuSettings,
+    });
+
     res.status(201).json({
       success: true,
       message: responseMessage,
       data: {
         ...product,
+        sku: readyToWearSku,
         materialTypeId: product.materialType?.id || product.materialTypeId || null,
         materialTypeName: product.materialType?.name || 'Material',
         fabricCategoryId: product.fabricCategory?.id || product.fabricCategoryId || null,

@@ -133,7 +133,7 @@ type FeaturedTile = {
   productGroup: 'ALL' | 'RTW' | 'CTW' | 'FTB';
   ctaStyle?: CTAStyle;
 };
-type CtaMode = 'URL' | 'PAGE';
+type CtaMode = 'URL' | 'PAGE' | 'PRODUCT_ID';
 type FeaturedCategoryKey = 'RTW' | 'CTW' | 'FTB';
 type FeaturedLayout = {
   rows: number;
@@ -634,6 +634,15 @@ const mapSourceCategoryToDetailHref = (
   if (category === 'RTW') return `/readytowear/${safeId}`;
   if (category === 'CTW') return `/customtowear/${safeId}`;
   return `/fabricstobuy/${safeId}`;
+};
+
+const resolveSpotlightProductHref = (fallbackHref: string, productId: string) => {
+  const safeId = asString(productId, '').trim();
+  if (!safeId) return toSafeInternalHref(fallbackHref);
+  const fallback = String(fallbackHref || '').toLowerCase();
+  if (fallback.includes('/fabricstobuy')) return `/fabricstobuy/${safeId}`;
+  if (fallback.includes('/customtowear')) return `/customtowear/${safeId}`;
+  return `/readytowear/${safeId}`;
 };
 
 const resolveManagerImage = (value: unknown, fallback = '') => {
@@ -1854,7 +1863,7 @@ export default function JenksFrontpageV2() {
     return rows.map((row) => ({
       range: asString(row.priceLabel, asString(row.title, '$0 - $100')),
       sub: asString(row.description, ''),
-      href: buildShopFilterHref('price', asString(row.title, asString(row.priceLabel, '$0 - $100'))),
+      href: buildShopFilterHref('price', asString(row.priceLabel, asString(row.title, '$0 - $100'))),
       Icon: iconFromKey(row.icon, Tag),
       titleFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.titleFontSize, 24)))),
       descriptionFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.descriptionFontSize, 14)))),
@@ -2281,10 +2290,15 @@ export default function JenksFrontpageV2() {
   }, [freshDropsCfg.columns, freshDropsCfg.rows, freshDropsProducts]);
 
   const spotCtaHref = (entry: Record<string, unknown>, fallbackHref: string) => {
-    const ctaMode = asString(entry.ctaMode, 'PAGE').toUpperCase() === 'PAGE' ? 'PAGE' : 'URL';
+    const modeToken = asString(entry.ctaMode, 'PAGE').toUpperCase();
+    const ctaMode: CtaMode = modeToken === 'URL' ? 'URL' : modeToken === 'PRODUCT_ID' ? 'PRODUCT_ID' : 'PAGE';
     if (ctaMode === 'PAGE') {
       const pageKey = asString(entry.ctaPageKey, '').toUpperCase();
       return toSafeInternalHref(PAGE_HREF_BY_KEY[pageKey] || fallbackHref);
+    }
+    if (ctaMode === 'PRODUCT_ID') {
+      const productId = asString(entry.ctaProductId, asString(entry.ctaLink, ''));
+      return toSafeInternalHref(resolveSpotlightProductHref(fallbackHref, productId));
     }
     return normalizeHref(entry.ctaLink, fallbackHref);
   };
@@ -2439,7 +2453,7 @@ export default function JenksFrontpageV2() {
         imageHeightPx,
         typography,
         colsClass,
-        cards: variant === 'FTB' ? source : source.slice(0, maxItems),
+        cards: source,
       };
     },
     [spotCtaHref]

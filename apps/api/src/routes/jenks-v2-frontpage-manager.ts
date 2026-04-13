@@ -216,7 +216,7 @@ type ShopByCountrySettings = {
   countries: ShopByCountry[];
 };
 
-type CtaMode = 'URL' | 'PAGE';
+type CtaMode = 'URL' | 'PAGE' | 'PRODUCT_ID';
 type FeaturedCategoryKey = 'RTW' | 'CTW' | 'FTB';
 type FeaturedLayout = {
   rows: number;
@@ -413,6 +413,7 @@ type DesignerSpotlightCard = {
   ctaLink: string;
   ctaMode: CtaMode;
   ctaPageKey?: string;
+  ctaProductId?: string;
   ctaStyle: CtaStyle;
   enabled: boolean;
   displayOrder: number;
@@ -795,17 +796,17 @@ const mapLegacyV2Href = (value: string): string => {
     return '/';
   }
   if (/^\/shop(\/)?$/i.test(normalized)) {
-    return '/Shop';
+    return '/shop';
   }
   if (/^\/shop[?#]/i.test(normalized)) {
-    return `/Shop${normalized.slice('/shop'.length)}`;
+    return `/shop${normalized.slice('/shop'.length)}`;
   }
   return normalized;
 };
 
 const PAGE_HREF_BY_KEY: Record<string, string> = {
   HOME: '/',
-  SHOP: '/Shop',
+  SHOP: '/shop',
   READY_TO_WEAR: '/readytowear',
   CUSTOM_TO_WEAR: '/customtowear',
   FABRICS: '/fabricstobuy',
@@ -828,8 +829,21 @@ const resolveCtaPageHref = (pageKey: unknown, fallbackHref: string) => {
   return mapLegacyV2Href(fallbackHref);
 };
 
-const normalizeCtaMode = (value: unknown, fallback: CtaMode = 'PAGE'): CtaMode =>
-  String(value || fallback).trim().toUpperCase() === 'PAGE' ? 'PAGE' : 'URL';
+const resolveSpotlightProductHref = (fallbackHref: string, productId: string) => {
+  const safeId = String(productId || '').trim();
+  if (!safeId) return mapLegacyV2Href(fallbackHref);
+  const fallback = String(fallbackHref || '').toLowerCase();
+  if (fallback.includes('/fabricstobuy')) return `/fabricstobuy/${safeId}`;
+  if (fallback.includes('/customtowear')) return `/customtowear/${safeId}`;
+  return `/readytowear/${safeId}`;
+};
+
+const normalizeCtaMode = (value: unknown, fallback: CtaMode = 'PAGE'): CtaMode => {
+  const token = String(value || fallback).trim().toUpperCase();
+  if (token === 'PAGE') return 'PAGE';
+  if (token === 'PRODUCT_ID') return 'PRODUCT_ID';
+  return 'URL';
+};
 
 const normalizeHref = (value: unknown, fallback: string) => {
   const next = getString(value);
@@ -2320,10 +2334,32 @@ const normalizeCategoryManage = (
 ): JenksV2FrontpageManagerSettings['categoryManage'] => {
   const row = asRecord(raw);
   const rows = Array.isArray(row.sections) ? row.sections : fallback.sections;
+  const fallbackSeed = fallback.sections[0] || {
+    id: randomUUID(),
+    key: 'CAT-1',
+    title: 'Category',
+    tag: '',
+    description: '',
+    image: '',
+    ctaText: 'Explore',
+    ctaLink: '/shop',
+    ctaMode: 'PAGE' as CtaMode,
+    ctaPageKey: 'SHOP',
+    ctaStyle: defaultCtaStyle(),
+    enabled: true,
+    displayOrder: 1,
+  };
+
   const sections = rows
     .map((entry, index) => {
       const item = asRecord(entry);
-      const fallbackItem = fallback.sections[index] || fallback.sections[0];
+      const fallbackItem = fallback.sections[index] || fallbackSeed;
+      const resolvedCtaProductId =
+        (getString((item as Record<string, unknown>).ctaProductId) ||
+          getString((fallbackItem as Record<string, unknown>).ctaProductId) ||
+          getString(item.ctaLink) ||
+          '')
+          .slice(0, 120) || undefined;
       return {
         id: getString(item.id) || fallbackItem.id || randomUUID(),
         key: (getString(item.key) || fallbackItem.key || `CAT-${index + 1}`).slice(0, 32).toUpperCase(),
@@ -2334,10 +2370,16 @@ const normalizeCategoryManage = (
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaMode: normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode),
         ctaPageKey: (getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey) || '').slice(0, 120) || undefined,
+        ctaProductId: resolvedCtaProductId,
         ctaLink:
           normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode) === 'PAGE'
             ? resolveCtaPageHref(getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey), fallbackItem.ctaLink)
-            : normalizeHref(item.ctaLink, fallbackItem.ctaLink),
+            : normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode) === 'PRODUCT_ID'
+              ? resolveSpotlightProductHref(
+                  fallbackItem.ctaLink,
+                  resolvedCtaProductId || ''
+                )
+              : normalizeHref(item.ctaLink, fallbackItem.ctaLink),
         ctaStyle: normalizeCtaStyle(item.ctaStyle, fallbackItem.ctaStyle),
         enabled: getBoolean(item.enabled) ?? fallbackItem.enabled,
         displayOrder: clamp(Math.round(getNumber(item.displayOrder) ?? fallbackItem.displayOrder), 0, 999),
