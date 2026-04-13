@@ -620,11 +620,17 @@ const parsePriceBucket = (token: string): { min?: number; max?: number } => {
     .replace(/usd/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
+  const compact = normalized.replace(/\s+/g, '').replace(/_/g, '-');
   if (normalized === 'under $100' || normalized === 'under 100' || normalized === '$0 - $100' || normalized === '0-100') {
     return { max: 100 };
   }
+  if (compact === 'under-100' || compact === 'under$100') return { max: 100 };
   if (normalized === '$100 - $249' || normalized === '$100-$249' || normalized === '$100 - $300' || normalized === '$100-$300') {
     return { min: 100, max: normalized.includes('300') ? 301 : 250 };
+  }
+  if (compact === '100-300' || compact === '$100-$300') return { min: 100, max: 301 };
+  if (compact === '250-500' || compact === '$250-$500' || compact === '300-500' || compact === '$300-$500') {
+    return { min: compact.startsWith('300') || compact.startsWith('$300') ? 300 : 250, max: 500 };
   }
   if (normalized === '$250 - $499' || normalized === '$250-$499' || normalized === '$300 - $500' || normalized === '$300-$500') {
     return { min: normalized.includes('$300') ? 300 : 250, max: 500 };
@@ -633,7 +639,17 @@ const parsePriceBucket = (token: string): { min?: number; max?: number } => {
     if (normalized.includes('999')) return { min: 500, max: 1000 };
     return { min: 500 };
   }
+  if (compact === 'above-300' || compact === 'over-300' || compact === '300+' || compact === '$300+' || compact === 'from-300') {
+    return { min: 300 };
+  }
+  if (compact === 'above-500' || compact === 'over-500' || compact === '500+' || compact === '$500+' || compact === 'from-500') {
+    return { min: 500 };
+  }
   if (normalized === '$1000+' || normalized === '$1000 +' || normalized === '1000+') return { min: 1000 };
+  const underCompactMatch = compact.match(/^under-?\$?(\d+(?:\.\d+)?)$/);
+  if (underCompactMatch) return { max: Number(underCompactMatch[1]) };
+  const aboveCompactMatch = compact.match(/^(above|over|from)-?\$?(\d+(?:\.\d+)?)$/);
+  if (aboveCompactMatch) return { min: Number(aboveCompactMatch[2]) };
   const underMatch = normalized.match(/^under\s*\$?\s*(\d+(?:\.\d+)?)$/i);
   if (underMatch) return { max: Number(underMatch[1]) };
   const plusMatch = normalized.match(/^\$?\s*(\d+(?:\.\d+)?)\s*\+$/);
@@ -896,6 +912,7 @@ const ensureSettingsTable = async () => {
 const normalizeFilters = (pageType: CategoryPageV2Type, rows: unknown): CategoryPageV2FilterRow[] => {
   const fallback = DEFAULT_FILTERS[pageType];
   const rawRows = Array.isArray(rows) ? rows : fallback;
+  const priceRequired = (pageType === 'SHOP' || pageType === 'READY_TO_WEAR') as boolean;
   const nextByKey = new Map<CategoryPageV2FilterKey, CategoryPageV2FilterRow>();
   for (const [index, raw] of rawRows.entries()) {
     const row = asObject(raw);
@@ -912,7 +929,7 @@ const normalizeFilters = (pageType: CategoryPageV2Type, rows: unknown): Category
         normalizeText(row.inputType || fallbackRow.inputType).toUpperCase() === 'SUGGESTIVE_SEARCH'
           ? 'SUGGESTIVE_SEARCH'
           : 'DROPDOWN',
-      enabled: pageType === 'SHOP' && key === 'PRICE' ? true : enabled,
+      enabled: priceRequired && key === 'PRICE' ? true : enabled,
       options: Array.isArray(row.options)
         ? row.options.map((entry) => normalizeText(entry)).filter(Boolean).slice(0, 100)
         : fallbackRow.options,
@@ -922,7 +939,21 @@ const normalizeFilters = (pageType: CategoryPageV2Type, rows: unknown): Category
     });
   }
   for (const fallbackRow of fallback) {
-    if (!nextByKey.has(fallbackRow.key)) nextByKey.set(fallbackRow.key, fallbackRow);
+    if (!nextByKey.has(fallbackRow.key)) {
+      nextByKey.set(fallbackRow.key, {
+        ...fallbackRow,
+        enabled: priceRequired && fallbackRow.key === 'PRICE' ? true : fallbackRow.enabled,
+      });
+    }
+  }
+  if (priceRequired) {
+    const existingPrice = nextByKey.get('PRICE');
+    const fallbackPrice = fallback.find((entry) => entry.key === 'PRICE');
+    if (existingPrice) {
+      nextByKey.set('PRICE', { ...existingPrice, enabled: true, inputType: 'DROPDOWN' });
+    } else if (fallbackPrice) {
+      nextByKey.set('PRICE', { ...fallbackPrice, enabled: true, inputType: 'DROPDOWN' });
+    }
   }
   return Array.from(nextByKey.values()).sort((a, b) => a.displayOrder - b.displayOrder);
 };

@@ -944,6 +944,20 @@ const buildCTAStyle = (raw: unknown, fallback: CTAStyle): CSSProperties => {
 const buildShopFilterHref = (filterKey: 'style' | 'price', value: string) =>
   `/shop?${filterKey}=${encodeURIComponent(value.trim())}`;
 
+const resolvePriceFilterToken = (entry: Record<string, unknown>) => {
+  const href = asString(entry.href, '');
+  if (href) {
+    try {
+      const parsed = new URL(href, 'https://jenks.local');
+      const fromQuery = parsed.searchParams.get('price');
+      if (fromQuery && fromQuery.trim()) return fromQuery.trim();
+    } catch {
+      // Ignore malformed manager links and use textual fallbacks.
+    }
+  }
+  return asString(entry.title, asString(entry.priceLabel, '$0 - $100'));
+};
+
 const resolveCTAHoverStyle = (raw: unknown, fallback: CTAStyle) => {
   const row = asRecord(raw);
   return {
@@ -1863,7 +1877,7 @@ export default function JenksFrontpageV2() {
     return rows.map((row) => ({
       range: asString(row.priceLabel, asString(row.title, '$0 - $100')),
       sub: asString(row.description, ''),
-      href: buildShopFilterHref('price', asString(row.priceLabel, asString(row.title, '$0 - $100'))),
+      href: buildShopFilterHref('price', resolvePriceFilterToken(row)),
       Icon: iconFromKey(row.icon, Tag),
       titleFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.titleFontSize, 24)))),
       descriptionFontSize: Math.max(10, Math.min(72, Math.round(asNumber(row.descriptionFontSize, 14)))),
