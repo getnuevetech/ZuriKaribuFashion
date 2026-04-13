@@ -2289,6 +2289,14 @@ export default function JenksFrontpageV2() {
         variant === 'RTW' ? RTW_SPOTLIGHT : variant === 'FTB' ? FTB_SPOTLIGHT : DESIGNER_SPOTLIGHT;
       const rows = Math.max(1, Math.round(asNumber(cfg.rows, 1)));
       const columns = Math.max(1, Math.min(12, Math.round(asNumber(cfg.columns, 3))));
+      const sectionHeightPx = Math.max(
+        0,
+        Math.min(2400, Math.round(asNumber(cfg.sectionHeightPx ?? cfg.sectionMinHeightPx, 0)))
+      );
+      const columnHeightPx = Math.max(
+        0,
+        Math.min(2400, Math.round(asNumber(cfg.columnHeightPx ?? cfg.cardHeightPx, 0)))
+      );
       const descriptionWordLimit = Math.max(
         5,
         Math.min(80, Math.round(asNumber(cfg.descriptionWordLimit, variant === 'DESIGNER' ? 25 : 25)))
@@ -2416,6 +2424,8 @@ export default function JenksFrontpageV2() {
       return {
         rows,
         columns,
+        sectionHeightPx,
+        columnHeightPx,
         typography,
         colsClass,
         cards: variant === 'FTB' ? source : source.slice(0, maxItems),
@@ -2449,6 +2459,11 @@ export default function JenksFrontpageV2() {
   const ftbSpotlightCards = ftbSpotlightModel.cards;
   const ftbSpotlightColsClass = ftbSpotlightModel.colsClass;
   const ftbSpotlightTypography = ftbSpotlightModel.typography;
+  const ftbSpotlightSectionHeightPx = Math.max(0, Math.round(asNumber(ftbSpotlightModel.sectionHeightPx, 0)));
+  const ftbSpotlightColumnHeightPx = Math.max(0, Math.round(asNumber(ftbSpotlightModel.columnHeightPx, 0)));
+  const ftbSpotlightSectionMinHeight = ftbSpotlightSectionHeightPx > 0 ? `${ftbSpotlightSectionHeightPx}px` : '106vh';
+  const ftbSpotlightCardMinHeight =
+    ftbSpotlightColumnHeightPx > 0 ? `${ftbSpotlightColumnHeightPx}px` : ftbSpotlightSectionMinHeight;
   const ftbSpotlightVisibleColumns = Math.max(1, Math.round(asNumber(ftbSpotlightModel.columns, 3)));
   const ftbSpotlightNeedsHorizontalScroll = ftbSpotlightCards.length > ftbSpotlightVisibleColumns;
   const syncFtbSpotlightScrollButtons = useCallback(() => {
@@ -3687,11 +3702,12 @@ export default function JenksFrontpageV2() {
     };
   }, []);
 
-  const renderFtbSpotlightCard = (spot: any, key: string, cardClassName = '') => (
+  const renderFtbSpotlightCard = (spot: any, key: string, cardClassName = '', cardStyle?: CSSProperties) => (
     <Link
       key={key}
       to={spot.href}
       className={`group relative overflow-hidden ${cardClassName}`}
+      style={cardStyle}
       data-kimi-anim="zoom-in"
     >
       <BrandImageWithFallback
@@ -5123,7 +5139,7 @@ export default function JenksFrontpageV2() {
       {isSectionVisible('FTB_SPOTLIGHT') ? (
         <section
           className={`${HERO_HEIGHT_CLASS} bg-[#101010] ${ftbSpotlightNeedsHorizontalScroll ? 'relative' : `grid grid-cols-1 gap-0 ${ftbSpotlightColsClass}`}`}
-          style={{ order: getSectionOrder('FTB_SPOTLIGHT') }}
+          style={{ order: getSectionOrder('FTB_SPOTLIGHT'), minHeight: ftbSpotlightSectionMinHeight }}
         >
           {ftbSpotlightNeedsHorizontalScroll ? (
             <>
@@ -5148,15 +5164,20 @@ export default function JenksFrontpageV2() {
               <div
                 ref={ftbSpotlightStripRef}
                 className="flex h-full overflow-x-auto scroll-smooth scrollbar-hide"
-                style={{ '--ftb-card-basis': ftbSpotlightCardBasis } as CSSProperties}
+                style={{ '--ftb-card-basis': ftbSpotlightCardBasis, minHeight: ftbSpotlightSectionMinHeight } as CSSProperties}
               >
                 {ftbSpotlightCards.map((spot) =>
-                  renderFtbSpotlightCard(spot, `ftb-${spot.id}`, 'h-full shrink-0 basis-full md:[flex-basis:var(--ftb-card-basis)]')
+                  renderFtbSpotlightCard(
+                    spot,
+                    `ftb-${spot.id}`,
+                    'h-full shrink-0 basis-full md:[flex-basis:var(--ftb-card-basis)]',
+                    { minHeight: ftbSpotlightCardMinHeight }
+                  )
                 )}
               </div>
             </>
           ) : (
-            ftbSpotlightCards.map((spot) => renderFtbSpotlightCard(spot, `ftb-${spot.id}`))
+            ftbSpotlightCards.map((spot) => renderFtbSpotlightCard(spot, `ftb-${spot.id}`, '', { minHeight: ftbSpotlightCardMinHeight }))
           )}
         </section>
       ) : null}

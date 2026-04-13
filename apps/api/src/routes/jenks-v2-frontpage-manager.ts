@@ -421,6 +421,8 @@ type DesignerSpotlightCard = {
 type DesignerSpotlightSettings = {
   rows: number;
   columns: number;
+  sectionHeightPx?: number;
+  columnHeightPx?: number;
   overlayEnabled?: boolean;
   overlayBackgroundColor?: string;
   countryFontSize: number;
@@ -1623,6 +1625,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     designerSpotlight: {
       rows: 1,
       columns: 3,
+      sectionHeightPx: 0,
+      columnHeightPx: 0,
       overlayEnabled: true,
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
@@ -1666,6 +1670,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     rtwFtb: {
       rows: 1,
       columns: 3,
+      sectionHeightPx: 0,
+      columnHeightPx: 0,
       overlayEnabled: true,
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
@@ -1715,6 +1721,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
     ftbSpotlight: {
       rows: 1,
       columns: 3,
+      sectionHeightPx: 0,
+      columnHeightPx: 0,
       overlayEnabled: true,
       overlayBackgroundColor: 'rgba(0,0,0,0.36)',
       countryFontSize: 18,
@@ -2852,6 +2860,26 @@ const normalizeDesignerSpotlight = (
   return {
     rows: clamp(Math.round(getNumber(row.rows) ?? fallback.rows), 1, 12),
     columns: clamp(Math.round(getNumber(row.columns) ?? fallback.columns), 1, 12),
+    sectionHeightPx: clamp(
+      Math.round(
+        getNumber((row as Record<string, unknown>).sectionHeightPx) ??
+          getNumber((row as Record<string, unknown>).sectionMinHeightPx) ??
+          fallback.sectionHeightPx ??
+          0
+      ),
+      0,
+      2400
+    ),
+    columnHeightPx: clamp(
+      Math.round(
+        getNumber((row as Record<string, unknown>).columnHeightPx) ??
+          getNumber((row as Record<string, unknown>).cardHeightPx) ??
+          fallback.columnHeightPx ??
+          0
+      ),
+      0,
+      2400
+    ),
     overlayEnabled: getBoolean(row.overlayEnabled) ?? fallback.overlayEnabled ?? true,
     overlayBackgroundColor:
       (getString(row.overlayBackgroundColor) ||

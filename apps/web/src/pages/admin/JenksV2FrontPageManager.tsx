@@ -415,6 +415,8 @@ type CTAStyle = {
 type DesignerSpotlight = {
   rows: number;
   columns: number;
+  sectionHeightPx?: number;
+  columnHeightPx?: number;
   countryFontSize: number;
   designerNameFontSize: number;
   designerNameColor: string;
@@ -1692,6 +1694,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   designerSpotlight: {
     rows: 1,
     columns: 3,
+    sectionHeightPx: 0,
+    columnHeightPx: 0,
     countryFontSize: 22,
     designerNameFontSize: 52,
     designerNameColor: '#ffffff',
@@ -1735,6 +1739,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   rtwFtb: {
     rows: 1,
     columns: 3,
+    sectionHeightPx: 0,
+    columnHeightPx: 0,
     countryFontSize: 22,
     designerNameFontSize: 52,
     designerNameColor: '#ffffff',
@@ -1784,6 +1790,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
   ftbSpotlight: {
     rows: 1,
     columns: 3,
+    sectionHeightPx: 0,
+    columnHeightPx: 0,
     countryFontSize: 22,
     designerNameFontSize: 52,
     designerNameColor: '#ffffff',
@@ -2033,6 +2041,8 @@ const toApiPayload = (config: JenksV2FrontpageConfig) => ({
     return {
       rows: ds.rows,
       columns: ds.columns,
+      sectionHeightPx: ds.sectionHeightPx,
+      columnHeightPx: ds.columnHeightPx,
       countryFontSize: ds.countryFontSize,
       nameFontSize: ds.designerNameFontSize,
       nameColor: ds.designerNameColor,
@@ -3023,6 +3033,38 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     },
     designerSpotlight: {
       ...designerSpotlight,
+      sectionHeightPx: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (designerSpotlightRaw as Record<string, unknown>).sectionHeightPx ??
+                (designerSpotlightRaw as Record<string, unknown>).sectionMinHeightPx ??
+                (designerSpotlight as DesignerSpotlight | undefined)?.sectionHeightPx ??
+                DEFAULT_CONFIG.designerSpotlight.sectionHeightPx ??
+                0
+            ),
+            DEFAULT_CONFIG.designerSpotlight.sectionHeightPx ?? 0
+          )
+        ),
+        0,
+        2400
+      ),
+      columnHeightPx: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (designerSpotlightRaw as Record<string, unknown>).columnHeightPx ??
+                (designerSpotlightRaw as Record<string, unknown>).cardHeightPx ??
+                (designerSpotlight as DesignerSpotlight | undefined)?.columnHeightPx ??
+                DEFAULT_CONFIG.designerSpotlight.columnHeightPx ??
+                0
+            ),
+            DEFAULT_CONFIG.designerSpotlight.columnHeightPx ?? 0
+          )
+        ),
+        0,
+        2400
+      ),
       countryFontSize: clamp(
         Math.round(
           toNumber(
@@ -3154,6 +3196,38 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     },
     rtwFtb: {
       ...rtwFtb,
+      sectionHeightPx: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (rtwFtbRaw as Record<string, unknown>).sectionHeightPx ??
+                (rtwFtbRaw as Record<string, unknown>).sectionMinHeightPx ??
+                (rtwFtb as DesignerSpotlight | undefined)?.sectionHeightPx ??
+                DEFAULT_CONFIG.rtwFtb.sectionHeightPx ??
+                0
+            ),
+            DEFAULT_CONFIG.rtwFtb.sectionHeightPx ?? 0
+          )
+        ),
+        0,
+        2400
+      ),
+      columnHeightPx: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (rtwFtbRaw as Record<string, unknown>).columnHeightPx ??
+                (rtwFtbRaw as Record<string, unknown>).cardHeightPx ??
+                (rtwFtb as DesignerSpotlight | undefined)?.columnHeightPx ??
+                DEFAULT_CONFIG.rtwFtb.columnHeightPx ??
+                0
+            ),
+            DEFAULT_CONFIG.rtwFtb.columnHeightPx ?? 0
+          )
+        ),
+        0,
+        2400
+      ),
       countryFontSize: clamp(
         Math.round(
           toNumber(
@@ -3335,6 +3409,38 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     },
     ftbSpotlight: {
       ...ftbSpotlight,
+      sectionHeightPx: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (ftbSpotlightRaw as Record<string, unknown>).sectionHeightPx ??
+                (ftbSpotlightRaw as Record<string, unknown>).sectionMinHeightPx ??
+                (ftbSpotlight as DesignerSpotlight | undefined)?.sectionHeightPx ??
+                DEFAULT_CONFIG.ftbSpotlight.sectionHeightPx ??
+                0
+            ),
+            DEFAULT_CONFIG.ftbSpotlight.sectionHeightPx ?? 0
+          )
+        ),
+        0,
+        2400
+      ),
+      columnHeightPx: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (ftbSpotlightRaw as Record<string, unknown>).columnHeightPx ??
+                (ftbSpotlightRaw as Record<string, unknown>).cardHeightPx ??
+                (ftbSpotlight as DesignerSpotlight | undefined)?.columnHeightPx ??
+                DEFAULT_CONFIG.ftbSpotlight.columnHeightPx ??
+                0
+            ),
+            DEFAULT_CONFIG.ftbSpotlight.columnHeightPx ?? 0
+          )
+        ),
+        0,
+        2400
+      ),
       countryFontSize: clamp(
         Math.round(
           toNumber(
@@ -10455,6 +10561,38 @@ export default function JenksV2FrontPageManager() {
                 }
               />
             </label>
+            {isFtbTab ? (
+              <label className="text-xs">
+                Section Height (px, 0 = default)
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={spotlightConfig.sectionHeightPx ?? 0}
+                  onChange={(event) =>
+                    updateSpotlightConfig((current) => ({
+                      ...current,
+                      sectionHeightPx: clamp(toNumber(event.target.value, current.sectionHeightPx ?? 0), 0, 2400),
+                    }))
+                  }
+                />
+              </label>
+            ) : null}
+            {isFtbTab ? (
+              <label className="text-xs">
+                Column Height (px, 0 = section/default)
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  value={spotlightConfig.columnHeightPx ?? 0}
+                  onChange={(event) =>
+                    updateSpotlightConfig((current) => ({
+                      ...current,
+                      columnHeightPx: clamp(toNumber(event.target.value, current.columnHeightPx ?? 0), 0, 2400),
+                    }))
+                  }
+                />
+              </label>
+            ) : null}
             <label className="text-xs">
               Country Text Size (px)
               <input
