@@ -153,6 +153,9 @@ type CategorySectionRuntime = {
   ctaPageKey?: string;
   ctaStyle?: CTAStyle;
   image: string;
+  sectionHeightPx: number;
+  columnHeightPx: number;
+  imageHeightPx: number;
   textOnLeft: boolean;
   panelBg: string;
   stepsEnabled: boolean;
@@ -1254,6 +1257,9 @@ const RTW_FTB_CTW_SECTIONS = [
     cta: 'SHOP READY TO WEAR',
     href: '/readytowear',
     image: `${ASSET_BASE}/rw_full.jpg`,
+    sectionHeightPx: 0,
+    columnHeightPx: 0,
+    imageHeightPx: 0,
     textOnLeft: false,
     panelBg: 'bg-[#111]',
   },
@@ -1266,6 +1272,9 @@ const RTW_FTB_CTW_SECTIONS = [
     cta: 'SHOP FABRICS TO BUY',
     href: '/fabricstobuy',
     image: `${ASSET_BASE}/fabrics_full.jpg`,
+    sectionHeightPx: 0,
+    columnHeightPx: 0,
+    imageHeightPx: 0,
     textOnLeft: true,
     panelBg: 'bg-[#171717]',
   },
@@ -1278,6 +1287,9 @@ const RTW_FTB_CTW_SECTIONS = [
     cta: 'SHOP CUSTOM TO WEAR',
     href: '/customtowear',
     image: `${ASSET_BASE}/custom_full.jpg`,
+    sectionHeightPx: 0,
+    columnHeightPx: 0,
+    imageHeightPx: 0,
     textOnLeft: false,
     panelBg: 'bg-[#111]',
   },
@@ -1948,6 +1960,31 @@ export default function JenksFrontpageV2() {
           stripLegacyFallbackImage(entry.image),
           asString(stripLegacyFallbackImage(matchingCategory?.image), '')
         ),
+        sectionHeightPx: Math.max(
+          0,
+          Math.min(
+            2400,
+            Math.round(
+              asNumber((entry as Record<string, unknown>).sectionHeightPx ?? (entry as Record<string, unknown>).sectionMinHeightPx, 0)
+            )
+          )
+        ),
+        columnHeightPx: Math.max(
+          0,
+          Math.min(
+            2400,
+            Math.round(asNumber((entry as Record<string, unknown>).columnHeightPx ?? (entry as Record<string, unknown>).cardHeightPx, 0))
+          )
+        ),
+        imageHeightPx: Math.max(
+          0,
+          Math.min(
+            2400,
+            Math.round(
+              asNumber((entry as Record<string, unknown>).imageHeightPx ?? (entry as Record<string, unknown>).cardImageHeightPx, 0)
+            )
+          )
+        ),
         textOnLeft: CATEGORY_TEXT_LEFT_BY_KEY[key] ?? (idx % 2 === 1),
         panelBg: CATEGORY_PANEL_BG_BY_KEY[key] || 'bg-[#111]',
         stepsEnabled: asBoolean(entry.stepsEnabled, true),
@@ -2157,10 +2194,7 @@ export default function JenksFrontpageV2() {
         ? 'hover:scale-[1.03] hover:z-10 hover:shadow-[0_28px_56px_rgba(0,0,0,0.52)]'
         : 'hover:-translate-y-0.5 hover:shadow-[0_20px_38px_rgba(0,0,0,0.42)]';
       return (
-    <div
-      className="pointer-events-none absolute inset-y-6 left-6 z-20 hidden overflow-y-auto pr-1 md:block"
-      style={{ width: `${section.stepCardPanelWidth}px` }}
-    >
+    <div className="absolute inset-y-6 left-6 z-20 hidden overflow-y-auto pr-1 md:block" style={{ width: `${section.stepCardPanelWidth}px` }}>
       <div className="space-y-2">
         <div
           className="rounded-t-sm border border-white/25 px-4 py-3"
@@ -4850,16 +4884,24 @@ export default function JenksFrontpageV2() {
       {visibleCategorySections.map((section) => {
         const sectionKey = String(section.key || '').trim().toUpperCase() as 'RTW' | 'FTB' | 'CTW';
         const sectionTemplateKey = CATEGORY_SECTION_TEMPLATE_BY_KEY[sectionKey];
+        const sectionMinHeight = section.sectionHeightPx > 0 ? `${section.sectionHeightPx}px` : '106vh';
+        const sectionColumnHeight = section.columnHeightPx > 0 ? `${section.columnHeightPx}px` : sectionMinHeight;
+        const sectionImageHeight = section.imageHeightPx > 0 ? `${section.imageHeightPx}px` : '100%';
         return (
           <section key={section.id} className="space-y-0" style={{ order: getSectionOrder(sectionTemplateKey, 'CATEGORY_MANAGE') }}>
             <div
-              className={`group grid ${HERO_HEIGHT_CLASS} grid-cols-1 ${
+              className={`group grid grid-cols-1 ${
                 section.textOnLeft ? 'md:grid-cols-[32%_68%]' : 'md:grid-cols-[68%_32%]'
               }`}
+              style={{ minHeight: sectionMinHeight }}
             >
               {section.textOnLeft ? (
                 <>
-                  <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-left">
+                  <div
+                    className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`}
+                    data-kimi-anim="sidebar-left"
+                    style={{ minHeight: sectionColumnHeight }}
+                  >
                     <div
                       className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
                       style={{ backgroundImage: toSafeBackgroundImage(section.image), opacity: 0.18 }}
@@ -4896,11 +4938,12 @@ export default function JenksFrontpageV2() {
                       </div>
                     </div>
                   </div>
-                  <div className="relative h-full w-full">
+                  <div className="relative h-full w-full" style={{ minHeight: sectionColumnHeight }}>
                     <BrandImageWithFallback
                       src={section.image}
                       alt={section.sectionName}
                       className="h-full w-full object-cover"
+                      style={{ height: sectionImageHeight, minHeight: sectionColumnHeight }}
                       spinnerClassName="h-7 w-7"
                       data-kimi-anim="zoom-in"
                     />
@@ -4909,17 +4952,22 @@ export default function JenksFrontpageV2() {
                 </>
               ) : (
                 <>
-                  <div className="relative h-full w-full">
+                  <div className="relative h-full w-full" style={{ minHeight: sectionColumnHeight }}>
                     <BrandImageWithFallback
                       src={section.image}
                       alt={section.sectionName}
                       className="h-full w-full object-cover"
+                      style={{ height: sectionImageHeight, minHeight: sectionColumnHeight }}
                       spinnerClassName="h-7 w-7"
                       data-kimi-anim="zoom-in"
                     />
                     {section.stepsEnabled && section.stepCards.length > 0 ? renderCategoryStepCards(section) : null}
                   </div>
-                  <div className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`} data-kimi-anim="sidebar-right">
+                  <div
+                    className={`relative overflow-hidden px-8 py-12 text-white ${section.panelBg}`}
+                    data-kimi-anim="sidebar-right"
+                    style={{ minHeight: sectionColumnHeight }}
+                  >
                     <div
                       className="pointer-events-none absolute inset-0 scale-105 bg-cover bg-center blur-2xl"
                       style={{ backgroundImage: toSafeBackgroundImage(section.image), opacity: 0.18 }}

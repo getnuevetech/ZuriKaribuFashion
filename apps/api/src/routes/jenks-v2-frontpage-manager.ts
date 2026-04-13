@@ -230,6 +230,9 @@ type CategorySection = {
   tag: string;
   description: string;
   image: string;
+  sectionHeightPx?: number;
+  columnHeightPx?: number;
+  imageHeightPx?: number;
   ctaText: string;
   ctaLink: string;
   ctaMode: CtaMode;
@@ -1122,6 +1125,9 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
             borderWidth: 0,
             fontSize: 18,
           }),
+        sectionHeightPx: 0,
+        columnHeightPx: 0,
+        imageHeightPx: 0,
           enabled: true,
           displayOrder: 1,
           stepsEnabled: true,
@@ -1206,6 +1212,9 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
             borderWidth: 0,
             fontSize: 18,
           }),
+        sectionHeightPx: 0,
+        columnHeightPx: 0,
+        imageHeightPx: 0,
           enabled: true,
           displayOrder: 2,
           stepsEnabled: true,
@@ -1290,6 +1299,9 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
             borderWidth: 0,
             fontSize: 18,
           }),
+        sectionHeightPx: 0,
+        columnHeightPx: 0,
+        imageHeightPx: 0,
           enabled: true,
           displayOrder: 3,
           stepsEnabled: true,
@@ -2341,6 +2353,9 @@ const normalizeCategoryManage = (
     tag: '',
     description: '',
     image: '',
+    sectionHeightPx: 0,
+    columnHeightPx: 0,
+    imageHeightPx: 0,
     ctaText: 'Explore',
     ctaLink: '/shop',
     ctaMode: 'PAGE' as CtaMode,
@@ -2367,6 +2382,37 @@ const normalizeCategoryManage = (
         tag: (getString(item.tag) || fallbackItem.tag).slice(0, 80),
         description: (getString(item.description) || fallbackItem.description).slice(0, 300),
         image: normalizeHref(item.image, fallbackItem.image || ''),
+        sectionHeightPx: clamp(
+          Math.round(
+            getNumber((item as Record<string, unknown>).sectionHeightPx) ??
+              getNumber((item as Record<string, unknown>).sectionMinHeightPx) ??
+              getNumber((fallbackItem as Record<string, unknown>).sectionHeightPx) ??
+              0
+          ),
+          0,
+          2400
+        ),
+        columnHeightPx: clamp(
+          Math.round(
+            getNumber((item as Record<string, unknown>).columnHeightPx) ??
+              getNumber((item as Record<string, unknown>).cardHeightPx) ??
+              getNumber((fallbackItem as Record<string, unknown>).columnHeightPx) ??
+              0
+          ),
+          0,
+          2400
+        ),
+        imageHeightPx: clamp(
+          Math.round(
+            getNumber((item as Record<string, unknown>).imageHeightPx) ??
+              getNumber((item as Record<string, unknown>).cardImageHeightPx) ??
+              getNumber((item as Record<string, unknown>).imageMinHeightPx) ??
+              getNumber((fallbackItem as Record<string, unknown>).imageHeightPx) ??
+              0
+          ),
+          0,
+          2400
+        ),
         ctaText: (getString(item.ctaText) || fallbackItem.ctaText).slice(0, 80),
         ctaMode: normalizeCtaMode(item.ctaMode, fallbackItem.ctaMode),
         ctaPageKey: (getString(item.ctaPageKey) || getString(fallbackItem.ctaPageKey) || '').slice(0, 120) || undefined,

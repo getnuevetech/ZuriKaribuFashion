@@ -216,6 +216,9 @@ type CategorySection = {
   stepCardsTitleFontWeight: number;
   description: string;
   image: string;
+  sectionHeightPx?: number;
+  columnHeightPx?: number;
+  imageHeightPx?: number;
   ctaText: string;
   ctaLink: string;
   ctaMode: 'URL' | 'PAGE';
@@ -1259,6 +1262,9 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         stepCardsTitleFontWeight: 600,
         description: 'Manage title, tag, description and CTA for RTW block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.RTW,
+        sectionHeightPx: 0,
+        columnHeightPx: 0,
+        imageHeightPx: 0,
         ctaText: 'Shop RTW',
         ctaLink: '/readytowear',
         ctaStyle: createCtaStyle({
@@ -1325,6 +1331,9 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         stepCardsTitleFontWeight: 600,
         description: 'Manage title, tag, description and CTA for CTW block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.CTW,
+        sectionHeightPx: 0,
+        columnHeightPx: 0,
+        imageHeightPx: 0,
         ctaText: 'Explore CTW',
         ctaLink: '/customtowear',
         ctaStyle: createCtaStyle({
@@ -1391,6 +1400,9 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         stepCardsTitleFontWeight: 600,
         description: 'Manage title, tag, description and CTA for FTB block.',
         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.FTB,
+        sectionHeightPx: 0,
+        columnHeightPx: 0,
+        imageHeightPx: 0,
         ctaText: 'Shop FTB',
         ctaLink: '/fabricstobuy',
         ctaStyle: createCtaStyle({
@@ -2751,6 +2763,46 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             ...fallbackCategory,
             ...section,
             image: String((section as CategorySection)?.image || fallbackCategory.image || CATEGORY_FALLBACK_IMAGE_BY_KEY[String((section as CategorySection)?.key || '').toUpperCase()] || ''),
+            sectionHeightPx: clamp(
+              toNumber(
+                String(
+                  (section as CategorySection)?.sectionHeightPx ??
+                    (section as unknown as Record<string, unknown>)?.sectionMinHeightPx ??
+                    fallbackCategory.sectionHeightPx ??
+                    0
+                ),
+                fallbackCategory.sectionHeightPx ?? 0
+              ),
+              0,
+              2400
+            ),
+            columnHeightPx: clamp(
+              toNumber(
+                String(
+                  (section as CategorySection)?.columnHeightPx ??
+                    (section as unknown as Record<string, unknown>)?.cardHeightPx ??
+                    fallbackCategory.columnHeightPx ??
+                    0
+                ),
+                fallbackCategory.columnHeightPx ?? 0
+              ),
+              0,
+              2400
+            ),
+            imageHeightPx: clamp(
+              toNumber(
+                String(
+                  (section as CategorySection)?.imageHeightPx ??
+                    (section as unknown as Record<string, unknown>)?.cardImageHeightPx ??
+                    (section as unknown as Record<string, unknown>)?.imageMinHeightPx ??
+                    fallbackCategory.imageHeightPx ??
+                    0
+                ),
+                fallbackCategory.imageHeightPx ?? 0
+              ),
+              0,
+              2400
+            ),
             stepCardsTitle: String(
               (section as CategorySection)?.stepCardsTitle || fallbackCategory.stepCardsTitle || 'Create your own style step-by-step'
             ),
@@ -7758,6 +7810,9 @@ export default function JenksV2FrontPageManager() {
                         stepCardsTitleFontWeight: 600,
                         description: '',
                         image: CATEGORY_FALLBACK_IMAGE_BY_KEY.RTW,
+                        sectionHeightPx: 0,
+                        columnHeightPx: 0,
+                        imageHeightPx: 0,
                         ctaText: '',
                         ctaLink: '/readytowear',
                         ctaMode: 'PAGE',
@@ -7878,6 +7933,66 @@ export default function JenksV2FrontPageManager() {
                       categoryManage: {
                         sections: prev.categoryManage.sections.map((entry, entryIndex) =>
                           entryIndex === index ? { ...entry, description: event.target.value } : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="md:col-span-2 text-[11px]">
+                Section Height (px, 0 = default)
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.sectionHeightPx ?? 0}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index
+                            ? { ...entry, sectionHeightPx: clamp(toNumber(event.target.value, entry.sectionHeightPx ?? 0), 0, 2400) }
+                            : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="md:col-span-2 text-[11px]">
+                Column Height (px, 0 = section/default)
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.columnHeightPx ?? 0}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index
+                            ? { ...entry, columnHeightPx: clamp(toNumber(event.target.value, entry.columnHeightPx ?? 0), 0, 2400) }
+                            : entry
+                        ),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="md:col-span-2 text-[11px]">
+                Card Image Height (px, 0 = auto)
+                <input
+                  type="number"
+                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                  value={section.imageHeightPx ?? 0}
+                  onChange={(event) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      categoryManage: {
+                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+                          entryIndex === index
+                            ? { ...entry, imageHeightPx: clamp(toNumber(event.target.value, entry.imageHeightPx ?? 0), 0, 2400) }
+                            : entry
                         ),
                       },
                     }))
