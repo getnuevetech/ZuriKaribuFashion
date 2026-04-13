@@ -10767,6 +10767,27 @@ export default function JenksV2FrontPageManager() {
           {spotlightConfig.cards.map((card, index) => (
             <div key={card.id} className="rounded border p-3 space-y-2">
               <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
+                {isFtbTab ? (
+                  <label className="md:col-span-8 text-[11px]">
+                    Column Image URL
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                      value={card.image || ''}
+                      placeholder="https://.../ftb-column-image.jpg"
+                      onChange={(event) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          [spotlightConfigKey]: {
+                            ...prev[spotlightConfigKey],
+                            cards: prev[spotlightConfigKey].cards.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, image: event.target.value } : entry
+                            ),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                ) : null}
                 <label className="md:col-span-2 text-[11px]">
                   Country
                   <select

@@ -3706,7 +3706,7 @@ export default function JenksFrontpageV2() {
     <Link
       key={key}
       to={spot.href}
-      className={`group relative overflow-hidden ${cardClassName}`}
+      className={`group relative block h-full w-full overflow-hidden ${cardClassName}`}
       style={cardStyle}
       data-kimi-anim="zoom-in"
     >
@@ -5163,14 +5163,14 @@ export default function JenksFrontpageV2() {
               </button>
               <div
                 ref={ftbSpotlightStripRef}
-                className="flex h-full overflow-x-auto scroll-smooth scrollbar-hide"
+                className="flex h-full items-stretch overflow-x-auto scroll-smooth scrollbar-hide"
                 style={{ '--ftb-card-basis': ftbSpotlightCardBasis, minHeight: ftbSpotlightSectionMinHeight } as CSSProperties}
               >
                 {ftbSpotlightCards.map((spot) =>
                   renderFtbSpotlightCard(
                     spot,
                     `ftb-${spot.id}`,
-                    'h-full shrink-0 basis-full md:[flex-basis:var(--ftb-card-basis)]',
+                    'h-full shrink-0 basis-full self-stretch md:[flex-basis:var(--ftb-card-basis)]',
                     { minHeight: ftbSpotlightCardMinHeight }
                   )
                 )}
