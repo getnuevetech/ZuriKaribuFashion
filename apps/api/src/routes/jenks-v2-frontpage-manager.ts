@@ -601,7 +601,7 @@ const TEMPLATE_META: Array<{ templateKey: TemplateKey; key: string; name: string
   { templateKey: 'SHOP_BY_COUNTRY', key: 'shop-by-country', name: 'Shop By Country' },
   { templateKey: 'CATEGORY_MANAGE_RTW', key: 'category-manage-rtw', name: 'Category Manage RTW' },
   { templateKey: 'CATEGORY_MANAGE_FTB', key: 'category-manage-ftb', name: 'Category Manage FTB' },
-  { templateKey: 'CATEGORY_MANAGE_CTW', key: 'category-manage-ctw', name: 'Category Manage CTW' },
+  { templateKey: 'CATEGORY_MANAGE_CTW', key: 'category-manage-ctw-steps', name: 'Category Manage CTW Steps' },
   { templateKey: 'HOW_IT_WORKS', key: 'how-it-works', name: 'How It Works' },
   { templateKey: 'CUSTOM_TEXT_ICON', key: 'custom-text-icon', name: 'Custom' },
   { templateKey: 'SHOP_WITH_CONFIDENCE', key: 'shop-with-confidence', name: 'Shop With Confidence' },
@@ -1197,12 +1197,12 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         {
           id: randomUUID(),
           key: 'CTW',
-          title: 'Custom To Wear',
-          tag: 'CTW',
-          description: 'Manage title, tag, description and CTA for CTW block.',
+          title: 'CTW Steps',
+          tag: 'CTW Steps',
+          description: 'Manage title, tag, description and CTA for CTW Steps block.',
           image: '',
-          ctaText: 'Explore CTW',
-          ctaLink: '/cystomtowear',
+          ctaText: 'Explore CTW Steps',
+          ctaLink: '/customtowear',
           ctaMode: 'PAGE',
           ctaPageKey: 'CUSTOM_TO_WEAR',
           ctaStyle: defaultCtaStyle({
@@ -1234,32 +1234,32 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
             {
               id: randomUUID(),
               icon: 'Search',
-              title: 'SELECT A DESIGN',
-              description: 'Choose from designer templates',
+              title: 'BROWSE FABRIC TYPES',
+              description: 'Filter by weave, print, and material',
               enabled: true,
               displayOrder: 1,
             },
             {
               id: randomUUID(),
-              icon: 'Palette',
-              title: 'PICK YOUR FABRIC',
-              description: 'Browse kente, Ankara and more',
+              icon: 'ShieldCheck',
+              title: 'CHECK QUALITY',
+              description: 'Review specs, weight, and quality notes',
               enabled: true,
               displayOrder: 2,
             },
             {
               id: randomUUID(),
-              icon: 'Ruler',
-              title: 'ADD MEASUREMENTS',
-              description: 'Enter your exact measurements',
+              icon: 'Truck',
+              title: 'PLACE ORDER',
+              description: 'Secure checkout and shipping selection',
               enabled: true,
               displayOrder: 3,
             },
             {
               id: randomUUID(),
-              icon: 'Sparkles',
-              title: 'VIRTUAL TRY-ON',
-              description: 'See how it looks before ordering',
+              icon: 'RefreshCw',
+              title: 'TRACK DELIVERY',
+              description: 'Follow your order to final delivery',
               enabled: true,
               displayOrder: 4,
             },
@@ -2520,34 +2520,69 @@ const normalizeCategoryManage = (
     }
   });
 
-  const canonicalSections = categorySectionKeyOrder.map((key, index) => {
-    const fallbackSection = fallbackByKey.get(key) || ({
-      ...fallbackSeed,
+  const duplicateFtbAsCtwSteps = (source: CategorySection, preferredId?: string) => ({
+    ...source,
+    id: preferredId || randomUUID(),
+    key: 'CTW',
+    title: 'CTW Steps',
+    tag: 'CTW Steps',
+    description: 'Manage title, tag, description and CTA for CTW Steps block.',
+    ctaText: 'Explore CTW Steps',
+    ctaMode: 'PAGE' as CtaMode,
+    ctaPageKey: 'CUSTOM_TO_WEAR',
+    ctaLink: '/customtowear',
+    stepCards: (Array.isArray(source.stepCards) ? source.stepCards : []).map((step) => ({
+      ...step,
       id: randomUUID(),
-      key,
-      title: key === 'CTW' ? 'Custom To Wear' : key === 'FTB' ? 'Fabric To Buy' : 'Ready To Wear',
-      tag: key,
-      image: '',
-      ctaPageKey: key === 'CTW' ? 'CUSTOM_TO_WEAR' : key === 'FTB' ? 'FABRICS' : 'READY_TO_WEAR',
-      ctaLink: key === 'CTW' ? '/customtowear' : key === 'FTB' ? '/fabricstobuy' : '/readytowear',
-      stepCards: [],
-      stepsEnabled: true,
-      stepCardsTitle: 'Create your own style step-by-step',
-      stepCardsTitleIcon: 'Scissors',
-      stepCardsTitleFontSize: 16,
-      stepCardsTitleFontStyle: 'NORMAL',
-      stepCardsTitleFontWeight: 600,
-      stepCardBackgroundColor: '#111111',
-      stepCardOverlayOpacity: 78,
-      stepCardPanelWidth: 430,
-      stepCardAccentColor: '#e66045',
-      stepCardIconColor: '#ff7c61',
-      stepCardTitleFontSize: 16,
-      stepCardDescriptionFontSize: 14,
-      sectionHeightPx: 0,
-      columnHeightPx: 0,
-      imageHeightPx: 0,
-    } as CategorySection);
+    })),
+  });
+
+  const existingCtw = sectionByKey.get('CTW');
+  const existingCtwLooksLegacy =
+    !!existingCtw &&
+    (String(existingCtw.title || '').trim().toUpperCase() === 'CUSTOM TO WEAR' ||
+      String(existingCtw.tag || '').trim().toUpperCase() === 'CTW' ||
+      String(existingCtw.ctaText || '').trim().toUpperCase() === 'EXPLORE CTW');
+  if (existingCtwLooksLegacy) {
+    const ftbSource = sectionByKey.get('FTB') || fallbackByKey.get('FTB');
+    if (ftbSource) {
+      sectionByKey.set('CTW', duplicateFtbAsCtwSteps(ftbSource, existingCtw?.id));
+    }
+  }
+
+  const canonicalSections = categorySectionKeyOrder.map((key, index) => {
+    const fallbackSection =
+      key === 'CTW' && !fallbackByKey.get('CTW') && fallbackByKey.get('FTB')
+        ? duplicateFtbAsCtwSteps(fallbackByKey.get('FTB') as CategorySection)
+        : fallbackByKey.get(key) ||
+          ({
+            ...fallbackSeed,
+            id: randomUUID(),
+            key,
+            title: key === 'CTW' ? 'CTW Steps' : key === 'FTB' ? 'Fabric To Buy' : 'Ready To Wear',
+            tag: key === 'CTW' ? 'CTW Steps' : key,
+            image: '',
+            ctaText: key === 'CTW' ? 'Explore CTW Steps' : key === 'FTB' ? 'Shop Fabrics' : 'Explore',
+            ctaPageKey: key === 'CTW' ? 'CUSTOM_TO_WEAR' : key === 'FTB' ? 'FABRICS' : 'READY_TO_WEAR',
+            ctaLink: key === 'CTW' ? '/customtowear' : key === 'FTB' ? '/fabricstobuy' : '/readytowear',
+            stepCards: [],
+            stepsEnabled: true,
+            stepCardsTitle: 'Create your own style step-by-step',
+            stepCardsTitleIcon: 'Scissors',
+            stepCardsTitleFontSize: 16,
+            stepCardsTitleFontStyle: 'NORMAL',
+            stepCardsTitleFontWeight: 600,
+            stepCardBackgroundColor: '#111111',
+            stepCardOverlayOpacity: 78,
+            stepCardPanelWidth: 430,
+            stepCardAccentColor: '#e66045',
+            stepCardIconColor: '#ff7c61',
+            stepCardTitleFontSize: 16,
+            stepCardDescriptionFontSize: 14,
+            sectionHeightPx: 0,
+            columnHeightPx: 0,
+            imageHeightPx: 0,
+          } as CategorySection);
     const resolved = sectionByKey.get(key) || fallbackSection;
     return {
       ...fallbackSection,
@@ -3491,10 +3526,12 @@ const normalizeSectionVisibility = (
     const templateKey = TEMPLATE_KEYS.includes(templateToken as TemplateKey)
       ? (templateToken as TemplateKey)
       : 'TOP_NAVIGATIONS';
-    const name = (getString(item.name) || fallbackItem.name || 'Section').slice(0, 80);
+    const isCustom = getBoolean(item.isCustom) ?? fallbackItem.isCustom ?? false;
+    const templateMeta = TEMPLATE_META.find((meta) => meta.templateKey === templateKey);
+    const name = (isCustom ? getString(item.name) || fallbackItem.name : templateMeta?.name || getString(item.name) || fallbackItem.name || 'Section').slice(0, 80);
     const keyBase =
       getString(item.key) ||
-      (getBoolean(item.isCustom) ? `custom-${slugify(name)}` : TEMPLATE_META.find((meta) => meta.templateKey === templateKey)?.key) ||
+      (isCustom ? `custom-${slugify(name)}` : templateMeta?.key) ||
       `custom-${slugify(name)}`;
     return {
       id: getString(item.id) || fallbackItem.id || randomUUID(),
@@ -3503,7 +3540,7 @@ const normalizeSectionVisibility = (
       templateKey,
       enabled: getBoolean(item.enabled) ?? fallbackItem.enabled ?? true,
       order: clamp(Math.round(getNumber(item.order) ?? fallbackItem.order ?? index + 1), 1, 999),
-      isCustom: getBoolean(item.isCustom) ?? fallbackItem.isCustom ?? false,
+      isCustom,
       configSnapshot:
         item.configSnapshot && typeof item.configSnapshot === 'object'
           ? cloneJson(item.configSnapshot as Record<string, unknown>)

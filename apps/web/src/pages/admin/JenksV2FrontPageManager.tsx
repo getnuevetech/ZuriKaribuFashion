@@ -614,7 +614,7 @@ const TEMPLATES: Array<{ key: TemplateKey; label: string }> = [
   { key: 'SHOP_BY_COUNTRY', label: 'Shop By Country' },
   { key: 'CATEGORY_MANAGE_RTW', label: 'Category Manage RTW' },
   { key: 'CATEGORY_MANAGE_FTB', label: 'Category Manage FTB' },
-  { key: 'CATEGORY_MANAGE_CTW', label: 'Category Manage CTW' },
+  { key: 'CATEGORY_MANAGE_CTW', label: 'Category Manage CTW Steps' },
   { key: 'HOW_IT_WORKS', label: 'How It Works' },
   { key: 'CUSTOM_TEXT_ICON', label: 'Custom' },
   { key: 'SHOP_WITH_CONFIDENCE', label: 'Shop With Confidence' },
@@ -1322,19 +1322,19 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       {
         id: uid(),
         key: 'CTW',
-        title: 'Custom To Wear',
-        tag: 'CTW',
+        title: 'CTW Steps',
+        tag: 'CTW Steps',
         stepCardsTitle: 'Create your own style step-by-step',
         stepCardsTitleIcon: 'Scissors',
         stepCardsTitleFontSize: 16,
         stepCardsTitleFontStyle: 'NORMAL',
         stepCardsTitleFontWeight: 600,
-        description: 'Manage title, tag, description and CTA for CTW block.',
-        image: CATEGORY_FALLBACK_IMAGE_BY_KEY.CTW,
+        description: 'Manage title, tag, description and CTA for CTW Steps block.',
+        image: CATEGORY_FALLBACK_IMAGE_BY_KEY.FTB,
         sectionHeightPx: 0,
         columnHeightPx: 0,
         imageHeightPx: 0,
-        ctaText: 'Explore CTW',
+        ctaText: 'Explore CTW Steps',
         ctaLink: '/customtowear',
         ctaStyle: createCtaStyle({
           backgroundColor: 'transparent',
@@ -1355,32 +1355,32 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
           {
             id: uid(),
             icon: 'Search',
-            title: 'Discover Designer',
-            description: 'Find a designer that matches your vibe.',
+            title: 'Browse Fabric Types',
+            description: 'Filter by weave, print, and material.',
             enabled: true,
             displayOrder: 1,
           },
           {
             id: uid(),
-            icon: 'Palette',
-            title: 'Define Your Style',
-            description: 'Share design references and preferences.',
+            icon: 'ShieldCheck',
+            title: 'Check Quality',
+            description: 'Review specs, weight, and quality notes.',
             enabled: true,
             displayOrder: 2,
           },
           {
             id: uid(),
-            icon: 'Ruler',
-            title: 'Submit Measurements',
-            description: 'Provide fit details for precision tailoring.',
+            icon: 'Truck',
+            title: 'Place Order',
+            description: 'Secure checkout and shipping selection.',
             enabled: true,
             displayOrder: 3,
           },
           {
             id: uid(),
-            icon: 'Sparkles',
-            title: 'Approve & Produce',
-            description: 'Review and confirm before production.',
+            icon: 'RefreshCw',
+            title: 'Track Delivery',
+            description: 'Follow your order to final delivery.',
             enabled: true,
             displayOrder: 4,
           },
@@ -2003,7 +2003,7 @@ const TAB_META: Array<{ key: TabKey; label: string }> = [
   { key: 'shopByCountry', label: 'Shop By Country' },
   { key: 'categoryManageRtw', label: 'Category Manage RTW' },
   { key: 'categoryManageFtb', label: 'Category Manage FTB' },
-  { key: 'categoryManageCtw', label: 'Category Manage CTW' },
+  { key: 'categoryManageCtw', label: 'Category Manage CTW Steps' },
   { key: 'textIconCards', label: 'Text & Icon Cards' },
   { key: 'featured', label: 'Featured' },
   { key: 'instantBuy', label: 'Instant Buy' },
@@ -2024,6 +2024,7 @@ const SUBMENU_TO_TAB: Record<string, TabKey> = {
   'category-manage-rtw': 'categoryManageRtw',
   'category-manage-ftb': 'categoryManageFtb',
   'category-manage-ctw': 'categoryManageCtw',
+  'category-manage-ctw-steps': 'categoryManageCtw',
   'text-icon-cards': 'textIconCards',
   featured: 'featured',
   'instant-buy': 'instantBuy',
@@ -2043,7 +2044,7 @@ const TAB_TO_SUBMENU: Record<TabKey, string> = {
   shopByCountry: 'shop-by-country',
   categoryManageRtw: 'category-manage-rtw',
   categoryManageFtb: 'category-manage-ftb',
-  categoryManageCtw: 'category-manage-ctw',
+  categoryManageCtw: 'category-manage-ctw-steps',
   textIconCards: 'text-icon-cards',
   featured: 'featured',
   instantBuy: 'instant-buy',
@@ -2060,6 +2061,11 @@ const CATEGORY_MANAGE_TAB_SECTION_KEY: Record<'categoryManageRtw' | 'categoryMan
   categoryManageRtw: 'RTW',
   categoryManageFtb: 'FTB',
   categoryManageCtw: 'CTW',
+};
+const CATEGORY_MANAGE_TAB_LABEL_BY_SECTION_KEY: Record<(typeof CATEGORY_SECTION_KEY_OPTIONS)[number], string> = {
+  RTW: 'RTW',
+  FTB: 'FTB',
+  CTW: 'CTW Steps',
 };
 
 const toApiPayload = (config: JenksV2FrontpageConfig) => ({
@@ -2515,16 +2521,17 @@ const ensureCompleteSectionVisibility = (
     const template =
       TEMPLATES.find((item) => item.key === entry.templateKey) ||
       TEMPLATES.find((item) => item.key === 'TOP_NAVIGATIONS');
+    const isCustom = toBoolean(entry.isCustom, false);
     const fallbackOrder = index + 1;
     return {
       ...entry,
       id: String(entry.id || uid()),
       key: String(entry.key || templateKeyToSectionKey(template!.key)),
-      name: String(entry.name || template?.label || 'Section'),
+      name: isCustom ? String(entry.name || template?.label || 'Section') : String(template?.label || entry.name || 'Section'),
       templateKey: (template?.key || 'TOP_NAVIGATIONS') as TemplateKey,
       enabled: toBoolean(entry.enabled, true),
       order: clamp(Math.round(toNumber(String(entry.order ?? fallbackOrder), fallbackOrder)), 1, 999),
-      isCustom: toBoolean(entry.isCustom, false),
+      isCustom,
       configSnapshot: entry.configSnapshot || {},
     } as SectionVisibilityEntry;
   });
@@ -2849,14 +2856,14 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
                 900
               ),
               ctaMode: normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode),
-              ctaPageKey: ((): string => {
-                const explicit = String((section as CategorySection)?.ctaPageKey || fallbackCategory.ctaPageKey || '').trim().toUpperCase();
-                if (explicit) return explicit;
-                const keyToken = String((section as CategorySection)?.key || '').trim().toUpperCase();
-                if (keyToken === 'CTW') return 'CUSTOM_TO_WEAR';
-                if (keyToken === 'FTB') return 'FABRICS';
-                return 'READY_TO_WEAR';
-              })(),
+            ctaPageKey: ((): string => {
+              const explicit = String((section as CategorySection)?.ctaPageKey || fallbackCategory.ctaPageKey || '').trim().toUpperCase();
+              if (explicit) return explicit;
+              const keyToken = String((section as CategorySection)?.key || '').trim().toUpperCase();
+              if (keyToken === 'CTW') return 'FABRICS';
+              if (keyToken === 'FTB') return 'FABRICS';
+              return 'READY_TO_WEAR';
+            })(),
               ctaLink:
                 normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode) === 'PAGE'
                   ? resolvePageHrefForKey(
@@ -2947,8 +2954,41 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
           }
         });
 
+        const duplicateFtbAsCtwSteps = (source: CategorySection, preferredId?: string): CategorySection => ({
+          ...source,
+          id: preferredId || uid(),
+          key: 'CTW',
+          title: 'CTW Steps',
+          tag: 'CTW Steps',
+          description: 'Manage title, tag, description and CTA for CTW Steps block.',
+          ctaText: 'Explore CTW Steps',
+          ctaMode: 'PAGE',
+          ctaPageKey: 'CUSTOM_TO_WEAR',
+          ctaLink: '/customtowear',
+          stepCards: (Array.isArray(source.stepCards) ? source.stepCards : []).map((step) => ({
+            ...step,
+            id: uid(),
+          })),
+        });
+
+        const existingCtw = sectionByKey.get('CTW');
+        const existingCtwLooksLegacy =
+          !!existingCtw &&
+          (String(existingCtw.title || '').trim().toUpperCase() === 'CUSTOM TO WEAR' ||
+            String(existingCtw.tag || '').trim().toUpperCase() === 'CTW' ||
+            String(existingCtw.ctaText || '').trim().toUpperCase() === 'EXPLORE CTW');
+        if (existingCtwLooksLegacy) {
+          const ftbSource = sectionByKey.get('FTB') || fallbackByKey.get('FTB');
+          if (ftbSource) {
+            sectionByKey.set('CTW', duplicateFtbAsCtwSteps(ftbSource, existingCtw?.id));
+          }
+        }
+
         return CATEGORY_SECTION_KEY_OPTIONS.map((key, index) => {
-          const fallbackEntry = fallbackByKey.get(key) || fallbackCategory;
+          const fallbackEntry =
+            key === 'CTW' && !fallbackByKey.get('CTW') && fallbackByKey.get('FTB')
+              ? duplicateFtbAsCtwSteps(fallbackByKey.get('FTB') as CategorySection)
+              : fallbackByKey.get(key) || fallbackCategory;
           const resolved = sectionByKey.get(key) || { ...fallbackEntry, id: uid(), key };
           return {
             ...fallbackEntry,
@@ -4859,6 +4899,9 @@ export default function JenksV2FrontPageManager() {
     activeTab === 'categoryManageRtw' || activeTab === 'categoryManageFtb' || activeTab === 'categoryManageCtw';
   const activeCategoryManageSectionKey = isCategoryManageStandaloneTab
     ? CATEGORY_MANAGE_TAB_SECTION_KEY[activeTab as 'categoryManageRtw' | 'categoryManageFtb' | 'categoryManageCtw']
+    : null;
+  const activeCategoryManageSectionLabel = activeCategoryManageSectionKey
+    ? CATEGORY_MANAGE_TAB_LABEL_BY_SECTION_KEY[activeCategoryManageSectionKey]
     : null;
   const activeCategoryManageEntries = isCategoryManageStandaloneTab
     ? config.categoryManage.sections
@@ -7857,7 +7900,7 @@ export default function JenksV2FrontPageManager() {
         <section className="rounded-lg border bg-white p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">
-              {activeCategoryManageSectionKey ? `Category Manage ${activeCategoryManageSectionKey}` : 'Category Manage'}
+              {activeCategoryManageSectionLabel ? `Category Manage ${activeCategoryManageSectionLabel}` : 'Category Manage'}
             </h2>
           </div>
           {activeCategoryManageEntries.map(({ section, index }) => (
@@ -8757,7 +8800,7 @@ export default function JenksV2FrontPageManager() {
           ))}
           {activeCategoryManageEntries.length === 0 ? (
             <div className="rounded border border-dashed px-3 py-2 text-xs text-gray-500">
-              No section found for {activeCategoryManageSectionKey}. Refresh the page to reload normalized RTW/FTB/CTW sections.
+              No section found for {activeCategoryManageSectionLabel || activeCategoryManageSectionKey}. Refresh the page to reload normalized RTW/FTB/CTW sections.
             </div>
           ) : null}
           <input
