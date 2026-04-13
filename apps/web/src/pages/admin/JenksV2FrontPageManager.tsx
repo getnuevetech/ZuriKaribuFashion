@@ -1982,7 +1982,9 @@ type TabKey =
   | 'topNavigations'
   | 'shopBy'
   | 'shopByCountry'
-  | 'categoryManage'
+  | 'categoryManageRtw'
+  | 'categoryManageFtb'
+  | 'categoryManageCtw'
   | 'textIconCards'
   | 'featured'
   | 'instantBuy'
@@ -1999,7 +2001,9 @@ const TAB_META: Array<{ key: TabKey; label: string }> = [
   { key: 'topNavigations', label: 'Top Navigations' },
   { key: 'shopBy', label: 'Shop By' },
   { key: 'shopByCountry', label: 'Shop By Country' },
-  { key: 'categoryManage', label: 'Category Manage' },
+  { key: 'categoryManageRtw', label: 'Category Manage RTW' },
+  { key: 'categoryManageFtb', label: 'Category Manage FTB' },
+  { key: 'categoryManageCtw', label: 'Category Manage CTW' },
   { key: 'textIconCards', label: 'Text & Icon Cards' },
   { key: 'featured', label: 'Featured' },
   { key: 'instantBuy', label: 'Instant Buy' },
@@ -2016,7 +2020,10 @@ const SUBMENU_TO_TAB: Record<string, TabKey> = {
   'top-navigations': 'topNavigations',
   'shop-by': 'shopBy',
   'shop-by-country': 'shopByCountry',
-  'category-manage': 'categoryManage',
+  'category-manage': 'categoryManageRtw',
+  'category-manage-rtw': 'categoryManageRtw',
+  'category-manage-ftb': 'categoryManageFtb',
+  'category-manage-ctw': 'categoryManageCtw',
   'text-icon-cards': 'textIconCards',
   featured: 'featured',
   'instant-buy': 'instantBuy',
@@ -2034,7 +2041,9 @@ const TAB_TO_SUBMENU: Record<TabKey, string> = {
   topNavigations: 'top-navigations',
   shopBy: 'shop-by',
   shopByCountry: 'shop-by-country',
-  categoryManage: 'category-manage',
+  categoryManageRtw: 'category-manage-rtw',
+  categoryManageFtb: 'category-manage-ftb',
+  categoryManageCtw: 'category-manage-ctw',
   textIconCards: 'text-icon-cards',
   featured: 'featured',
   instantBuy: 'instant-buy',
@@ -2046,6 +2055,11 @@ const TAB_TO_SUBMENU: Record<TabKey, string> = {
   customerReviews: 'customer-reviews',
   newsletterFooter: 'newsletter-footer',
   sectionVisibility: 'section-visibility',
+};
+const CATEGORY_MANAGE_TAB_SECTION_KEY: Record<'categoryManageRtw' | 'categoryManageFtb' | 'categoryManageCtw', (typeof CATEGORY_SECTION_KEY_OPTIONS)[number]> = {
+  categoryManageRtw: 'RTW',
+  categoryManageFtb: 'FTB',
+  categoryManageCtw: 'CTW',
 };
 
 const toApiPayload = (config: JenksV2FrontpageConfig) => ({
@@ -2758,163 +2772,192 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
     },
     categoryManage: {
       ...categoryManage,
-      sections: Array.isArray(categoryManage.sections)
-        ? categoryManage.sections.map((section) => ({
-            ...fallbackCategory,
-            ...section,
-            image: String((section as CategorySection)?.image || fallbackCategory.image || CATEGORY_FALLBACK_IMAGE_BY_KEY[String((section as CategorySection)?.key || '').toUpperCase()] || ''),
-            sectionHeightPx: clamp(
-              toNumber(
-                String(
-                  (section as CategorySection)?.sectionHeightPx ??
-                    (section as unknown as Record<string, unknown>)?.sectionMinHeightPx ??
-                    fallbackCategory.sectionHeightPx ??
-                    0
+      sections: (() => {
+        const normalizedSections = Array.isArray(categoryManage.sections)
+          ? categoryManage.sections.map((section) => ({
+              ...fallbackCategory,
+              ...section,
+              image: String((section as CategorySection)?.image || fallbackCategory.image || CATEGORY_FALLBACK_IMAGE_BY_KEY[String((section as CategorySection)?.key || '').toUpperCase()] || ''),
+              sectionHeightPx: clamp(
+                toNumber(
+                  String(
+                    (section as CategorySection)?.sectionHeightPx ??
+                      (section as unknown as Record<string, unknown>)?.sectionMinHeightPx ??
+                      fallbackCategory.sectionHeightPx ??
+                      0
+                  ),
+                  fallbackCategory.sectionHeightPx ?? 0
                 ),
-                fallbackCategory.sectionHeightPx ?? 0
+                0,
+                2400
               ),
-              0,
-              2400
-            ),
-            columnHeightPx: clamp(
-              toNumber(
-                String(
-                  (section as CategorySection)?.columnHeightPx ??
-                    (section as unknown as Record<string, unknown>)?.cardHeightPx ??
-                    fallbackCategory.columnHeightPx ??
-                    0
+              columnHeightPx: clamp(
+                toNumber(
+                  String(
+                    (section as CategorySection)?.columnHeightPx ??
+                      (section as unknown as Record<string, unknown>)?.cardHeightPx ??
+                      fallbackCategory.columnHeightPx ??
+                      0
+                  ),
+                  fallbackCategory.columnHeightPx ?? 0
                 ),
-                fallbackCategory.columnHeightPx ?? 0
+                0,
+                2400
               ),
-              0,
-              2400
-            ),
-            imageHeightPx: clamp(
-              toNumber(
-                String(
-                  (section as CategorySection)?.imageHeightPx ??
-                    (section as unknown as Record<string, unknown>)?.cardImageHeightPx ??
-                    (section as unknown as Record<string, unknown>)?.imageMinHeightPx ??
-                    fallbackCategory.imageHeightPx ??
-                    0
+              imageHeightPx: clamp(
+                toNumber(
+                  String(
+                    (section as CategorySection)?.imageHeightPx ??
+                      (section as unknown as Record<string, unknown>)?.cardImageHeightPx ??
+                      (section as unknown as Record<string, unknown>)?.imageMinHeightPx ??
+                      fallbackCategory.imageHeightPx ??
+                      0
+                  ),
+                  fallbackCategory.imageHeightPx ?? 0
                 ),
-                fallbackCategory.imageHeightPx ?? 0
+                0,
+                2400
               ),
-              0,
-              2400
-            ),
-            stepCardsTitle: String(
-              (section as CategorySection)?.stepCardsTitle || fallbackCategory.stepCardsTitle || 'Create your own style step-by-step'
-            ),
-            stepCardsTitleIcon: String(
-              (section as CategorySection)?.stepCardsTitleIcon || fallbackCategory.stepCardsTitleIcon || 'Scissors'
-            ),
-            stepCardsTitleFontSize: clamp(
-              toNumber(
-                String((section as CategorySection)?.stepCardsTitleFontSize ?? fallbackCategory.stepCardsTitleFontSize ?? 16),
-                fallbackCategory.stepCardsTitleFontSize ?? 16
+              stepCardsTitle: String(
+                (section as CategorySection)?.stepCardsTitle || fallbackCategory.stepCardsTitle || 'Create your own style step-by-step'
               ),
-              10,
-              40
-            ),
-            stepCardsTitleFontStyle:
-              String((section as CategorySection)?.stepCardsTitleFontStyle || fallbackCategory.stepCardsTitleFontStyle || 'NORMAL')
-                .trim()
-                .toUpperCase() === 'ITALIC'
-                ? 'ITALIC'
-                : 'NORMAL',
-            stepCardsTitleFontWeight: clamp(
-              toNumber(
-                String(
-                  (section as CategorySection)?.stepCardsTitleFontWeight ?? fallbackCategory.stepCardsTitleFontWeight ?? 600
+              stepCardsTitleIcon: String(
+                (section as CategorySection)?.stepCardsTitleIcon || fallbackCategory.stepCardsTitleIcon || 'Scissors'
+              ),
+              stepCardsTitleFontSize: clamp(
+                toNumber(
+                  String((section as CategorySection)?.stepCardsTitleFontSize ?? fallbackCategory.stepCardsTitleFontSize ?? 16),
+                  fallbackCategory.stepCardsTitleFontSize ?? 16
                 ),
-                fallbackCategory.stepCardsTitleFontWeight ?? 600
+                10,
+                40
               ),
-              100,
-              900
-            ),
-            ctaMode: normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode),
-            ctaPageKey: ((): string => {
-              const explicit = String((section as CategorySection)?.ctaPageKey || fallbackCategory.ctaPageKey || '').trim().toUpperCase();
-              if (explicit) return explicit;
-              const keyToken = String((section as CategorySection)?.key || '').trim().toUpperCase();
-              if (keyToken === 'CTW') return 'CUSTOM_TO_WEAR';
-              if (keyToken === 'FTB') return 'FABRICS';
-              return 'READY_TO_WEAR';
-            })(),
-            ctaLink:
-              normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode) === 'PAGE'
-                ? resolvePageHrefForKey(
-                    (section as CategorySection)?.ctaPageKey,
-                    (section as CategorySection)?.ctaLink || fallbackCategory.ctaLink
-                  )
-                : normalizeManagerHref((section as CategorySection)?.ctaLink, fallbackCategory.ctaLink),
-            ctaStyle: normalizeCtaStyle((section as CategorySection)?.ctaStyle, fallbackCategory.ctaStyle),
-            stepCardBackgroundColor: String(
-              (section as CategorySection)?.stepCardBackgroundColor || fallbackCategory.stepCardBackgroundColor || '#111111'
-            ),
-            stepCardOverlayOpacity: clamp(
-              toNumber(
-                String((section as CategorySection)?.stepCardOverlayOpacity ?? fallbackCategory.stepCardOverlayOpacity ?? 78),
-                fallbackCategory.stepCardOverlayOpacity ?? 78
-              ),
-              0,
-              100
-            ),
-            stepCardPanelWidth: clamp(
-              toNumber(
-                String((section as CategorySection)?.stepCardPanelWidth ?? fallbackCategory.stepCardPanelWidth ?? 340),
-                fallbackCategory.stepCardPanelWidth ?? 340
-              ),
-              220,
-              460
-            ),
-            stepCardAccentColor: String(
-              (section as CategorySection)?.stepCardAccentColor || fallbackCategory.stepCardAccentColor || '#e66045'
-            ),
-            stepCardIconColor: String(
-              (section as CategorySection)?.stepCardIconColor || fallbackCategory.stepCardIconColor || '#ff7c61'
-            ),
-            stepCardTitleFontSize: clamp(
-              toNumber(
-                String(
-                  (section as CategorySection)?.stepCardTitleFontSize ?? fallbackCategory.stepCardTitleFontSize ?? 11
+              stepCardsTitleFontStyle:
+                String((section as CategorySection)?.stepCardsTitleFontStyle || fallbackCategory.stepCardsTitleFontStyle || 'NORMAL')
+                  .trim()
+                  .toUpperCase() === 'ITALIC'
+                  ? 'ITALIC'
+                  : 'NORMAL',
+              stepCardsTitleFontWeight: clamp(
+                toNumber(
+                  String(
+                    (section as CategorySection)?.stepCardsTitleFontWeight ?? fallbackCategory.stepCardsTitleFontWeight ?? 600
+                  ),
+                  fallbackCategory.stepCardsTitleFontWeight ?? 600
                 ),
-                fallbackCategory.stepCardTitleFontSize ?? 11
+                100,
+                900
               ),
-              10,
-              28
-            ),
-            stepCardDescriptionFontSize: clamp(
-              toNumber(
-                String(
-                  (section as CategorySection)?.stepCardDescriptionFontSize ??
-                    fallbackCategory.stepCardDescriptionFontSize ??
-                    12
+              ctaMode: normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode),
+              ctaPageKey: ((): string => {
+                const explicit = String((section as CategorySection)?.ctaPageKey || fallbackCategory.ctaPageKey || '').trim().toUpperCase();
+                if (explicit) return explicit;
+                const keyToken = String((section as CategorySection)?.key || '').trim().toUpperCase();
+                if (keyToken === 'CTW') return 'CUSTOM_TO_WEAR';
+                if (keyToken === 'FTB') return 'FABRICS';
+                return 'READY_TO_WEAR';
+              })(),
+              ctaLink:
+                normalizeCtaMode((section as CategorySection)?.ctaMode, fallbackCategory.ctaMode) === 'PAGE'
+                  ? resolvePageHrefForKey(
+                      (section as CategorySection)?.ctaPageKey,
+                      (section as CategorySection)?.ctaLink || fallbackCategory.ctaLink
+                    )
+                  : normalizeManagerHref((section as CategorySection)?.ctaLink, fallbackCategory.ctaLink),
+              ctaStyle: normalizeCtaStyle((section as CategorySection)?.ctaStyle, fallbackCategory.ctaStyle),
+              stepCardBackgroundColor: String(
+                (section as CategorySection)?.stepCardBackgroundColor || fallbackCategory.stepCardBackgroundColor || '#111111'
+              ),
+              stepCardOverlayOpacity: clamp(
+                toNumber(
+                  String((section as CategorySection)?.stepCardOverlayOpacity ?? fallbackCategory.stepCardOverlayOpacity ?? 78),
+                  fallbackCategory.stepCardOverlayOpacity ?? 78
                 ),
-                fallbackCategory.stepCardDescriptionFontSize ?? 12
+                0,
+                100
               ),
-              10,
-              26
-            ),
-            stepsEnabled: toBoolean(
-              (section as any)?.stepsEnabled ?? (section as any)?.stepCardsEnabled,
-              (fallbackCategory as any)?.stepsEnabled ?? true
-            ),
-            stepCards: Array.isArray((section as CategorySection)?.stepCards)
-              ? (section as CategorySection).stepCards
-                  .map((card, cardIndex) => ({
-                    id: String(card?.id || `${section.id}-step-${cardIndex + 1}`),
-                    icon: String(card?.icon || 'Sparkles'),
-                    title: String(card?.title || `Step ${cardIndex + 1}`),
-                    description: String(card?.description || ''),
-                    enabled: toBoolean(card?.enabled, true),
-                    displayOrder: clamp(toNumber(String(card?.displayOrder ?? cardIndex + 1), cardIndex + 1), 0, 999),
-                  }))
-                  .slice(0, 12)
-              : fallbackCategory.stepCards,
-          }))
-        : DEFAULT_CONFIG.categoryManage.sections,
+              stepCardPanelWidth: clamp(
+                toNumber(
+                  String((section as CategorySection)?.stepCardPanelWidth ?? fallbackCategory.stepCardPanelWidth ?? 340),
+                  fallbackCategory.stepCardPanelWidth ?? 340
+                ),
+                220,
+                460
+              ),
+              stepCardAccentColor: String(
+                (section as CategorySection)?.stepCardAccentColor || fallbackCategory.stepCardAccentColor || '#e66045'
+              ),
+              stepCardIconColor: String(
+                (section as CategorySection)?.stepCardIconColor || fallbackCategory.stepCardIconColor || '#ff7c61'
+              ),
+              stepCardTitleFontSize: clamp(
+                toNumber(
+                  String(
+                    (section as CategorySection)?.stepCardTitleFontSize ?? fallbackCategory.stepCardTitleFontSize ?? 11
+                  ),
+                  fallbackCategory.stepCardTitleFontSize ?? 11
+                ),
+                10,
+                28
+              ),
+              stepCardDescriptionFontSize: clamp(
+                toNumber(
+                  String(
+                    (section as CategorySection)?.stepCardDescriptionFontSize ??
+                      fallbackCategory.stepCardDescriptionFontSize ??
+                      12
+                  ),
+                  fallbackCategory.stepCardDescriptionFontSize ?? 12
+                ),
+                10,
+                26
+              ),
+              stepsEnabled: toBoolean(
+                (section as any)?.stepsEnabled ?? (section as any)?.stepCardsEnabled,
+                (fallbackCategory as any)?.stepsEnabled ?? true
+              ),
+              stepCards: Array.isArray((section as CategorySection)?.stepCards)
+                ? (section as CategorySection).stepCards
+                    .map((card, cardIndex) => ({
+                      id: String(card?.id || `${section.id}-step-${cardIndex + 1}`),
+                      icon: String(card?.icon || 'Sparkles'),
+                      title: String(card?.title || `Step ${cardIndex + 1}`),
+                      description: String(card?.description || ''),
+                      enabled: toBoolean(card?.enabled, true),
+                      displayOrder: clamp(toNumber(String(card?.displayOrder ?? cardIndex + 1), cardIndex + 1), 0, 999),
+                    }))
+                    .slice(0, 12)
+                : fallbackCategory.stepCards,
+            }))
+          : DEFAULT_CONFIG.categoryManage.sections;
+
+        const fallbackByKey = new Map<string, CategorySection>();
+        DEFAULT_CONFIG.categoryManage.sections.forEach((entry) => {
+          const key = String(entry.key || '').trim().toUpperCase();
+          if (!CATEGORY_SECTION_KEY_OPTIONS.includes(key as (typeof CATEGORY_SECTION_KEY_OPTIONS)[number])) return;
+          if (!fallbackByKey.has(key)) fallbackByKey.set(key, entry);
+        });
+
+        const sectionByKey = new Map<string, CategorySection>();
+        normalizedSections.forEach((entry) => {
+          const key = String(entry.key || '').trim().toUpperCase();
+          if (!CATEGORY_SECTION_KEY_OPTIONS.includes(key as (typeof CATEGORY_SECTION_KEY_OPTIONS)[number])) return;
+          if (!sectionByKey.has(key)) {
+            sectionByKey.set(key, { ...entry, key });
+          }
+        });
+
+        return CATEGORY_SECTION_KEY_OPTIONS.map((key, index) => {
+          const fallbackEntry = fallbackByKey.get(key) || fallbackCategory;
+          const resolved = sectionByKey.get(key) || { ...fallbackEntry, id: uid(), key };
+          return {
+            ...fallbackEntry,
+            ...resolved,
+            key,
+            displayOrder: index + 1,
+          };
+        });
+      })(),
     },
     featured: {
       ...featured,
@@ -4517,6 +4560,21 @@ export default function JenksV2FrontPageManager() {
     }
   };
 
+  const updateCategorySectionAtIndex = (
+    sectionIndex: number,
+    updater: (entry: CategorySection) => CategorySection
+  ) => {
+    setConfig((prev) => ({
+      ...prev,
+      categoryManage: {
+        ...prev.categoryManage,
+        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
+          entryIndex === sectionIndex ? updater(entry) : entry
+        ),
+      },
+    }));
+  };
+
   const handleFeaturedImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || featuredUploadIndex === null) return;
@@ -4797,6 +4855,16 @@ export default function JenksV2FrontPageManager() {
   }
 
   const activeSection = TAB_META.find((item) => item.key === activeTab);
+  const isCategoryManageStandaloneTab =
+    activeTab === 'categoryManageRtw' || activeTab === 'categoryManageFtb' || activeTab === 'categoryManageCtw';
+  const activeCategoryManageSectionKey = isCategoryManageStandaloneTab
+    ? CATEGORY_MANAGE_TAB_SECTION_KEY[activeTab as 'categoryManageRtw' | 'categoryManageFtb' | 'categoryManageCtw']
+    : null;
+  const activeCategoryManageEntries = isCategoryManageStandaloneTab
+    ? config.categoryManage.sections
+        .map((section, index) => ({ section, index }))
+        .filter(({ section }) => String(section.key || '').trim().toUpperCase() === activeCategoryManageSectionKey)
+    : [];
   const isRtwTab = activeTab === 'rtwFtb';
   const isFtbTab = activeTab === 'ftbSpotlight';
   const isProductSpotlightTab = isRtwTab || isFtbTab;
@@ -7785,91 +7853,23 @@ export default function JenksV2FrontPageManager() {
         </section>
       ) : null}
 
-      {activeTab === 'categoryManage' ? (
+      {isCategoryManageStandaloneTab ? (
         <section className="rounded-lg border bg-white p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Category Manage</h2>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                setConfig((prev) => ({
-                  ...prev,
-                  categoryManage: {
-                    sections: [
-                      ...prev.categoryManage.sections,
-                      {
-                        id: uid(),
-                        key: '',
-                        title: 'New Category Section',
-                        tag: '',
-                        stepCardsTitle: 'Create your own style step-by-step',
-                        stepCardsTitleIcon: 'Scissors',
-                        stepCardsTitleFontSize: 16,
-                        stepCardsTitleFontStyle: 'NORMAL',
-                        stepCardsTitleFontWeight: 600,
-                        description: '',
-                        image: CATEGORY_FALLBACK_IMAGE_BY_KEY.RTW,
-                        sectionHeightPx: 0,
-                        columnHeightPx: 0,
-                        imageHeightPx: 0,
-                        ctaText: '',
-                        ctaLink: '/readytowear',
-                        ctaMode: 'PAGE',
-                        ctaPageKey: 'READY_TO_WEAR',
-                        ctaStyle: createCtaStyle({
-                          backgroundColor: 'transparent',
-                          textColor: '#ffffff',
-                          borderColor: 'transparent',
-                          borderWidth: 0,
-                          fontSize: 18,
-                        }),
-                        stepCardBackgroundColor: '#111111',
-                        stepCardOverlayOpacity: 78,
-                        stepCardPanelWidth: 340,
-                        stepCardAccentColor: '#e66045',
-                        stepCardIconColor: '#ff7c61',
-                        stepCardTitleFontSize: 11,
-                        stepCardDescriptionFontSize: 12,
-                        stepsEnabled: true,
-                        stepCards: defaultCategoryStepCards('RTW'),
-                        enabled: true,
-                        displayOrder: prev.categoryManage.sections.length + 1,
-                      },
-                    ],
-                  },
-                }))
-              }
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Section
-            </Button>
+            <h2 className="text-xl font-semibold">
+              {activeCategoryManageSectionKey ? `Category Manage ${activeCategoryManageSectionKey}` : 'Category Manage'}
+            </h2>
           </div>
-          {config.categoryManage.sections.map((section, index) => (
+          {activeCategoryManageEntries.map(({ section, index }) => (
             <div key={section.id} className="space-y-3 rounded border p-3">
               <div className="grid grid-cols-1 gap-2 md:grid-cols-16">
               <label className="md:col-span-1 text-[11px]">
-                Section Key
-                <select
-                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                  value={section.key}
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      categoryManage: {
-                        sections: prev.categoryManage.sections.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, key: event.target.value.toUpperCase() } : entry
-                        ),
-                      },
-                    }))
-                  }
-                >
-                  {CATEGORY_SECTION_KEY_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                Section
+                <input
+                  className="mt-1 w-full rounded border bg-gray-50 px-2 py-1 text-xs"
+                  value={String(section.key || '').toUpperCase()}
+                  readOnly
+                />
               </label>
               <label className="md:col-span-2 text-[11px]">
                 Title
@@ -8204,20 +8204,7 @@ export default function JenksV2FrontPageManager() {
                     }))
                   }
                 />
-                <button
-                  type="button"
-                  className="rounded border p-1"
-                  onClick={() =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      categoryManage: {
-                        sections: prev.categoryManage.sections.filter((_, entryIndex) => entryIndex !== index),
-                      },
-                    }))
-                  }
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <span className="text-[10px] text-gray-400">Core section</span>
               </div>
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
@@ -8768,6 +8755,11 @@ export default function JenksV2FrontPageManager() {
               </div>
             </div>
           ))}
+          {activeCategoryManageEntries.length === 0 ? (
+            <div className="rounded border border-dashed px-3 py-2 text-xs text-gray-500">
+              No section found for {activeCategoryManageSectionKey}. Refresh the page to reload normalized RTW/FTB/CTW sections.
+            </div>
+          ) : null}
           <input
             ref={categoryManageImageUploadRef}
             type="file"
@@ -13495,7 +13487,16 @@ export default function JenksV2FrontPageManager() {
                       {section.isCustom ? 'Custom' : 'Core'}
                     </span>
                   </div>
-                  <div className="md:col-span-3 text-xs text-gray-600">{section.templateKey}</div>
+                  <div className="md:col-span-3 text-xs text-gray-600">
+                    {section.templateKey}
+                    {section.templateKey === 'CATEGORY_MANAGE_RTW' ||
+                    section.templateKey === 'CATEGORY_MANAGE_FTB' ||
+                    section.templateKey === 'CATEGORY_MANAGE_CTW' ? (
+                      <span className="ml-2 rounded border border-emerald-200 bg-emerald-50 px-1 py-0.5 text-[10px] font-medium text-emerald-700">
+                        Standalone
+                      </span>
+                    ) : null}
+                  </div>
                   <input
                     type="number"
                     className="md:col-span-2 rounded border px-2 py-1 text-xs"
@@ -13561,7 +13562,10 @@ export default function JenksV2FrontPageManager() {
       activeTab === 'shopBy' ||
       activeTab === 'shopByCountry' ||
       activeTab === 'topNavigations' ||
-      activeTab === 'categoryManage' ||
+      activeTab === 'categoryManageRtw' ||
+      activeTab === 'categoryManageFtb' ||
+      activeTab === 'categoryManageCtw' ||
+      isCategoryManageStandaloneTab ||
       activeTab === 'textIconCards' ||
       activeTab === 'featured' ||
       activeTab === 'instantBuy' ||

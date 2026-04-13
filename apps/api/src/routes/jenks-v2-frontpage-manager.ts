@@ -2497,7 +2497,83 @@ const normalizeCategoryManage = (
       } as CategorySection;
     })
     .slice(0, 30);
-  return { sections };
+  const categorySectionKeyOrder: FeaturedCategoryKey[] = ['RTW', 'FTB', 'CTW'];
+  const fallbackByKey = new Map<FeaturedCategoryKey, CategorySection>();
+  fallback.sections.forEach((entry) => {
+    const keyToken = String(entry.key || '')
+      .trim()
+      .toUpperCase();
+    if (keyToken === 'RTW' || keyToken === 'FTB' || keyToken === 'CTW') {
+      const key = keyToken as FeaturedCategoryKey;
+      if (!fallbackByKey.has(key)) fallbackByKey.set(key, { ...entry, key });
+    }
+  });
+
+  const sectionByKey = new Map<FeaturedCategoryKey, CategorySection>();
+  sections.forEach((entry) => {
+    const keyToken = String(entry.key || '')
+      .trim()
+      .toUpperCase();
+    if (keyToken === 'RTW' || keyToken === 'FTB' || keyToken === 'CTW') {
+      const key = keyToken as FeaturedCategoryKey;
+      if (!sectionByKey.has(key)) sectionByKey.set(key, { ...entry, key });
+    }
+  });
+
+  const canonicalSections = categorySectionKeyOrder.map((key, index) => {
+    const fallbackSection = fallbackByKey.get(key) || ({
+      ...fallbackSeed,
+      id: randomUUID(),
+      key,
+      title: key === 'CTW' ? 'Custom To Wear' : key === 'FTB' ? 'Fabric To Buy' : 'Ready To Wear',
+      tag: key,
+      image: '',
+      ctaPageKey: key === 'CTW' ? 'CUSTOM_TO_WEAR' : key === 'FTB' ? 'FABRICS' : 'READY_TO_WEAR',
+      ctaLink: key === 'CTW' ? '/customtowear' : key === 'FTB' ? '/fabricstobuy' : '/readytowear',
+      stepCards: [],
+      stepsEnabled: true,
+      stepCardsTitle: 'Create your own style step-by-step',
+      stepCardsTitleIcon: 'Scissors',
+      stepCardsTitleFontSize: 16,
+      stepCardsTitleFontStyle: 'NORMAL',
+      stepCardsTitleFontWeight: 600,
+      stepCardBackgroundColor: '#111111',
+      stepCardOverlayOpacity: 78,
+      stepCardPanelWidth: 430,
+      stepCardAccentColor: '#e66045',
+      stepCardIconColor: '#ff7c61',
+      stepCardTitleFontSize: 16,
+      stepCardDescriptionFontSize: 14,
+      sectionHeightPx: 0,
+      columnHeightPx: 0,
+      imageHeightPx: 0,
+    } as CategorySection);
+    const resolved = sectionByKey.get(key) || fallbackSection;
+    return {
+      ...fallbackSection,
+      ...resolved,
+      key,
+      displayOrder: index + 1,
+      tag: String(resolved.tag || fallbackSection.tag || key).slice(0, 80),
+      ctaPageKey:
+        String(resolved.ctaPageKey || fallbackSection.ctaPageKey || '').trim().toUpperCase() ||
+        (key === 'CTW' ? 'CUSTOM_TO_WEAR' : key === 'FTB' ? 'FABRICS' : 'READY_TO_WEAR'),
+      ctaLink:
+        normalizeCtaMode(resolved.ctaMode, fallbackSection.ctaMode) === 'PAGE'
+          ? resolveCtaPageHref(
+              String(resolved.ctaPageKey || fallbackSection.ctaPageKey || ''),
+              fallbackSection.ctaLink
+            )
+          : normalizeHref(resolved.ctaLink, fallbackSection.ctaLink),
+      stepCards:
+        Array.isArray(resolved.stepCards) && resolved.stepCards.length > 0
+          ? resolved.stepCards
+          : fallbackSection.stepCards.length > 0
+            ? fallbackSection.stepCards
+            : sections[0]?.stepCards || [],
+    } as CategorySection;
+  });
+  return { sections: canonicalSections };
 };
 
 const normalizeTextIconCards = (
