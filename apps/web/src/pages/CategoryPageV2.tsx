@@ -153,6 +153,8 @@ const DEFAULT_PRODUCT_CARD = {
   countryIconPosition: 'BOTTOM_RIGHT' as const,
 };
 
+const DEFAULT_PRICE_FILTER_OPTIONS = ['Under $100', '$100 - $300', '$300 - $500', '$500+'];
+
 const normalizeToken = (value: string) => String(value || '').trim().toLowerCase();
 
 const shortDescription = (value: string, wordLimit: number) => {
@@ -202,6 +204,7 @@ export default function CategoryPageV2({
   const [searchParams] = useSearchParams();
   const searchParamsKey = searchParams.toString();
   const querySearch = String(searchParams.get('search') || '').trim();
+  const shouldForcePriceFilter = pageType === 'SHOP' || pageType === 'READY_TO_WEAR';
   const [runtime, setRuntime] = useState<CategoryPageRuntime | null>(null);
   const [products, setProducts] = useState<CategoryPageProduct[]>([]);
   const [loadingRuntime, setLoadingRuntime] = useState(true);
@@ -242,6 +245,16 @@ export default function CategoryPageV2({
           const tokens = parseFilterTokens(queryValue, row.options || []);
           if (tokens.length > 0) nextApplied[paramKey] = tokens;
         }
+        if (shouldForcePriceFilter) {
+          if (!Object.prototype.hasOwnProperty.call(initialFilters, 'PRICE')) initialFilters.PRICE = '';
+          const queryPrice = String(params.get('price') || '').trim();
+          if (queryPrice) {
+            initialFilters.PRICE = queryPrice;
+            const existingPriceRow = (data.settings.filterDefinitions || []).find((row) => row.key === 'PRICE');
+            const tokens = parseFilterTokens(queryPrice, existingPriceRow?.options || DEFAULT_PRICE_FILTER_OPTIONS);
+            if (tokens.length > 0) nextApplied.price = tokens;
+          }
+        }
         if (allowCountryQuery) {
           const queryCountry = String(params.get('country') || '').trim();
           const queryCategory = String(params.get('category') || '').trim();
@@ -271,7 +284,7 @@ export default function CategoryPageV2({
     return () => {
       active = false;
     };
-  }, [pageType, allowCountryQuery, querySearch, searchParamsKey]);
+  }, [pageType, allowCountryQuery, querySearch, searchParamsKey, shouldForcePriceFilter]);
 
   useEffect(() => {
     if (!runtime?.settings) return;
@@ -319,6 +332,21 @@ export default function CategoryPageV2({
     () => (runtime?.settings.filterDefinitions || []).filter((row) => row.enabled).sort((a, b) => a.displayOrder - b.displayOrder),
     [runtime]
   );
+  const visibleFilters = useMemo(() => {
+    if (!shouldForcePriceFilter) return enabledFilters;
+    const existingPrice = enabledFilters.find((row) => row.key === 'PRICE');
+    const forcedPriceRow =
+      existingPrice || {
+        id: `${pageType}-forced-price`,
+        key: 'PRICE' as const,
+        label: 'Price',
+        inputType: 'DROPDOWN' as const,
+        enabled: true,
+        options: DEFAULT_PRICE_FILTER_OPTIONS,
+        displayOrder: 0,
+      };
+    return [forcedPriceRow, ...enabledFilters.filter((row) => row.key !== 'PRICE')];
+  }, [enabledFilters, pageType, shouldForcePriceFilter]);
 
   const primarySlotCount = Math.max(1, Number(runtime?.settings.primaryGridRows || 1)) * Math.max(1, Number(runtime?.settings.primaryGridColumns || 1));
   const primaryProducts = (runtime?.primaryGridProducts || []).slice(0, primarySlotCount);
@@ -455,7 +483,7 @@ export default function CategoryPageV2({
     event?.preventDefault();
     const formData = event?.currentTarget ? new FormData(event.currentTarget) : null;
     const nextApplied: Record<string, string[]> = {};
-    for (const row of enabledFilters) {
+    for (const row of visibleFilters) {
       const paramKey = FILTER_PARAM_BY_KEY[row.key];
       const value = String(formData?.get(`filter-${row.key}`) || pendingFilters[row.key] || '').trim();
       if (!value) continue;
@@ -469,7 +497,7 @@ export default function CategoryPageV2({
 
   const clearFilters = () => {
     const reset: Record<string, string> = {};
-    for (const row of enabledFilters) reset[row.key] = '';
+    for (const row of visibleFilters) reset[row.key] = '';
     setPendingFilters(reset);
     setAppliedFilters({});
     setPendingSearch('');
@@ -538,7 +566,7 @@ export default function CategoryPageV2({
                         className="w-full pl-10 pr-4 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors text-sm"
                       />
                     </div>
-                    {enabledFilters.map((row) => {
+                    {visibleFilters.map((row) => {
                       const value = String(pendingFilters[row.key] || '');
                       const listId = `filter-suggest-${pageType}-${row.key}`;
                       return (
