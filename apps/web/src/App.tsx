@@ -54,9 +54,6 @@ const AdminOrders = lazy(() => import('./pages/admin/Orders'));
 const AdminPricingRules = lazy(() => import('./pages/admin/PricingRules'));
 const AdminPromoCodes = lazy(() => import('./pages/admin/PromoCodes'));
 const AdminBanners = lazy(() => import('./pages/admin/Banners'));
-const AdminHomepage = lazy(() => import('./pages/admin/Homepage'));
-const AdminHomepageSections = lazy(() => import('./pages/admin/HomepageSections'));
-const AdminHomepageVisibility = lazy(() => import('./pages/admin/HomepageVisibility'));
 const AdminCategoryPages = lazy(() => import('./pages/admin/CategoryPages'));
 const AdminBlogs = lazy(() => import('./pages/admin/Blogs'));
 const AdminRoleManagement = lazy(() => import('./pages/admin/RoleManagement'));
@@ -96,7 +93,6 @@ const AdminAuthenticatorSettings = lazy(() => import('./pages/admin/Authenticato
 const AdminHelpCenterContent = lazy(() => import('./pages/admin/HelpCenterContent'));
 const AdminContactPageManager = lazy(() => import('./pages/admin/ContactPageManager'));
 const AdminModuleRuntimeSettings = lazy(() => import('./pages/admin/ModuleRuntimeSettings'));
-const AdminJenksHomepageManage = lazy(() => import('./pages/admin/JenksHomepageManage'));
 const AdminJenksV2FrontPageManager = lazy(() => import('./pages/admin/JenksV2FrontPageManager'));
 
 const SellerDashboard = lazy(() => import('./pages/seller/Dashboard'));
@@ -700,35 +696,19 @@ function App() {
                 />
                 <Route
                   path="/admin/homepage"
-                  element={
-                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
-                      <AdminHomepage />
-                    </AdminPermissionGuard>
-                  }
+                  element={<Navigate to="/admin/jenks-v2-frontpage-manager" replace />}
                 />
                 <Route
                   path="/admin/homepage-visibility"
-                  element={
-                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
-                      <AdminHomepageVisibility />
-                    </AdminPermissionGuard>
-                  }
+                  element={<Navigate to="/admin/jenks-v2-frontpage-manager/section-visibility" replace />}
                 />
                 <Route
                   path="/admin/homepage-sections"
-                  element={
-                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
-                      <AdminHomepageSections />
-                    </AdminPermissionGuard>
-                  }
+                  element={<Navigate to="/admin/jenks-v2-frontpage-manager/section-visibility" replace />}
                 />
                 <Route
                   path="/admin/jenks-homepage"
-                  element={
-                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
-                      <AdminJenksHomepageManage />
-                    </AdminPermissionGuard>
-                  }
+                  element={<Navigate to="/admin/jenks-v2-frontpage-manager" replace />}
                 />
                 <Route
                   path="/admin/jenks-v2-frontpage-manager"

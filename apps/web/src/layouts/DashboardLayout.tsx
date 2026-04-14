@@ -38,8 +38,6 @@ import { isSuperAdminUser } from '../auth/superAdmin';
 import { 
   User, 
   Ruler,
-  Home,
-  LayoutTemplate,
   LayoutGrid
 } from 'lucide-react';
 
@@ -82,8 +80,6 @@ interface DashboardWeatherSnapshot {
   locationLabel: string;
 }
 
-const LEGACY_HOMEPAGE_PATHS = ['/admin/homepage', '/admin/homepage-visibility'] as const;
-const JENKS_HOMEPAGE_PATHS = ['/admin/jenks-homepage', '/admin/homepage-sections'] as const;
 const JENKS_V2_FRONTPAGE_MANAGER_PATHS = [
   '/admin/jenks-v2-frontpage-manager',
   '/admin/jenks-v2-frontpage-manager/top-navigations',
@@ -126,8 +122,6 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Customer Service Settings', href: '/admin/customer-service/settings', icon: Settings },
     { label: 'VoIP Management', href: '/admin/voip', icon: PhoneCall },
     { label: 'Banners', href: '/admin/banners', icon: ImageIcon },
-    { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
-    { label: 'Jenks FrontPage Manage', href: '/admin/jenks-homepage', icon: LayoutGrid },
     { label: 'Jenks-V2 FrontPage Manager', href: '/admin/jenks-v2-frontpage-manager', icon: LayoutGrid },
     { label: 'Category Pages Manager', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
@@ -378,8 +372,10 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const [isOrderMenuOpen, setIsOrderMenuOpen] = useState(true);
   const [isTicketManagementMenuOpen, setIsTicketManagementMenuOpen] = useState(true);
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(true);
-  const [isLegacyMenuOpen, setIsLegacyMenuOpen] = useState(true);
-  const [isJenksMenuOpen, setIsJenksMenuOpen] = useState(true);
+  // Keep legacy hook slots stable to avoid transient hook-order errors on live sessions
+  // when users receive this update without a hard refresh.
+  const [isLegacyMenuOpen] = useState(false);
+  const [isJenksMenuOpen] = useState(false);
   const [isJenksV2MenuOpen, setIsJenksV2MenuOpen] = useState(true);
   const [isAdminAccountsMenuOpen, setIsAdminAccountsMenuOpen] = useState(true);
   const [isProductManagementMenuOpen, setIsProductManagementMenuOpen] = useState(true);
@@ -415,11 +411,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
   const canAccessAdminNav = (href: string) => {
     if (userType !== 'admin') return true;
     if (
-      (href === '/admin/homepage' ||
-        href === '/admin/homepage-visibility' ||
-        href === '/admin/homepage-sections' ||
-        href === '/admin/jenks-homepage' ||
-        href === '/admin/jenks-v2-frontpage-manager' ||
+      (href === '/admin/jenks-v2-frontpage-manager' ||
         href.startsWith('/admin/jenks-v2-frontpage-manager/')) &&
       !isSuperAdmin
     ) {
@@ -476,10 +468,6 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/customer-service/settings': ['customer_service:settings:manage'],
       '/admin/voip': ['voip:manage|whatsapp:manage|orders:manage'],
       '/admin/banners': ['banners:manage'],
-      '/admin/homepage': ['homepage:manage'],
-      '/admin/homepage-visibility': ['homepage:manage'],
-      '/admin/homepage-sections': ['homepage:manage'],
-      '/admin/jenks-homepage': ['homepage:manage'],
       '/admin/jenks-v2-frontpage-manager': ['homepage:manage'],
       '/admin/jenks-v2-frontpage-manager/top-navigations': ['homepage:manage'],
       '/admin/jenks-v2-frontpage-manager/shop-by': ['homepage:manage'],
@@ -507,11 +495,7 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
     return moduleAccessMap[moduleKey]?.allowed !== false;
   };
   const visibleItems = items
-    .filter((item) => canAccessAdminNav(item.href) && canAccessModuleNav(item.href))
-    .filter((item) => {
-      if (userType !== 'admin' || !isSuperAdmin) return true;
-      return item.href !== '/admin/homepage-visibility';
-    });
+    .filter((item) => canAccessAdminNav(item.href) && canAccessModuleNav(item.href));
   const roleLabel = userType === 'admin' && isSuperAdmin ? 'Super Admin' : roleLabels[userType] || 'User';
   const displayName = user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User';
   const userCountryRaw = String((user as any)?.country || (user as any)?.location || '').trim();
@@ -592,14 +576,8 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       timeZone: userTimeZone,
     }).format(clockNow);
   }, [clockNow, dashboardClockWeatherSettings.showDate, userTimeZone]);
-  const legacySubmenu = [
-    { label: 'Legacy Homepage Manager', href: '/admin/homepage', icon: ChevronRight },
-    { label: 'Frontpage Visibility', href: '/admin/homepage-visibility', icon: ChevronRight },
-  ];
-  const jenksSubmenu = [
-    { label: 'FrontPage', href: '/admin/jenks-homepage', icon: ChevronRight },
-    { label: 'Legacy Sections', href: '/admin/homepage-sections', icon: ChevronRight },
-  ];
+  void isLegacyMenuOpen;
+  void isJenksMenuOpen;
   const jenksV2Submenu = [
     { label: 'Top Navigations', href: '/admin/jenks-v2-frontpage-manager/top-navigations', icon: ChevronRight },
     { label: 'Shop By', href: '/admin/jenks-v2-frontpage-manager/shop-by', icon: ChevronRight },
@@ -923,28 +901,6 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       if (isSuperAdmin) {
         addSearchEntries(
           entries,
-          legacySubmenu
-            .filter((item) => canAccessAdminNav(item.href))
-            .map((item) => ({
-              label: item.label,
-              href: item.href,
-              keywords: ['legacy', 'homepage', 'frontpage', 'visibility', 'sections'],
-            })),
-          { prefix: 'Legacy' }
-        );
-        addSearchEntries(
-          entries,
-          jenksSubmenu
-            .filter((item) => canAccessAdminNav(item.href))
-            .map((item) => ({
-              label: item.label,
-              href: item.href,
-              keywords: ['jenks', 'homepage', 'trust badges', 'copy controls', 'experience'],
-            })),
-          { prefix: 'Jenks FrontPage Manage' }
-        );
-        addSearchEntries(
-          entries,
           jenksV2Submenu
             .filter((item) => canAccessAdminNav(item.href))
             .map((item) => ({
@@ -1131,118 +1087,6 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
                 location.pathname === hrefMeta.pathname &&
                 (hrefMeta.tab ? currentTab === hrefMeta.tab : !currentTab);
               const Icon = item.icon;
-
-              if (userType === 'admin' && item.href === '/admin/homepage' && isSuperAdmin) {
-                const legacyMenuActive = LEGACY_HOMEPAGE_PATHS.includes(location.pathname as (typeof LEGACY_HOMEPAGE_PATHS)[number]);
-                const visibleLegacySubmenu = legacySubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
-                if (visibleLegacySubmenu.length === 0) {
-                  return null;
-                }
-                return (
-                  <div key={item.href} className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsLegacyMenuOpen((prev) => !prev)}
-                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
-                        legacyMenuActive
-                          ? 'bg-white/10 text-white'
-                          : 'text-white/70 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <Icon className="w-5 h-5 flex-shrink-0" />
-                      {isSidebarOpen ? (
-                        <>
-                          <span className="text-sm font-medium">Legacy</span>
-                          <span className="ml-auto">
-                            {isLegacyMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </span>
-                        </>
-                      ) : null}
-                    </button>
-                    {isLegacyMenuOpen && isSidebarOpen ? (
-                      <div className="ml-7 space-y-1">
-                        {visibleLegacySubmenu.map((subItem) => {
-                          const subMeta = readHrefMeta(subItem.href);
-                          const subActive =
-                            location.pathname === subMeta.pathname &&
-                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
-                          const SubIcon = subItem.icon;
-                          return (
-                            <Link
-                              key={subItem.href}
-                              to={subItem.href}
-                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
-                                subActive
-                                  ? 'bg-white/10 text-white'
-                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
-                              }`}
-                            >
-                              <SubIcon className="h-4 w-4" />
-                              <span>{subItem.label}</span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              }
-
-              if (userType === 'admin' && item.href === '/admin/jenks-homepage' && isSuperAdmin) {
-                const jenksMenuActive = JENKS_HOMEPAGE_PATHS.includes(location.pathname as (typeof JENKS_HOMEPAGE_PATHS)[number]);
-                const visibleJenksSubmenu = jenksSubmenu.filter((subItem) => canAccessAdminNav(subItem.href));
-                if (visibleJenksSubmenu.length === 0) {
-                  return null;
-                }
-                return (
-                  <div key={item.href} className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsJenksMenuOpen((prev) => !prev)}
-                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${
-                        jenksMenuActive
-                          ? 'bg-white/10 text-white'
-                          : 'text-white/70 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <Icon className="w-5 h-5 flex-shrink-0" />
-                      {isSidebarOpen ? (
-                        <>
-                          <span className="text-sm font-medium">Jenks FrontPage Manage</span>
-                          <span className="ml-auto">
-                            {isJenksMenuOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </span>
-                        </>
-                      ) : null}
-                    </button>
-                    {isJenksMenuOpen && isSidebarOpen ? (
-                      <div className="ml-7 space-y-1">
-                        {visibleJenksSubmenu.map((subItem) => {
-                          const subMeta = readHrefMeta(subItem.href);
-                          const subActive =
-                            location.pathname === subMeta.pathname &&
-                            (subMeta.tab ? currentTab === subMeta.tab : !currentTab);
-                          const SubIcon = subItem.icon;
-                          return (
-                            <Link
-                              key={subItem.href}
-                              to={subItem.href}
-                              className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
-                                subActive
-                                  ? 'bg-white/10 text-white'
-                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
-                              }`}
-                            >
-                              <SubIcon className="h-4 w-4" />
-                              <span>{subItem.label}</span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              }
 
               if (userType === 'admin' && item.href === '/admin/jenks-v2-frontpage-manager' && isSuperAdmin) {
                 const jenksV2MenuActive =
