@@ -3781,7 +3781,7 @@ const normalizeSettings = (
 
 const readSettings = async () => {
   const defaults = defaultSettings();
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; value: string; updatedAt: Date | null }>>(
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; value: unknown; updatedAt: Date | null }>>(
     `SELECT "id", "value", "updatedAt"
      FROM "HomepageSectionSetting"
      WHERE "key" = $1
@@ -3798,14 +3798,22 @@ const readSettings = async () => {
     };
   }
   try {
-    const parsed = JSON.parse(String(row.value || '{}'));
+    let parsed: unknown;
+    if (typeof row.value === 'string') {
+      parsed = JSON.parse(row.value || '{}');
+    } else if (row.value && typeof row.value === 'object') {
+      parsed = row.value;
+    } else {
+      parsed = {};
+    }
     return {
       rowId: String(row.id),
       settings: normalizeSettings(parsed, defaults),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };
-  } catch {
+  } catch (error) {
+    console.error('Failed to parse Jenks-V2 stored settings value:', error);
     return {
       rowId: String(row.id),
       settings: defaults,
