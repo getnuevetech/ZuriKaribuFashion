@@ -2537,16 +2537,10 @@ const normalizeCategoryManage = (
     })),
   });
 
-  const existingCtw = sectionByKey.get('CTW');
-  const existingCtwLooksLegacy =
-    !!existingCtw &&
-    (String(existingCtw.title || '').trim().toUpperCase() === 'CUSTOM TO WEAR' ||
-      String(existingCtw.tag || '').trim().toUpperCase() === 'CTW' ||
-      String(existingCtw.ctaText || '').trim().toUpperCase() === 'EXPLORE CTW');
-  if (existingCtwLooksLegacy) {
+  if (!sectionByKey.has('CTW')) {
     const ftbSource = sectionByKey.get('FTB') || fallbackByKey.get('FTB');
     if (ftbSource) {
-      sectionByKey.set('CTW', duplicateFtbAsCtwSteps(ftbSource, existingCtw?.id));
+      sectionByKey.set('CTW', duplicateFtbAsCtwSteps(ftbSource));
     }
   }
 
