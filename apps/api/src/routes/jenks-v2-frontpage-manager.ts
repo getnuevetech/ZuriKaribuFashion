@@ -272,7 +272,6 @@ type TextIconCard = {
   title: string;
   description: string;
   icon: string;
-  backgroundImage?: string;
   enabled: boolean;
   displayOrder: number;
 };
@@ -282,6 +281,7 @@ type TextIconCardStyle = {
   cardWidth: number;
   sectionHeightPx: number;
   imageHeightPx: number;
+  backgroundImage: string;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -1413,6 +1413,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         cardWidth: 320,
         sectionHeightPx: 0,
         imageHeightPx: 180,
+        backgroundImage: '',
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -1423,6 +1424,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           cardWidth: 320,
           sectionHeightPx: 0,
           imageHeightPx: 180,
+          backgroundImage: '',
           iconSize: 44,
           titleFontSize: 11,
           descriptionFontSize: 12,
@@ -1432,6 +1434,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           cardWidth: 320,
           sectionHeightPx: 0,
           imageHeightPx: 180,
+          backgroundImage: '',
           iconSize: 44,
           titleFontSize: 11,
           descriptionFontSize: 12,
@@ -1441,6 +1444,7 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           cardWidth: 320,
           sectionHeightPx: 0,
           imageHeightPx: 180,
+          backgroundImage: '',
           iconSize: 44,
           titleFontSize: 11,
           descriptionFontSize: 12,
@@ -2674,6 +2678,7 @@ const normalizeTextIconCards = (
       0,
       2400
     ),
+    backgroundImage: (getString(input.backgroundImage) || fallbackStyle.backgroundImage).slice(0, 2000),
     iconSize: clamp(Math.round(getNumber(input.iconSize) ?? fallbackStyle.iconSize), 20, 120),
     titleFontSize: clamp(Math.round(getNumber(input.titleFontSize) ?? fallbackStyle.titleFontSize), 8, 72),
     descriptionFontSize: clamp(Math.round(getNumber(input.descriptionFontSize) ?? fallbackStyle.descriptionFontSize), 8, 72),
@@ -2681,15 +2686,36 @@ const normalizeTextIconCards = (
   const cardStyle = normalizeCardStyle(rawCardStyle, fallbackCardStyle);
   const rawSectionStyles = asRecord(row.sectionStyles);
   const fallbackSectionStyles = fallback.sectionStyles;
-  const sectionStyles = {
-    howItWorks: normalizeCardStyle(asRecord(rawSectionStyles.howItWorks), fallbackSectionStyles.howItWorks),
-    custom: normalizeCardStyle(asRecord(rawSectionStyles.custom), fallbackSectionStyles.custom),
-    shopWithConfidence: normalizeCardStyle(
-      asRecord(rawSectionStyles.shopWithConfidence),
-      fallbackSectionStyles.shopWithConfidence
-    ),
-  };
   const rows = Array.isArray(row.cards) ? row.cards : fallback.cards;
+  const resolveLegacySectionBackgroundImage = (target: TextIconSectionType): string => {
+    const matched = rows
+      .map((entry) => asRecord(entry))
+      .find((entry) => String(entry.sectionType || '').trim().toUpperCase() === target);
+    return getString(matched?.backgroundImage) || '';
+  };
+  const sectionStyles = {
+    howItWorks: {
+      ...normalizeCardStyle(asRecord(rawSectionStyles.howItWorks), fallbackSectionStyles.howItWorks),
+      backgroundImage:
+        getString(asRecord(rawSectionStyles.howItWorks).backgroundImage) ||
+        resolveLegacySectionBackgroundImage('HOW_IT_WORKS') ||
+        fallbackSectionStyles.howItWorks.backgroundImage,
+    },
+    custom: {
+      ...normalizeCardStyle(asRecord(rawSectionStyles.custom), fallbackSectionStyles.custom),
+      backgroundImage:
+        getString(asRecord(rawSectionStyles.custom).backgroundImage) ||
+        resolveLegacySectionBackgroundImage('CUSTOM') ||
+        fallbackSectionStyles.custom.backgroundImage,
+    },
+    shopWithConfidence: {
+      ...normalizeCardStyle(asRecord(rawSectionStyles.shopWithConfidence), fallbackSectionStyles.shopWithConfidence),
+      backgroundImage:
+        getString(asRecord(rawSectionStyles.shopWithConfidence).backgroundImage) ||
+        resolveLegacySectionBackgroundImage('SHOP_WITH_CONFIDENCE') ||
+        fallbackSectionStyles.shopWithConfidence.backgroundImage,
+    },
+  };
   const cards = rows
     .map((entry, index) => {
       const item = asRecord(entry);

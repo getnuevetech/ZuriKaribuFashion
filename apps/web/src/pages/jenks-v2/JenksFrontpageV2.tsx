@@ -520,6 +520,7 @@ type TextIconCardStyleConfig = {
   cardWidth: number;
   sectionHeightPx: number;
   imageHeightPx: number;
+  backgroundImage: string;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -2729,6 +2730,7 @@ export default function JenksFrontpageV2() {
           0,
           Math.min(2400, Math.round(asNumber(row.imageHeightPx, asNumber(fallbackStyle.imageHeightPx, 180))))
         ),
+        backgroundImage: resolveManagerImage(row.backgroundImage, resolveManagerImage(fallbackStyle.backgroundImage, '')),
         iconSize: Math.max(20, Math.min(120, Math.round(asNumber(row.iconSize, asNumber(fallbackStyle.iconSize, 44))))),
         titleFontSize: Math.max(
           8,
@@ -2767,7 +2769,6 @@ export default function JenksFrontpageV2() {
         title: asString(entry.title, target === 'SHOP_WITH_CONFIDENCE' ? 'Trust' : target === 'CUSTOM' ? 'Custom' : 'Step').toUpperCase(),
         sub: asString(entry.description, ''),
         Icon: iconFromKey(entry.icon, target === 'SHOP_WITH_CONFIDENCE' ? ShieldCheck : Sparkles),
-        backgroundImage: resolveManagerImage((entry as Record<string, unknown>).backgroundImage, ''),
       }));
     if (rows.length > 0) return rows;
     if (allRows.length > 0) return [];
@@ -2776,7 +2777,6 @@ export default function JenksFrontpageV2() {
       title: asString(row.title || row.label, 'Card').toUpperCase(),
       sub: asString(row.sub, ''),
       Icon: row.Icon,
-      backgroundImage: '',
     }));
   };
 
@@ -2811,13 +2811,14 @@ export default function JenksFrontpageV2() {
   };
   const renderTextIconCard = (
     sectionType: TextIconSectionType,
-    item: { id: string; title: string; sub: string; Icon: IconComponent; backgroundImage: string }
+    item: { id: string; title: string; sub: string; Icon: IconComponent }
   ) => {
     const textIconCardStyle = textIconSectionStyles[sectionType];
     const iconSize = textIconCardStyle.iconSize;
     const iconGlyphSize = Math.max(14, Math.round(iconSize * 0.45));
     const imageHeightPx = Math.max(0, Math.round(asNumber(textIconCardStyle.imageHeightPx, 180)));
-    const hasBackgroundImage = hasImageSource(item.backgroundImage);
+    const sectionBackgroundImage = resolveManagerImage(textIconCardStyle.backgroundImage, '');
+    const hasBackgroundImage = hasImageSource(sectionBackgroundImage);
     return (
       <article
         key={item.id}
@@ -2833,7 +2834,7 @@ export default function JenksFrontpageV2() {
         {hasBackgroundImage ? (
           <div className="-mx-4 -mt-8 mb-4 w-[calc(100%+2rem)]">
             <BrandImageWithFallback
-              src={item.backgroundImage}
+              src={sectionBackgroundImage}
               alt={item.title}
               className="w-full object-cover"
               style={{ height: `${imageHeightPx}px` }}

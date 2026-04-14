@@ -243,7 +243,6 @@ type TextIconCard = {
   title: string;
   description: string;
   icon: string;
-  backgroundImage: string;
   enabled: boolean;
   displayOrder: number;
 };
@@ -259,6 +258,7 @@ type TextIconCardStyle = {
   cardWidth: number;
   sectionHeightPx: number;
   imageHeightPx: number;
+  backgroundImage: string;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -1473,6 +1473,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       cardWidth: 320,
       sectionHeightPx: 0,
       imageHeightPx: 180,
+      backgroundImage: '',
       iconSize: 44,
       titleFontSize: 11,
       descriptionFontSize: 12,
@@ -1483,6 +1484,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         cardWidth: 320,
         sectionHeightPx: 0,
         imageHeightPx: 180,
+        backgroundImage: '',
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -1492,6 +1494,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         cardWidth: 320,
         sectionHeightPx: 0,
         imageHeightPx: 180,
+        backgroundImage: '',
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -1501,6 +1504,7 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         cardWidth: 320,
         sectionHeightPx: 0,
         imageHeightPx: 180,
+        backgroundImage: '',
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -1514,7 +1518,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'How it works',
         description: 'Manage process cards and icon settings.',
         icon: 'Workflow',
-        backgroundImage: '',
         enabled: true,
         displayOrder: 1,
       },
@@ -1524,7 +1527,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Custom',
         description: 'Manage standalone custom text/icon cards.',
         icon: 'Sparkles',
-        backgroundImage: '',
         enabled: true,
         displayOrder: 2,
       },
@@ -1534,7 +1536,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Shop with confidence',
         description: 'Manage trust cards and icon settings.',
         icon: 'ShieldCheck',
-        backgroundImage: '',
         enabled: true,
         displayOrder: 3,
       },
@@ -2666,6 +2667,16 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
   const fallbackRtwFtbSpotlight = DEFAULT_CONFIG.rtwFtb.cards[0];
   const fallbackFtbSpotlight = DEFAULT_CONFIG.ftbSpotlight.cards[0];
   const textIconCards = data.textIconCards as Partial<JenksV2FrontpageConfig['textIconCards']> | undefined;
+  const resolveLegacyTextIconSectionBackground = (
+    target: TextIconCard['sectionType']
+  ): string => {
+    if (!Array.isArray(textIconCards?.cards)) return '';
+    const matched = (textIconCards.cards as Array<Record<string, unknown>>).find((entry) => {
+      const token = String(entry.sectionType || '').trim().toUpperCase();
+      return token === target;
+    });
+    return String(matched?.backgroundImage || '');
+  };
   return {
     ...DEFAULT_CONFIG,
     ...data,
@@ -2808,6 +2819,10 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
           0,
           2400
         ),
+        backgroundImage: String(
+          (textIconCards?.cardStyle as Record<string, unknown> | undefined)?.backgroundImage ||
+            DEFAULT_CONFIG.textIconCards.cardStyle.backgroundImage
+        ),
       },
       sectionStyles: {
         ...DEFAULT_CONFIG.textIconCards.sectionStyles,
@@ -2843,6 +2858,13 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             0,
             2400
           ),
+          backgroundImage: String(
+            ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.howItWorks as
+              | Record<string, unknown>
+              | undefined)?.backgroundImage ||
+              resolveLegacyTextIconSectionBackground('HOW_IT_WORKS') ||
+              DEFAULT_CONFIG.textIconCards.sectionStyles.howItWorks.backgroundImage
+          ),
         },
         custom: {
           ...DEFAULT_CONFIG.textIconCards.sectionStyles.custom,
@@ -2874,6 +2896,13 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             ),
             0,
             2400
+          ),
+          backgroundImage: String(
+            ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.custom as
+              | Record<string, unknown>
+              | undefined)?.backgroundImage ||
+              resolveLegacyTextIconSectionBackground('CUSTOM') ||
+              DEFAULT_CONFIG.textIconCards.sectionStyles.custom.backgroundImage
           ),
         },
         shopWithConfidence: {
@@ -2911,6 +2940,13 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             0,
             2400
           ),
+          backgroundImage: String(
+            ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.shopWithConfidence as
+              | Record<string, unknown>
+              | undefined)?.backgroundImage ||
+              resolveLegacyTextIconSectionBackground('SHOP_WITH_CONFIDENCE') ||
+              DEFAULT_CONFIG.textIconCards.sectionStyles.shopWithConfidence.backgroundImage
+          ),
         },
       },
       cards: Array.isArray(textIconCards?.cards)
@@ -2926,7 +2962,6 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             title: String(card?.title || `Card ${index + 1}`),
             description: String(card?.description || ''),
             icon: String(card?.icon || 'Sparkles'),
-            backgroundImage: String((card as unknown as Record<string, unknown>)?.backgroundImage || ''),
             enabled: toBoolean(card?.enabled, true),
             displayOrder: clamp(toNumber(String(card?.displayOrder ?? index + 1), index + 1), 0, 999),
           }))
@@ -4499,6 +4534,7 @@ export default function JenksV2FrontPageManager() {
   const spotlightImageUploadRef = useRef<HTMLInputElement | null>(null);
   const rtwFtbImageUploadRef = useRef<HTMLInputElement | null>(null);
   const ftbSpotlightImageUploadRef = useRef<HTMLInputElement | null>(null);
+  const textIconSectionImageUploadRef = useRef<HTMLInputElement | null>(null);
 
   const [heroUploadIndex, setHeroUploadIndex] = useState<number | null>(null);
   const [shopByCategoryUploadIndex, setShopByCategoryUploadIndex] = useState<number | null>(null);
@@ -4509,6 +4545,9 @@ export default function JenksV2FrontPageManager() {
   const [spotlightUploadIndex, setSpotlightUploadIndex] = useState<number | null>(null);
   const [rtwFtbUploadIndex, setRtwFtbUploadIndex] = useState<number | null>(null);
   const [ftbSpotlightUploadIndex, setFtbSpotlightUploadIndex] = useState<number | null>(null);
+  const [textIconSectionImageUploadKey, setTextIconSectionImageUploadKey] = useState<keyof TextIconSectionStyles | null>(
+    null
+  );
 
   const updatedAtLabel = useMemo(() => {
     if (!config.updatedAt) return 'Never';
@@ -4744,6 +4783,36 @@ export default function JenksV2FrontPageManager() {
       setError(uploadError?.message || 'Failed to upload category section image.');
     } finally {
       setCategoryManageUploadIndex(null);
+      setUploadingTarget(null);
+      event.target.value = '';
+    }
+  };
+
+  const handleTextIconSectionImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !textIconSectionImageUploadKey) return;
+    const sectionKey = textIconSectionImageUploadKey;
+    triggerUpload(`text-icon-section-${sectionKey}`);
+    try {
+      const url = await uploadImage(file);
+      setConfig((prev) => ({
+        ...prev,
+        textIconCards: {
+          ...prev.textIconCards,
+          sectionStyles: {
+            ...prev.textIconCards.sectionStyles,
+            [sectionKey]: {
+              ...prev.textIconCards.sectionStyles[sectionKey],
+              backgroundImage: url,
+            },
+          },
+        },
+      }));
+      setSuccess(`${sectionKey === 'howItWorks' ? 'How It Works' : sectionKey === 'custom' ? 'Custom' : 'Shop With Confidence'} section image uploaded.`);
+    } catch (uploadError: any) {
+      setError(uploadError?.message || 'Failed to upload Text & Icon section image.');
+    } finally {
+      setTextIconSectionImageUploadKey(null);
       setUploadingTarget(null);
       event.target.value = '';
     }
@@ -8982,7 +9051,6 @@ export default function JenksV2FrontPageManager() {
                         title: 'New Custom Card',
                         description: '',
                         icon: 'Sparkles',
-                        backgroundImage: '',
                         enabled: true,
                         displayOrder: prev.textIconCards.cards.length + 1,
                       },
@@ -9292,6 +9360,65 @@ export default function JenksV2FrontPageManager() {
                   />
                 </label>
                 <label className="text-[11px]">
+                  Section Background Image
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={config.textIconCards.sectionStyles[section.key].backgroundImage || ''}
+                    placeholder="https://... or /uploads/..."
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        textIconCards: {
+                          ...prev.textIconCards,
+                          sectionStyles: {
+                            ...prev.textIconCards.sectionStyles,
+                            [section.key]: {
+                              ...prev.textIconCards.sectionStyles[section.key],
+                              backgroundImage: event.target.value,
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      isLoading={uploadingTarget === `text-icon-section-${section.key}`}
+                      onClick={() => {
+                        setTextIconSectionImageUploadKey(section.key);
+                        textIconSectionImageUploadRef.current?.click();
+                      }}
+                    >
+                      Upload Image
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          textIconCards: {
+                            ...prev.textIconCards,
+                            sectionStyles: {
+                              ...prev.textIconCards.sectionStyles,
+                              [section.key]: {
+                                ...prev.textIconCards.sectionStyles[section.key],
+                                backgroundImage: '',
+                              },
+                            },
+                          },
+                        }))
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </label>
+                <label className="text-[11px]">
                   Min Height
                   <input
                     type="number"
@@ -9528,25 +9655,6 @@ export default function JenksV2FrontPageManager() {
                 />
               </label>
               <label className="md:col-span-2 text-[11px]">
-                Background Image URL
-                <input
-                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                  value={card.backgroundImage || ''}
-                  placeholder="https://... or /uploads/..."
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      textIconCards: {
-                        ...prev.textIconCards,
-                        cards: prev.textIconCards.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, backgroundImage: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-              </label>
-              <label className="md:col-span-2 text-[11px]">
                 Icon
                 <select
                   className="mt-1 w-full rounded border px-2 py-1 text-xs"
@@ -9604,6 +9712,13 @@ export default function JenksV2FrontPageManager() {
               </div>
             </div>
           ))}
+          <input
+            ref={textIconSectionImageUploadRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleTextIconSectionImageUpload}
+          />
         </section>
       ) : null}
 
