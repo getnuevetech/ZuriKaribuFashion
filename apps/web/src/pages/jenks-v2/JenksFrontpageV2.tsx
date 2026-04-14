@@ -518,6 +518,8 @@ type TextIconSectionHeadingConfig = {
 type TextIconCardStyleConfig = {
   cardMinHeight: number;
   cardWidth: number;
+  sectionHeightPx: number;
+  imageHeightPx: number;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -2719,6 +2721,14 @@ export default function JenksFrontpageV2() {
           180,
           Math.min(520, Math.round(asNumber(row.cardWidth, asNumber(fallbackStyle.cardWidth, 320))))
         ),
+        sectionHeightPx: Math.max(
+          0,
+          Math.min(2400, Math.round(asNumber(row.sectionHeightPx, asNumber(fallbackStyle.sectionHeightPx, 0))))
+        ),
+        imageHeightPx: Math.max(
+          0,
+          Math.min(2400, Math.round(asNumber(row.imageHeightPx, asNumber(fallbackStyle.imageHeightPx, 180))))
+        ),
         iconSize: Math.max(20, Math.min(120, Math.round(asNumber(row.iconSize, asNumber(fallbackStyle.iconSize, 44))))),
         titleFontSize: Math.max(
           8,
@@ -2757,6 +2767,7 @@ export default function JenksFrontpageV2() {
         title: asString(entry.title, target === 'SHOP_WITH_CONFIDENCE' ? 'Trust' : target === 'CUSTOM' ? 'Custom' : 'Step').toUpperCase(),
         sub: asString(entry.description, ''),
         Icon: iconFromKey(entry.icon, target === 'SHOP_WITH_CONFIDENCE' ? ShieldCheck : Sparkles),
+        backgroundImage: resolveManagerImage((entry as Record<string, unknown>).backgroundImage, ''),
       }));
     if (rows.length > 0) return rows;
     if (allRows.length > 0) return [];
@@ -2765,6 +2776,7 @@ export default function JenksFrontpageV2() {
       title: asString(row.title || row.label, 'Card').toUpperCase(),
       sub: asString(row.sub, ''),
       Icon: row.Icon,
+      backgroundImage: '',
     }));
   };
 
@@ -2783,6 +2795,9 @@ export default function JenksFrontpageV2() {
   const showHowItWorksSection = isSectionVisible('HOW_IT_WORKS') && howItWorksCards.length > 0;
   const showCustomTextIconSection = isSectionVisible('CUSTOM_TEXT_ICON') && customTextIconCards.length > 0;
   const showTrustSection = isSectionVisible('SHOP_WITH_CONFIDENCE') && trustCards.length > 0;
+  const howItWorksSectionHeightPx = Math.max(0, Math.round(asNumber(textIconSectionStyles.HOW_IT_WORKS.sectionHeightPx, 0)));
+  const customTextIconSectionHeightPx = Math.max(0, Math.round(asNumber(textIconSectionStyles.CUSTOM.sectionHeightPx, 0)));
+  const trustSectionHeightPx = Math.max(0, Math.round(asNumber(textIconSectionStyles.SHOP_WITH_CONFIDENCE.sectionHeightPx, 0)));
   const getTextIconHeadingConfig = (sectionType: TextIconSectionType): TextIconSectionHeadingConfig => {
     if (sectionType === 'HOW_IT_WORKS') return textIconSectionHeadings.HOW_IT_WORKS;
     if (sectionType === 'CUSTOM') return textIconSectionHeadings.CUSTOM;
@@ -2796,15 +2811,17 @@ export default function JenksFrontpageV2() {
   };
   const renderTextIconCard = (
     sectionType: TextIconSectionType,
-    item: { id: string; title: string; sub: string; Icon: IconComponent }
+    item: { id: string; title: string; sub: string; Icon: IconComponent; backgroundImage: string }
   ) => {
     const textIconCardStyle = textIconSectionStyles[sectionType];
     const iconSize = textIconCardStyle.iconSize;
     const iconGlyphSize = Math.max(14, Math.round(iconSize * 0.45));
+    const imageHeightPx = Math.max(0, Math.round(asNumber(textIconCardStyle.imageHeightPx, 180)));
+    const hasBackgroundImage = hasImageSource(item.backgroundImage);
     return (
       <article
         key={item.id}
-        className="mt-2 flex flex-col items-center border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]"
+        className="mt-2 flex flex-col items-center overflow-hidden border border-black/10 bg-[#faf9f5] px-4 py-8 text-center transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_14px_28px_rgba(0,0,0,0.12)]"
         style={{
           minHeight: `${textIconCardStyle.cardMinHeight}px`,
           width: '100%',
@@ -2813,6 +2830,16 @@ export default function JenksFrontpageV2() {
           marginRight: 'auto',
         }}
       >
+        {hasBackgroundImage ? (
+          <div className="-mx-4 -mt-8 mb-4 w-[calc(100%+2rem)]">
+            <BrandImageWithFallback
+              src={item.backgroundImage}
+              alt={item.title}
+              className="w-full object-cover"
+              style={{ height: `${imageHeightPx}px` }}
+            />
+          </div>
+        ) : null}
         <div
           className="flex items-center justify-center rounded-full border border-black/15 bg-white"
           style={{ width: `${iconSize}px`, height: `${iconSize}px` }}
@@ -5013,7 +5040,14 @@ export default function JenksFrontpageV2() {
 
       {/* HOW IT WORKS */}
       {showHowItWorksSection ? (
-      <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('HOW_IT_WORKS') }}>
+      <section
+        className="bg-white py-12"
+        data-kimi-anim="fade-up"
+        style={{
+          order: getSectionOrder('HOW_IT_WORKS'),
+          minHeight: howItWorksSectionHeightPx > 0 ? `${howItWorksSectionHeightPx}px` : undefined,
+        }}
+      >
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           {sectionTitlesEnabled && getTextIconHeadingConfig('HOW_IT_WORKS').titleEnabled ? (
             <h2
@@ -5040,7 +5074,14 @@ export default function JenksFrontpageV2() {
 
       {/* CUSTOM TEXT & ICON */}
       {showCustomTextIconSection ? (
-      <section className="bg-white py-12" data-kimi-anim="fade-up" style={{ order: getSectionOrder('CUSTOM_TEXT_ICON') }}>
+      <section
+        className="bg-white py-12"
+        data-kimi-anim="fade-up"
+        style={{
+          order: getSectionOrder('CUSTOM_TEXT_ICON'),
+          minHeight: customTextIconSectionHeightPx > 0 ? `${customTextIconSectionHeightPx}px` : undefined,
+        }}
+      >
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           {sectionTitlesEnabled && getTextIconHeadingConfig('CUSTOM').titleEnabled ? (
             <h2
@@ -5657,7 +5698,14 @@ export default function JenksFrontpageV2() {
 
       {/* TRUST */}
       {showTrustSection ? (
-        <section className="bg-white py-16 lg:py-20" data-kimi-anim="fade-up" style={{ order: getSectionOrder('SHOP_WITH_CONFIDENCE') }}>
+        <section
+          className="bg-white py-16 lg:py-20"
+          data-kimi-anim="fade-up"
+          style={{
+            order: getSectionOrder('SHOP_WITH_CONFIDENCE'),
+            minHeight: trustSectionHeightPx > 0 ? `${trustSectionHeightPx}px` : undefined,
+          }}
+        >
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           {sectionTitlesEnabled && getTextIconHeadingConfig('SHOP_WITH_CONFIDENCE').titleEnabled ? (
             <h2

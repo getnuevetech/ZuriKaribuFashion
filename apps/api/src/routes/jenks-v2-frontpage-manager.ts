@@ -272,6 +272,7 @@ type TextIconCard = {
   title: string;
   description: string;
   icon: string;
+  backgroundImage?: string;
   enabled: boolean;
   displayOrder: number;
 };
@@ -279,6 +280,8 @@ type TextIconCard = {
 type TextIconCardStyle = {
   cardMinHeight: number;
   cardWidth: number;
+  sectionHeightPx: number;
+  imageHeightPx: number;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -1408,6 +1411,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
       cardStyle: {
         cardMinHeight: 220,
         cardWidth: 320,
+        sectionHeightPx: 0,
+        imageHeightPx: 180,
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -1416,6 +1421,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         howItWorks: {
           cardMinHeight: 220,
           cardWidth: 320,
+          sectionHeightPx: 0,
+          imageHeightPx: 180,
           iconSize: 44,
           titleFontSize: 11,
           descriptionFontSize: 12,
@@ -1423,6 +1430,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         custom: {
           cardMinHeight: 220,
           cardWidth: 320,
+          sectionHeightPx: 0,
+          imageHeightPx: 180,
           iconSize: 44,
           titleFontSize: 11,
           descriptionFontSize: 12,
@@ -1430,6 +1439,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         shopWithConfidence: {
           cardMinHeight: 220,
           cardWidth: 320,
+          sectionHeightPx: 0,
+          imageHeightPx: 180,
           iconSize: 44,
           titleFontSize: 11,
           descriptionFontSize: 12,
@@ -2653,6 +2664,16 @@ const normalizeTextIconCards = (
   const normalizeCardStyle = (input: Record<string, unknown>, fallbackStyle: TextIconCardStyle): TextIconCardStyle => ({
     cardMinHeight: clamp(Math.round(getNumber(input.cardMinHeight) ?? fallbackStyle.cardMinHeight), 80, 520),
     cardWidth: clamp(Math.round(getNumber(input.cardWidth) ?? fallbackStyle.cardWidth), 180, 520),
+    sectionHeightPx: clamp(
+      Math.round(getNumber(input.sectionHeightPx) ?? getNumber(input.sectionMinHeightPx) ?? fallbackStyle.sectionHeightPx),
+      0,
+      2400
+    ),
+    imageHeightPx: clamp(
+      Math.round(getNumber(input.imageHeightPx) ?? getNumber(input.imageMinHeightPx) ?? fallbackStyle.imageHeightPx),
+      0,
+      2400
+    ),
     iconSize: clamp(Math.round(getNumber(input.iconSize) ?? fallbackStyle.iconSize), 20, 120),
     titleFontSize: clamp(Math.round(getNumber(input.titleFontSize) ?? fallbackStyle.titleFontSize), 8, 72),
     descriptionFontSize: clamp(Math.round(getNumber(input.descriptionFontSize) ?? fallbackStyle.descriptionFontSize), 8, 72),
