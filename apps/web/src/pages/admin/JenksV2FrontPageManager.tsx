@@ -243,7 +243,6 @@ type TextIconCard = {
   title: string;
   description: string;
   icon: string;
-  backgroundImage: string;
   enabled: boolean;
   displayOrder: number;
 };
@@ -257,8 +256,6 @@ type TextIconSectionTitles = {
 type TextIconCardStyle = {
   cardMinHeight: number;
   cardWidth: number;
-  sectionHeightPx: number;
-  imageHeightPx: number;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -1471,8 +1468,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
     cardStyle: {
       cardMinHeight: 220,
       cardWidth: 320,
-      sectionHeightPx: 0,
-      imageHeightPx: 180,
       iconSize: 44,
       titleFontSize: 11,
       descriptionFontSize: 12,
@@ -1481,8 +1476,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       howItWorks: {
         cardMinHeight: 220,
         cardWidth: 320,
-        sectionHeightPx: 0,
-        imageHeightPx: 180,
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -1490,8 +1483,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       custom: {
         cardMinHeight: 220,
         cardWidth: 320,
-        sectionHeightPx: 0,
-        imageHeightPx: 180,
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -1499,8 +1490,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       shopWithConfidence: {
         cardMinHeight: 220,
         cardWidth: 320,
-        sectionHeightPx: 0,
-        imageHeightPx: 180,
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -1514,7 +1503,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'How it works',
         description: 'Manage process cards and icon settings.',
         icon: 'Workflow',
-        backgroundImage: '',
         enabled: true,
         displayOrder: 1,
       },
@@ -1524,7 +1512,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Custom',
         description: 'Manage standalone custom text/icon cards.',
         icon: 'Sparkles',
-        backgroundImage: '',
         enabled: true,
         displayOrder: 2,
       },
@@ -1534,7 +1521,6 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
         title: 'Shop with confidence',
         description: 'Manage trust cards and icon settings.',
         icon: 'ShieldCheck',
-        backgroundImage: '',
         enabled: true,
         displayOrder: 3,
       },
@@ -2784,153 +2770,12 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
       cardStyle: {
         ...DEFAULT_CONFIG.textIconCards.cardStyle,
         ...(textIconCards?.cardStyle || {}),
-        sectionHeightPx: clamp(
-          toNumber(
-            String(
-              (textIconCards?.cardStyle as Record<string, unknown> | undefined)?.sectionHeightPx ??
-                (textIconCards?.cardStyle as Record<string, unknown> | undefined)?.sectionMinHeightPx ??
-                DEFAULT_CONFIG.textIconCards.cardStyle.sectionHeightPx
-            ),
-            DEFAULT_CONFIG.textIconCards.cardStyle.sectionHeightPx
-          ),
-          0,
-          2400
-        ),
-        imageHeightPx: clamp(
-          toNumber(
-            String(
-              (textIconCards?.cardStyle as Record<string, unknown> | undefined)?.imageHeightPx ??
-                (textIconCards?.cardStyle as Record<string, unknown> | undefined)?.cardImageHeightPx ??
-                DEFAULT_CONFIG.textIconCards.cardStyle.imageHeightPx
-            ),
-            DEFAULT_CONFIG.textIconCards.cardStyle.imageHeightPx
-          ),
-          0,
-          2400
-        ),
       },
       sectionStyles: {
         ...DEFAULT_CONFIG.textIconCards.sectionStyles,
         ...(textIconCards?.sectionStyles || {}),
-        howItWorks: {
-          ...DEFAULT_CONFIG.textIconCards.sectionStyles.howItWorks,
-          ...((textIconCards?.sectionStyles as TextIconSectionStyles | undefined)?.howItWorks || {}),
-          sectionHeightPx: clamp(
-            toNumber(
-              String(
-                ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.howItWorks as Record<string, unknown> | undefined)
-                  ?.sectionHeightPx ??
-                  ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.howItWorks as Record<string, unknown> | undefined)
-                    ?.sectionMinHeightPx ??
-                  DEFAULT_CONFIG.textIconCards.sectionStyles.howItWorks.sectionHeightPx
-              ),
-              DEFAULT_CONFIG.textIconCards.sectionStyles.howItWorks.sectionHeightPx
-            ),
-            0,
-            2400
-          ),
-          imageHeightPx: clamp(
-            toNumber(
-              String(
-                ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.howItWorks as Record<string, unknown> | undefined)
-                  ?.imageHeightPx ??
-                  ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.howItWorks as Record<string, unknown> | undefined)
-                    ?.cardImageHeightPx ??
-                  DEFAULT_CONFIG.textIconCards.sectionStyles.howItWorks.imageHeightPx
-              ),
-              DEFAULT_CONFIG.textIconCards.sectionStyles.howItWorks.imageHeightPx
-            ),
-            0,
-            2400
-          ),
-        },
-        custom: {
-          ...DEFAULT_CONFIG.textIconCards.sectionStyles.custom,
-          ...((textIconCards?.sectionStyles as TextIconSectionStyles | undefined)?.custom || {}),
-          sectionHeightPx: clamp(
-            toNumber(
-              String(
-                ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.custom as Record<string, unknown> | undefined)
-                  ?.sectionHeightPx ??
-                  ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.custom as Record<string, unknown> | undefined)
-                    ?.sectionMinHeightPx ??
-                  DEFAULT_CONFIG.textIconCards.sectionStyles.custom.sectionHeightPx
-              ),
-              DEFAULT_CONFIG.textIconCards.sectionStyles.custom.sectionHeightPx
-            ),
-            0,
-            2400
-          ),
-          imageHeightPx: clamp(
-            toNumber(
-              String(
-                ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.custom as Record<string, unknown> | undefined)
-                  ?.imageHeightPx ??
-                  ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.custom as Record<string, unknown> | undefined)
-                    ?.cardImageHeightPx ??
-                  DEFAULT_CONFIG.textIconCards.sectionStyles.custom.imageHeightPx
-              ),
-              DEFAULT_CONFIG.textIconCards.sectionStyles.custom.imageHeightPx
-            ),
-            0,
-            2400
-          ),
-        },
-        shopWithConfidence: {
-          ...DEFAULT_CONFIG.textIconCards.sectionStyles.shopWithConfidence,
-          ...((textIconCards?.sectionStyles as TextIconSectionStyles | undefined)?.shopWithConfidence || {}),
-          sectionHeightPx: clamp(
-            toNumber(
-              String(
-                ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.shopWithConfidence as
-                  | Record<string, unknown>
-                  | undefined)?.sectionHeightPx ??
-                  ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.shopWithConfidence as
-                    | Record<string, unknown>
-                    | undefined)?.sectionMinHeightPx ??
-                  DEFAULT_CONFIG.textIconCards.sectionStyles.shopWithConfidence.sectionHeightPx
-              ),
-              DEFAULT_CONFIG.textIconCards.sectionStyles.shopWithConfidence.sectionHeightPx
-            ),
-            0,
-            2400
-          ),
-          imageHeightPx: clamp(
-            toNumber(
-              String(
-                ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.shopWithConfidence as
-                  | Record<string, unknown>
-                  | undefined)?.imageHeightPx ??
-                  ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.shopWithConfidence as
-                    | Record<string, unknown>
-                    | undefined)?.cardImageHeightPx ??
-                  DEFAULT_CONFIG.textIconCards.sectionStyles.shopWithConfidence.imageHeightPx
-              ),
-              DEFAULT_CONFIG.textIconCards.sectionStyles.shopWithConfidence.imageHeightPx
-            ),
-            0,
-            2400
-          ),
-        },
       },
-      cards: Array.isArray(textIconCards?.cards)
-        ? (textIconCards?.cards as TextIconCard[]).map((card, index) => ({
-            ...card,
-            id: String(card?.id || uid()),
-            sectionType:
-              String(card?.sectionType || '').trim().toUpperCase() === 'SHOP_WITH_CONFIDENCE'
-                ? 'SHOP_WITH_CONFIDENCE'
-                : String(card?.sectionType || '').trim().toUpperCase() === 'CUSTOM'
-                  ? 'CUSTOM'
-                  : 'HOW_IT_WORKS',
-            title: String(card?.title || `Card ${index + 1}`),
-            description: String(card?.description || ''),
-            icon: String(card?.icon || 'Sparkles'),
-            backgroundImage: String((card as unknown as Record<string, unknown>)?.backgroundImage || ''),
-            enabled: toBoolean(card?.enabled, true),
-            displayOrder: clamp(toNumber(String(card?.displayOrder ?? index + 1), index + 1), 0, 999),
-          }))
-        : DEFAULT_CONFIG.textIconCards.cards,
+      cards: Array.isArray(textIconCards?.cards) ? (textIconCards?.cards as TextIconCard[]) : DEFAULT_CONFIG.textIconCards.cards,
     },
     categoryManage: {
       ...categoryManage,
@@ -8982,7 +8827,6 @@ export default function JenksV2FrontPageManager() {
                         title: 'New Custom Card',
                         description: '',
                         icon: 'Sparkles',
-                        backgroundImage: '',
                         enabled: true,
                         displayOrder: prev.textIconCards.cards.length + 1,
                       },
@@ -9235,62 +9079,8 @@ export default function JenksV2FrontPageManager() {
                 { key: 'shopWithConfidence', label: 'Shop With Confidence' },
               ] as const
             ).map((section) => (
-              <div key={`text-icon-style-${section.key}`} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-8">
-                <p className="text-xs font-semibold md:col-span-8">{section.label}</p>
-                <label className="text-[11px]">
-                  Section Height (px, 0 = auto)
-                  <input
-                    type="number"
-                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                    value={config.textIconCards.sectionStyles[section.key].sectionHeightPx}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        textIconCards: {
-                          ...prev.textIconCards,
-                          sectionStyles: {
-                            ...prev.textIconCards.sectionStyles,
-                            [section.key]: {
-                              ...prev.textIconCards.sectionStyles[section.key],
-                              sectionHeightPx: clamp(
-                                toNumber(event.target.value, prev.textIconCards.sectionStyles[section.key].sectionHeightPx),
-                                0,
-                                2400
-                              ),
-                            },
-                          },
-                        },
-                      }))
-                    }
-                  />
-                </label>
-                <label className="text-[11px]">
-                  Card Image Height (px)
-                  <input
-                    type="number"
-                    className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                    value={config.textIconCards.sectionStyles[section.key].imageHeightPx}
-                    onChange={(event) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        textIconCards: {
-                          ...prev.textIconCards,
-                          sectionStyles: {
-                            ...prev.textIconCards.sectionStyles,
-                            [section.key]: {
-                              ...prev.textIconCards.sectionStyles[section.key],
-                              imageHeightPx: clamp(
-                                toNumber(event.target.value, prev.textIconCards.sectionStyles[section.key].imageHeightPx),
-                                80,
-                                2400
-                              ),
-                            },
-                          },
-                        },
-                      }))
-                    }
-                  />
-                </label>
+              <div key={`text-icon-style-${section.key}`} className="grid grid-cols-1 gap-2 rounded border p-3 md:grid-cols-6">
+                <p className="text-xs font-semibold md:col-span-6">{section.label}</p>
                 <label className="text-[11px]">
                   Min Height
                   <input
@@ -9521,25 +9311,6 @@ export default function JenksV2FrontPageManager() {
                         ...prev.textIconCards,
                         cards: prev.textIconCards.cards.map((entry, entryIndex) =>
                           entryIndex === index ? { ...entry, description: event.target.value } : entry
-                        ),
-                      },
-                    }))
-                  }
-                />
-              </label>
-              <label className="md:col-span-2 text-[11px]">
-                Background Image URL
-                <input
-                  className="mt-1 w-full rounded border px-2 py-1 text-xs"
-                  value={card.backgroundImage || ''}
-                  placeholder="https://... or /uploads/..."
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      textIconCards: {
-                        ...prev.textIconCards,
-                        cards: prev.textIconCards.cards.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, backgroundImage: event.target.value } : entry
                         ),
                       },
                     }))
