@@ -833,10 +833,6 @@ const toNumber = (value: string, fallback: number) => {
 };
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const toBoolean = (value: unknown, fallback: boolean) => (typeof value === 'boolean' ? value : fallback);
-const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-
-
 const defaultCategoryStepCards = (keyRaw: string): CategoryStepCard[] => {
   const key = String(keyRaw || '').trim().toUpperCase();
   const ctwCards: CategoryStepCard[] = [
@@ -2861,9 +2857,11 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             2400
           ),
           backgroundImage: (() => {
-            const sectionRow = asRecord(
-              (textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.howItWorks
-            );
+            const rawSectionRow = (textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.howItWorks;
+            const sectionRow =
+              rawSectionRow && typeof rawSectionRow === 'object'
+                ? (rawSectionRow as Record<string, unknown>)
+                : {};
             if (Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')) {
               return String(sectionRow.backgroundImage || '');
             }
@@ -2905,9 +2903,11 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             2400
           ),
           backgroundImage: (() => {
-            const sectionRow = asRecord(
-              (textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.custom
-            );
+            const rawSectionRow = (textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.custom;
+            const sectionRow =
+              rawSectionRow && typeof rawSectionRow === 'object'
+                ? (rawSectionRow as Record<string, unknown>)
+                : {};
             if (Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')) {
               return String(sectionRow.backgroundImage || '');
             }
@@ -2953,9 +2953,11 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             2400
           ),
           backgroundImage: (() => {
-            const sectionRow = asRecord(
-              (textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.shopWithConfidence
-            );
+            const rawSectionRow = (textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.shopWithConfidence;
+            const sectionRow =
+              rawSectionRow && typeof rawSectionRow === 'object'
+                ? (rawSectionRow as Record<string, unknown>)
+                : {};
             if (Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')) {
               return String(sectionRow.backgroundImage || '');
             }
