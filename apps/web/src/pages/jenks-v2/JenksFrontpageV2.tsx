@@ -1689,10 +1689,10 @@ export default function JenksFrontpageV2() {
     sectionTitlePosition === 'CENTER' ? 'text-center' : sectionTitlePosition === 'RIGHT' ? 'text-right' : 'text-left';
 
   const logoCfg = useMemo(() => asRecord(topNavigationsCfg.logo), [topNavigationsCfg.logo]);
-  const logoTextRaw = asString(logoCfg.text, 'ZURIKARIBU');
+  const logoTextRaw = asString(logoCfg.text, '');
   const logoTextSplit = useMemo(() => {
     const compact = logoTextRaw.replace(/\s+/g, '').trim();
-    if (!compact) return { left: 'ZURI', right: 'KARIBU' };
+    if (!compact) return { left: '', right: '' };
     const upper = compact.toUpperCase();
     if (upper.startsWith('ZURI') && compact.length > 4) {
       return {
@@ -3258,14 +3258,11 @@ export default function JenksFrontpageV2() {
           .filter(Boolean)
       )
       .filter(Boolean);
+    if (messages.length === 0) return [] as string[];
     const repeatCount = Math.max(1, Math.min(20, Math.round(asNumber(topStripCfg.repeatCount, 4))));
-    const base =
-      messages.length > 0
-        ? messages
-        : ['Bespoke tailoring. Pan-African elegance. Worldwide delivery.'];
     const lane: string[] = [];
     for (let idx = 0; idx < repeatCount; idx += 1) {
-      lane.push(...base);
+      lane.push(...messages);
     }
     return lane;
   }, [topStripCfg.messages, topStripCfg.repeatCount]);
@@ -3278,6 +3275,7 @@ export default function JenksFrontpageV2() {
   const topStripIsBold = asBoolean(topStripCfg.isBold, true);
   const topStripTextColor = asString(topStripCfg.textColor, '#ffffff');
   const topStripBackgroundColor = asString(topStripCfg.backgroundColor, '#111111');
+  const showTopStrip = asBoolean(topNavigationsCfg.topStripEnabled, false) && topStripItems.length > 0;
   const customerReviewsSourceMode = ((): 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH' => {
     const token = asString(customerReviewsCfg.sourceMode, 'BOTH').toUpperCase();
     if (token === 'STATIC_ONLY' || token === 'PRODUCT_REVIEWS_ONLY' || token === 'BOTH') return token;
@@ -4251,7 +4249,7 @@ export default function JenksFrontpageV2() {
       {/* TOP STRIP + TOP NAVIGATION */}
       {isSectionVisible('TOP_NAVIGATIONS') ? (
         <div className="sticky top-0 z-50" style={{ order: getSectionOrder('TOP_NAVIGATIONS') }}>
-          {asBoolean(topNavigationsCfg.topStripEnabled, true) ? (
+          {showTopStrip ? (
             <div
               className="group relative h-8 overflow-hidden uppercase tracking-[0.18em]"
               style={{
@@ -4334,13 +4332,7 @@ export default function JenksFrontpageV2() {
 
               <div className="flex items-center gap-3 text-black/75">
                 <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.12em] text-black/75 md:flex">
-                  {(additionalTopMenuLinks.length > 0
-                    ? additionalTopMenuLinks
-                    : [
-                        { label: 'About Us', href: '/about' },
-                        { label: 'Contact Us', href: '/contact' },
-                      ]
-                  ).map((link) => (
+                  {additionalTopMenuLinks.map((link) => (
                     <Link key={`${link.label}-${link.href}`} to={toSafeInternalHref(link.href)} className="hover:text-black">
                       {link.label}
                     </Link>
@@ -4450,19 +4442,7 @@ export default function JenksFrontpageV2() {
                 </button>
                 <nav className="scrollbar-hide flex h-full w-full items-start overflow-y-auto px-6 pt-20 sm:px-8">
                   <div className="w-full space-y-2 pb-8">
-                    {(hamburgerMenuLinks.length > 0
-                      ? hamburgerMenuLinks
-                      : [
-                          { label: 'Home', href: '/' },
-                          { label: 'Shop', href: '/shop' },
-                          { label: 'Ready To Wear', href: '/readytowear' },
-                          { label: 'Fabrics To Buy', href: '/fabricstobuy' },
-                          { label: 'Custom To Wear', href: '/customtowear' },
-                          { label: 'Designers', href: '/designers' },
-                          { label: 'About Us', href: '/about' },
-                          { label: 'Contact Us', href: '/contact' },
-                        ]
-                    ).map((link) => (
+                    {hamburgerMenuLinks.map((link) => (
                       <Link
                         key={`${link.label}-${link.href}`}
                         to={toSafeInternalHref(link.href)}

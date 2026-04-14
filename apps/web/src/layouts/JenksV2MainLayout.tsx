@@ -136,7 +136,11 @@ export default function JenksV2MainLayout() {
   const [topStripPaused, setTopStripPaused] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>('LIGHT');
 
-  const { data: frontpageConfig } = useQuery({
+  const {
+    data: frontpageConfig,
+    isLoading: frontpageConfigLoading,
+    isFetching: frontpageConfigFetching,
+  } = useQuery({
     queryKey: ['jenksV2MainLayoutPublicConfig'],
     queryFn: async () => {
       const response = await api.jenksV2Frontpage.getPublicConfig();
@@ -152,10 +156,10 @@ export default function JenksV2MainLayout() {
 
   const topNavigationsCfg = useMemo(() => asRecord(asRecord(frontpageConfig).topNavigations), [frontpageConfig]);
   const logoCfg = useMemo(() => asRecord(topNavigationsCfg.logo), [topNavigationsCfg.logo]);
-  const logoTextRaw = asString(logoCfg.text, 'ZURIKARIBU');
+  const logoTextRaw = asString(logoCfg.text, '');
   const logoTextSplit = useMemo(() => {
     const compact = logoTextRaw.replace(/\s+/g, '').trim();
-    if (!compact) return { left: 'ZURI', right: 'KARIBU' };
+    if (!compact) return { left: '', right: '' };
     const upper = compact.toUpperCase();
     if (upper.startsWith('ZURI') && compact.length > 4) {
       return {
@@ -173,6 +177,10 @@ export default function JenksV2MainLayout() {
   const themeCfg = useMemo(() => asRecord(asRecord(topNavigationsCfg.controllers).theme), [topNavigationsCfg.controllers]);
   const ThemeIcon = iconFromKey(themeCfg.icon, Sun);
   const ComputedThemeIcon = themeMode === 'DARK' ? Moon : ThemeIcon;
+  const showImageLogo = asString(logoCfg.mode, '').toUpperCase() === 'IMAGE' && asString(logoCfg.imageUrl, '').length > 0;
+  const showTextLogo = !showImageLogo && (logoTextSplit.left.length > 0 || logoTextSplit.right.length > 0);
+  const navigationConfigReady = Object.keys(topNavigationsCfg).length > 0;
+  const navigationConfigPending = frontpageConfigLoading || frontpageConfigFetching;
 
   const hamburgerMenuLinks = useMemo(
     () =>
@@ -206,11 +214,11 @@ export default function JenksV2MainLayout() {
     const messages = asArray(topStripCfg.messages)
       .map((entry) => asString(entry, ''))
       .filter(Boolean);
-    const content = messages.length > 0 ? messages : ['Free shipping on orders over $1960', 'New arrivals weekly', 'Authentic African designs'];
+    if (messages.length === 0) return [] as string[];
     const repeatCount = Math.max(1, Math.min(20, Math.round(asNumber(topStripCfg.repeatCount, 4))));
     const rows: string[] = [];
     for (let i = 0; i < repeatCount; i += 1) {
-      rows.push(...content);
+      rows.push(...messages);
     }
     return rows;
   }, [topStripCfg.messages, topStripCfg.repeatCount]);
@@ -220,7 +228,7 @@ export default function JenksV2MainLayout() {
   const topStripIsBold = asBoolean(topStripCfg.isBold, true);
   const topStripTextColor = asString(topStripCfg.textColor, '#ffffff');
   const topStripBackgroundColor = asString(topStripCfg.backgroundColor, '#111111');
-  const showTopStrip = asBoolean(topNavigationsCfg.topStripEnabled, true);
+  const showTopStrip = asBoolean(topNavigationsCfg.topStripEnabled, false) && topStripItems.length > 0;
 
   const hamburgerMenuFontSize = Math.max(16, Math.min(72, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontSize, 32))));
   const hamburgerMenuFontWeight = Math.max(500, Math.min(900, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontWeight, 800))));
@@ -280,7 +288,13 @@ export default function JenksV2MainLayout() {
   return (
     <div className="kimi-site flex min-h-screen flex-col bg-[#f5f3ee] text-[#111]">
       <div className="sticky top-0 z-50">
-        {showTopStrip ? (
+        {navigationConfigPending ? (
+          <div className="h-[88px] border-b border-black/10 bg-[#f5f3ee]/95 backdrop-blur" />
+        ) : !navigationConfigReady ? (
+          <div className="h-14 border-b border-black/10 bg-[#f5f3ee]/95 backdrop-blur" />
+        ) : (
+          <>
+            {showTopStrip ? (
           <div
             className="group relative h-8 overflow-hidden uppercase tracking-[0.18em]"
             style={{
@@ -310,213 +324,198 @@ export default function JenksV2MainLayout() {
               ))}
             </div>
           </div>
-        ) : null}
+            ) : null}
 
-        <header className="h-14 border-b border-black/10 bg-[#f5f3ee]/95 backdrop-blur">
-          <div className="relative mx-auto flex h-full w-full max-w-[1700px] items-center justify-between px-4 sm:px-6 lg:px-12">
-            <div className="flex items-center gap-3 text-black/75">
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black text-white shadow-sm transition-colors hover:bg-[#e66045]"
-                aria-label="Open menu"
-                onClick={() => setHamburgerOpen(true)}
-              >
-                <Menu className="h-5 w-5 stroke-[2.75]" />
-              </button>
-              {asBoolean(topNavigationsCfg.searchIconEnabled, true) ? (
-                <button
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/20 hover:bg-black/5"
-                  aria-label="Search"
-                  onClick={() => setSearchOpen(true)}
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-              ) : null}
-            </div>
-
-            <Link to="/" className="absolute left-1/2 -translate-x-1/2">
-              {asString(logoCfg.mode, 'TEXT').toUpperCase() === 'IMAGE' && asString(logoCfg.imageUrl, '') ? (
-                <img
-                  src={resolveAssetUrl(asString(logoCfg.imageUrl, '')) || asString(logoCfg.imageUrl, '')}
-                  alt={asString(logoCfg.altText, 'Jenks')}
-                  className="object-contain"
-                  style={{
-                    width: Math.max(80, Math.round(asNumber(logoCfg.width, 180))),
-                    height: Math.max(24, Math.round(asNumber(logoCfg.height, 50))),
-                  }}
-                />
-              ) : (
-                <p
-                  className="font-['Oswald'] uppercase leading-none tracking-[0.08em]"
-                  style={{
-                    color: asString(logoCfg.textColor, '#111111'),
-                    fontFamily: asString(logoCfg.fontFamily, 'Oswald'),
-                    fontSize: Math.max(18, Math.round(asNumber(logoCfg.fontSize, 27))),
-                    fontWeight: headerLogoFontWeight,
-                  }}
-                >
-                  <span>{logoTextSplit.left}</span>
-                  <span className="text-[#e66045]">{logoTextSplit.right}</span>
-                </p>
-              )}
-            </Link>
-
-            <div className="flex items-center gap-3 text-black/75">
-              <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.12em] text-black/75 md:flex">
-                {(additionalTopMenuLinks.length > 0
-                  ? additionalTopMenuLinks
-                  : [
-                      { label: 'About Us', href: '/about' },
-                      { label: 'Contact Us', href: '/contact' },
-                    ]
-                ).map((link) => (
-                  <Link key={`${link.label}-${link.href}`} to={toSafeInternalHref(link.href)} className="hover:text-black">
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-
-              {asBoolean(themeCfg.enabled, true) ? (
-                <button
-                  type="button"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/20"
-                  aria-label="Toggle theme"
-                  onClick={() => setThemeMode((prev) => (prev === 'LIGHT' ? 'DARK' : 'LIGHT'))}
-                >
-                  <ComputedThemeIcon className="h-4 w-4 text-[#e66045]" />
-                </button>
-              ) : null}
-
-              <Link
-                to="/cart"
-                className="relative inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5"
-                aria-label="Cart"
-              >
-                <ShoppingBag className="h-4 w-4" />
-                <span className="absolute right-0 top-0 h-3.5 min-w-3.5 rounded-full bg-[#e66045] px-1 text-[9px] font-semibold leading-[14px] text-white">
-                  {cartItemCount}
-                </span>
-              </Link>
-
-              {asBoolean(signInCfg.enabled, true) ? (
-                <Link
-                  to={isAuthenticated ? profileRoute : resolveConfiguredMenuHref(signInCfg, '/auth/login')}
-                  className="hidden text-xs font-semibold uppercase tracking-[0.12em] hover:text-black sm:inline"
-                >
-                  {isAuthenticated ? 'Dashboard' : asString(signInCfg.label, 'Sign In')}
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        </header>
-
-        {searchOpen ? (
-          <div className="fixed inset-0 z-[69]">
-            <button
-              type="button"
-              aria-label="Close search overlay"
-              className="absolute inset-0 h-full w-full bg-white/40 backdrop-blur-[1px]"
-              onClick={() => setSearchOpen(false)}
-            />
-            <div className="absolute left-1/2 top-16 w-[94vw] max-w-[860px] -translate-x-1/2 rounded-xl border border-black/10 bg-white/88 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur sm:p-5">
-              <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-black/60" />
-                <input
-                  type="text"
-                  autoFocus
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search products, categories, countries..."
-                  className="h-10 w-full bg-transparent text-sm text-black placeholder:text-black/45 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded border border-black/20 text-black/70 hover:bg-black/5"
-                  onClick={() => {
-                    setSearchOpen(false);
-                    setSearchQuery('');
-                  }}
-                  aria-label="Close search"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                {['Ready To Wear', 'Custom To Wear', 'Fabrics', 'Shop By Country'].map((suggestion) => (
-                  <Link
-                    key={suggestion}
-                    to={toSafeInternalHref(
-                      suggestion === 'Ready To Wear'
-                        ? '/readytowear'
-                        : suggestion === 'Custom To Wear'
-                          ? '/customtowear'
-                          : suggestion === 'Fabrics'
-                            ? '/fabricstobuy'
-                            : '/country-products'
-                    )}
-                    onClick={() => setSearchOpen(false)}
-                    className="rounded border border-black/20 px-2.5 py-1 text-black/75 hover:border-[#e66045] hover:text-[#e66045]"
+            <header className="h-14 border-b border-black/10 bg-[#f5f3ee]/95 backdrop-blur">
+              <div className="relative mx-auto flex h-full w-full max-w-[1700px] items-center justify-between px-4 sm:px-6 lg:px-12">
+                <div className="flex items-center gap-3 text-black/75">
+                  <button
+                    type="button"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black text-white shadow-sm transition-colors hover:bg-[#e66045]"
+                    aria-label="Open menu"
+                    onClick={() => setHamburgerOpen(true)}
                   >
-                    {suggestion}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {hamburgerOpen ? (
-          <div className="fixed inset-0 z-[70]">
-            <button
-              type="button"
-              aria-label="Close menu overlay"
-              className="absolute inset-0 h-full w-full bg-black/60"
-              onClick={() => setHamburgerOpen(false)}
-            />
-            <div className="absolute left-0 top-0 h-full w-[98vw] max-w-[760px] overflow-y-auto bg-black/96 shadow-none">
-              <button
-                type="button"
-                className="absolute left-4 top-8 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
-                aria-label="Close menu"
-                onClick={() => setHamburgerOpen(false)}
-              >
-                <span className="text-xl leading-none">×</span>
-              </button>
-              <nav className="flex h-full w-full items-start overflow-y-auto px-6 pt-20 sm:px-8">
-                <div className="w-full space-y-2 pb-8">
-                  {(hamburgerMenuLinks.length > 0
-                    ? hamburgerMenuLinks
-                    : [
-                        { label: 'Home', href: '/' },
-                        { label: 'Shop', href: '/shop' },
-                        { label: 'Ready To Wear', href: '/readytowear' },
-                        { label: 'Fabrics To Buy', href: '/fabricstobuy' },
-                        { label: 'Custom To Wear', href: '/customtowear' },
-                        { label: 'About Us', href: '/about' },
-                        { label: 'Contact Us', href: '/contact' },
-                      ]
-                  ).map((link) => (
-                    <Link
-                      key={`${link.label}-${link.href}`}
-                      to={toSafeInternalHref(link.href)}
-                      className="block whitespace-nowrap px-4 py-3 font-['Oswald'] uppercase leading-none tracking-[0.01em] text-white transition-colors hover:text-[#e66045]"
-                      style={{
-                        fontSize: `${hamburgerMenuFontSize}px`,
-                        fontWeight: hamburgerMenuFontWeight,
-                      }}
-                      onClick={() => setHamburgerOpen(false)}
+                    <Menu className="h-5 w-5 stroke-[2.75]" />
+                  </button>
+                  {asBoolean(topNavigationsCfg.searchIconEnabled, true) ? (
+                    <button
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/20 hover:bg-black/5"
+                      aria-label="Search"
+                      onClick={() => setSearchOpen(true)}
                     >
-                      {link.label}
-                    </Link>
-                  ))}
-                  <p className="pt-6 text-[10px] font-medium uppercase tracking-[0.2em] text-white/55">
-                    Made by Africans. Worn by the world.
-                  </p>
+                      <Search className="h-4 w-4" />
+                    </button>
+                  ) : null}
                 </div>
-              </nav>
-            </div>
-          </div>
-        ) : null}
+
+                <Link to="/" className="absolute left-1/2 -translate-x-1/2">
+                  {showImageLogo ? (
+                    <img
+                      src={resolveAssetUrl(asString(logoCfg.imageUrl, '')) || asString(logoCfg.imageUrl, '')}
+                      alt={asString(logoCfg.altText, 'Jenks')}
+                      className="object-contain"
+                      style={{
+                        width: Math.max(80, Math.round(asNumber(logoCfg.width, 180))),
+                        height: Math.max(24, Math.round(asNumber(logoCfg.height, 50))),
+                      }}
+                    />
+                  ) : showTextLogo ? (
+                    <p
+                      className="font-['Oswald'] uppercase leading-none tracking-[0.08em]"
+                      style={{
+                        color: asString(logoCfg.textColor, '#111111'),
+                        fontFamily: asString(logoCfg.fontFamily, 'Oswald'),
+                        fontSize: Math.max(18, Math.round(asNumber(logoCfg.fontSize, 27))),
+                        fontWeight: headerLogoFontWeight,
+                      }}
+                    >
+                      <span>{logoTextSplit.left}</span>
+                      <span className="text-[#e66045]">{logoTextSplit.right}</span>
+                    </p>
+                  ) : null}
+                </Link>
+
+                <div className="flex items-center gap-3 text-black/75">
+                  <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.12em] text-black/75 md:flex">
+                    {additionalTopMenuLinks.map((link) => (
+                      <Link key={`${link.label}-${link.href}`} to={toSafeInternalHref(link.href)} className="hover:text-black">
+                        {link.label}
+                      </Link>
+                    ))}
+                  </div>
+
+                  {asBoolean(themeCfg.enabled, true) ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/20"
+                      aria-label="Toggle theme"
+                      onClick={() => setThemeMode((prev) => (prev === 'LIGHT' ? 'DARK' : 'LIGHT'))}
+                    >
+                      <ComputedThemeIcon className="h-4 w-4 text-[#e66045]" />
+                    </button>
+                  ) : null}
+
+                  <Link
+                    to="/cart"
+                    className="relative inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5"
+                    aria-label="Cart"
+                  >
+                    <ShoppingBag className="h-4 w-4" />
+                    <span className="absolute right-0 top-0 h-3.5 min-w-3.5 rounded-full bg-[#e66045] px-1 text-[9px] font-semibold leading-[14px] text-white">
+                      {cartItemCount}
+                    </span>
+                  </Link>
+
+                  {asBoolean(signInCfg.enabled, true) ? (
+                    <Link
+                      to={isAuthenticated ? profileRoute : resolveConfiguredMenuHref(signInCfg, '/auth/login')}
+                      className="hidden text-xs font-semibold uppercase tracking-[0.12em] hover:text-black sm:inline"
+                    >
+                      {isAuthenticated ? 'Dashboard' : asString(signInCfg.label, 'Sign In')}
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            </header>
+
+            {searchOpen ? (
+              <div className="fixed inset-0 z-[69]">
+                <button
+                  type="button"
+                  aria-label="Close search overlay"
+                  className="absolute inset-0 h-full w-full bg-white/40 backdrop-blur-[1px]"
+                  onClick={() => setSearchOpen(false)}
+                />
+                <div className="absolute left-1/2 top-16 w-[94vw] max-w-[860px] -translate-x-1/2 rounded-xl border border-black/10 bg-white/88 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur sm:p-5">
+                  <div className="flex items-center gap-2">
+                    <Search className="h-4 w-4 text-black/60" />
+                    <input
+                      type="text"
+                      autoFocus
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Search products, categories, countries..."
+                      className="h-10 w-full bg-transparent text-sm text-black placeholder:text-black/45 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded border border-black/20 text-black/70 hover:bg-black/5"
+                      onClick={() => {
+                        setSearchOpen(false);
+                        setSearchQuery('');
+                      }}
+                      aria-label="Close search"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                    {['Ready To Wear', 'Custom To Wear', 'Fabrics', 'Shop By Country'].map((suggestion) => (
+                      <Link
+                        key={suggestion}
+                        to={toSafeInternalHref(
+                          suggestion === 'Ready To Wear'
+                            ? '/readytowear'
+                            : suggestion === 'Custom To Wear'
+                              ? '/customtowear'
+                              : suggestion === 'Fabrics'
+                                ? '/fabricstobuy'
+                                : '/country-products'
+                        )}
+                        onClick={() => setSearchOpen(false)}
+                        className="rounded border border-black/20 px-2.5 py-1 text-black/75 hover:border-[#e66045] hover:text-[#e66045]"
+                      >
+                        {suggestion}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {hamburgerOpen ? (
+              <div className="fixed inset-0 z-[70]">
+                <button
+                  type="button"
+                  aria-label="Close menu overlay"
+                  className="absolute inset-0 h-full w-full bg-black/60"
+                  onClick={() => setHamburgerOpen(false)}
+                />
+                <div className="absolute left-0 top-0 h-full w-[98vw] max-w-[760px] overflow-y-auto bg-black/96 shadow-none">
+                  <button
+                    type="button"
+                    className="absolute left-4 top-8 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white hover:bg-white/10"
+                    aria-label="Close menu"
+                    onClick={() => setHamburgerOpen(false)}
+                  >
+                    <span className="text-xl leading-none">×</span>
+                  </button>
+                  <nav className="flex h-full w-full items-start overflow-y-auto px-6 pt-20 sm:px-8">
+                    <div className="w-full space-y-2 pb-8">
+                      {hamburgerMenuLinks.map((link) => (
+                        <Link
+                          key={`${link.label}-${link.href}`}
+                          to={toSafeInternalHref(link.href)}
+                          className="block whitespace-nowrap px-4 py-3 font-['Oswald'] uppercase leading-none tracking-[0.01em] text-white transition-colors hover:text-[#e66045]"
+                          style={{
+                            fontSize: `${hamburgerMenuFontSize}px`,
+                            fontWeight: hamburgerMenuFontWeight,
+                          }}
+                          onClick={() => setHamburgerOpen(false)}
+                        >
+                          {link.label}
+                        </Link>
+                      ))}
+                      <p className="pt-6 text-[10px] font-medium uppercase tracking-[0.2em] text-white/55">
+                        Made by Africans. Worn by the world.
+                      </p>
+                    </div>
+                  </nav>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       <main className="flex-1">
