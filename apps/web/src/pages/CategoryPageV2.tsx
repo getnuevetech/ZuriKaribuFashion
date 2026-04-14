@@ -115,46 +115,6 @@ const PAGE_PATH_BY_TYPE: Record<CategoryPageType, string> = {
   SHOP: '/shop',
 };
 
-const DEFAULT_PRODUCT_CARD = {
-  imageEnabled: true,
-  fieldOrder: ['DESIGNER_NAME', 'PRODUCT_NAME', 'SHORT_DESCRIPTION', 'PRICE'] as Array<
-    'DESIGNER_NAME' | 'PRODUCT_NAME' | 'SHORT_DESCRIPTION' | 'PRICE'
-  >,
-  imageAspectRatio: '3:4' as '3:4' | '1:1',
-  textGap: 6,
-  contentPaddingX: 16,
-  contentPaddingY: 16,
-  designerNameEnabled: true,
-  designerNameFontSize: 14,
-  designerNameColor: '#6b7280',
-  productNameEnabled: true,
-  productNameFontSize: 16,
-  productNameColor: '#111111',
-  shortDescriptionEnabled: true,
-  shortDescriptionFontSize: 13,
-  shortDescriptionColor: '#4b5563',
-  shortDescriptionWordLimit: 10,
-  priceEnabled: true,
-  priceFontSize: 14,
-  priceColor: '#e66045',
-  priceFontWeight: 600,
-  labelEnabled: true,
-  labelFontSize: 11,
-  labelTextColor: '#ffffff',
-  labelBackgroundColor: 'rgba(17, 17, 17, 0.75)',
-  labelPosition: 'TOP_LEFT' as const,
-  likesEnabled: true,
-  likesSize: 18,
-  likesColor: '#ffffff',
-  likesActiveColor: '#ef4444',
-  likesPosition: 'TOP_RIGHT' as const,
-  countryIconEnabled: true,
-  countryIconSize: 24,
-  countryIconPosition: 'BOTTOM_RIGHT' as const,
-};
-
-const DEFAULT_PRICE_FILTER_OPTIONS = ['Under $100', '$100 - $300', '$300 - $500', '$500+'];
-
 const normalizeToken = (value: string) => String(value || '').trim().toLowerCase();
 
 const shortDescription = (value: string, wordLimit: number) => {
@@ -227,22 +187,27 @@ export default function CategoryPageV2({
         const response = await api.products.getCategoryPageSettings(pageType);
         if (!active) return;
         const data = response?.data as CategoryPageRuntime | undefined;
-        if (!response?.success || !data?.settings) {
+        if (!response?.success || !data?.settings || !Array.isArray(data.settings.filterDefinitions) || !data.settings.productCard) {
           setRuntime(null);
           setError('Unable to load category page settings.');
+          return;
+        }
+        if (shouldForcePriceFilter && !data.settings.filterDefinitions.some((row) => row.key === 'PRICE' && row.enabled)) {
+          setRuntime(null);
+          setError('Category page settings are missing the required price filter.');
           return;
         }
         setRuntime(data);
         const initialFilters: Record<string, string> = {};
         const nextApplied: Record<string, string[]> = {};
         const params = new URLSearchParams(searchParamsKey);
-        for (const row of data.settings.filterDefinitions || []) {
+        for (const row of data.settings.filterDefinitions) {
           initialFilters[row.key] = '';
           const paramKey = FILTER_PARAM_BY_KEY[row.key];
           const queryValue = String(params.get(paramKey) || '').trim();
           if (!queryValue) continue;
           initialFilters[row.key] = queryValue;
-          const tokens = parseFilterTokens(queryValue, row.options || []);
+          const tokens = parseFilterTokens(queryValue, row.options);
           if (tokens.length > 0) nextApplied[paramKey] = tokens;
         }
         if (shouldForcePriceFilter) {
@@ -250,8 +215,8 @@ export default function CategoryPageV2({
           const queryPrice = String(params.get('price') || '').trim();
           if (queryPrice) {
             initialFilters.PRICE = queryPrice;
-            const existingPriceRow = (data.settings.filterDefinitions || []).find((row) => row.key === 'PRICE');
-            const tokens = parseFilterTokens(queryPrice, existingPriceRow?.options || DEFAULT_PRICE_FILTER_OPTIONS);
+            const existingPriceRow = data.settings.filterDefinitions.find((row) => row.key === 'PRICE');
+            const tokens = parseFilterTokens(queryPrice, existingPriceRow?.options || []);
             if (tokens.length > 0) nextApplied.price = tokens;
           }
         }
@@ -306,12 +271,15 @@ export default function CategoryPageV2({
           category: appliedFilters.category || undefined,
         });
         if (!active) return;
+        if (!response?.success || !response?.data?.pagination) {
+          throw new Error('Unable to load products.');
+        }
         const rows = Array.isArray(response?.data?.products) ? (response.data.products as CategoryPageProduct[]) : [];
-        const pagination = response?.data?.pagination || { page: 1, pages: 1, total: 0 };
+        const pagination = response.data.pagination;
         setProducts(rows);
-        setPage(Number(pagination.page || 1));
-        setPages(Number(pagination.pages || 1));
-        setTotal(Number(pagination.total || 0));
+        setPage(Math.max(1, Number(pagination.page)));
+        setPages(Math.max(1, Number(pagination.pages)));
+        setTotal(Math.max(0, Number(pagination.total)));
       } catch {
         if (!active) return;
         setProducts([]);
@@ -329,24 +297,10 @@ export default function CategoryPageV2({
   }, [runtime, pageType, page, appliedSearch, appliedFilters]);
 
   const enabledFilters = useMemo(
-    () => (runtime?.settings.filterDefinitions || []).filter((row) => row.enabled).sort((a, b) => a.displayOrder - b.displayOrder),
+    () => (runtime ? runtime.settings.filterDefinitions : []).filter((row) => row.enabled).sort((a, b) => a.displayOrder - b.displayOrder),
     [runtime]
   );
-  const visibleFilters = useMemo(() => {
-    if (!shouldForcePriceFilter) return enabledFilters;
-    const existingPrice = enabledFilters.find((row) => row.key === 'PRICE');
-    const forcedPriceRow =
-      existingPrice || {
-        id: `${pageType}-forced-price`,
-        key: 'PRICE' as const,
-        label: 'Price',
-        inputType: 'DROPDOWN' as const,
-        enabled: true,
-        options: DEFAULT_PRICE_FILTER_OPTIONS,
-        displayOrder: 0,
-      };
-    return [forcedPriceRow, ...enabledFilters.filter((row) => row.key !== 'PRICE')];
-  }, [enabledFilters, pageType, shouldForcePriceFilter]);
+  const visibleFilters = enabledFilters;
 
   const primarySlotCount = Math.max(1, Number(runtime?.settings.primaryGridRows || 1)) * Math.max(1, Number(runtime?.settings.primaryGridColumns || 1));
   const primaryProducts = (runtime?.primaryGridProducts || []).slice(0, primarySlotCount);
@@ -356,9 +310,10 @@ export default function CategoryPageV2({
   const hasActiveQuery = hasActiveSearch || hasActiveFilters;
   const listingProducts = hasActiveQuery ? products : products.filter((row) => !primaryIds.has(row.id));
   const featuredProducts = hasActiveQuery ? [] : primaryProducts;
-  const cardCfg = runtime?.settings.productCard || DEFAULT_PRODUCT_CARD;
+  const cardCfg = runtime?.settings.productCard ?? null;
 
   const renderCard = (row: CategoryPageProduct, cardKey: string) => {
+    if (!cardCfg) return null;
     const countryCode = resolveCountryCode(row.country);
     const primaryLabel = Array.isArray(row.productLabels) && row.productLabels.length > 0 ? row.productLabels[0] : null;
     const labelText = String(primaryLabel?.name || '').trim();
@@ -471,7 +426,7 @@ export default function CategoryPageV2({
             gap: `${cardCfg.textGap}px`,
           }}
         >
-          {(Array.isArray(cardCfg.fieldOrder) ? cardCfg.fieldOrder : DEFAULT_PRODUCT_CARD.fieldOrder).map((fieldKey) =>
+          {(Array.isArray(cardCfg?.fieldOrder) ? cardCfg.fieldOrder : []).map((fieldKey) =>
             fieldRenderers[fieldKey] ? fieldRenderers[fieldKey]() : null
           )}
         </div>
@@ -487,7 +442,7 @@ export default function CategoryPageV2({
       const paramKey = FILTER_PARAM_BY_KEY[row.key];
       const value = String(formData?.get(`filter-${row.key}`) || pendingFilters[row.key] || '').trim();
       if (!value) continue;
-      const tokens = parseFilterTokens(value, row.options || []);
+      const tokens = parseFilterTokens(value, row.options);
       if (tokens.length > 0) nextApplied[paramKey] = tokens;
     }
     setAppliedSearch(String(formData?.get('search') || pendingSearch).trim());
@@ -522,12 +477,18 @@ export default function CategoryPageV2({
           <div className="min-h-[55vh] flex items-center justify-center">
             <Loader2 className="h-10 w-10 animate-spin text-[var(--text-primary)]" />
           </div>
+        ) : !runtime ? (
+          <div className="px-8 md:px-[8vw] py-10">
+            <div className="border border-red-300 bg-red-50 text-red-700 px-4 py-3 text-sm">
+              {error || 'Unable to load category page settings.'}
+            </div>
+          </div>
         ) : (
           <>
-            <section className="relative overflow-hidden" style={{ minHeight: `${Math.max(320, Number(runtime?.settings.bannerHeight || 680))}px` }}>
+            <section className="relative overflow-hidden" style={{ minHeight: `${Math.max(320, Number(runtime.settings.bannerHeight))}px` }}>
               <BrandImageWithFallback
-                src={resolveAssetUrl(runtime?.settings.bannerImage || '')}
-                alt={runtime?.settings.title || 'Category banner'}
+                src={resolveAssetUrl(runtime.settings.bannerImage)}
+                alt={runtime.settings.title}
                 className="absolute inset-0 h-full w-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/35 to-transparent" />
@@ -541,8 +502,8 @@ export default function CategoryPageV2({
                     {breadcrumbLabel}
                   </Link>
                 </nav>
-                <h1 className="headline-lg text-[clamp(44px,7vw,96px)] leading-[0.95] text-white mb-4">{runtime?.settings.title || breadcrumbLabel}</h1>
-                <p className="max-w-2xl text-base md:text-lg text-white/85">{runtime?.settings.subtitle || ''}</p>
+                <h1 className="headline-lg text-[clamp(44px,7vw,96px)] leading-[0.95] text-white mb-4">{runtime.settings.title}</h1>
+                <p className="max-w-2xl text-base md:text-lg text-white/85">{runtime.settings.subtitle}</p>
               </div>
             </section>
 
@@ -562,7 +523,7 @@ export default function CategoryPageV2({
                           event.preventDefault();
                           submitFilters();
                         }}
-                        placeholder={runtime?.settings.searchPlaceholder || 'Search products...'}
+                        placeholder={runtime.settings.searchPlaceholder}
                         className="w-full pl-10 pr-4 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors text-sm"
                       />
                     </div>
@@ -585,7 +546,7 @@ export default function CategoryPageV2({
                             className="w-full px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:outline-none focus:border-[var(--accent)]"
                           />
                           <datalist id={listId}>
-                            {(row.options || []).map((option) => (
+                            {row.options.map((option) => (
                               <option key={`${listId}-${option}`} value={option} />
                             ))}
                           </datalist>
@@ -616,9 +577,9 @@ export default function CategoryPageV2({
                 </form>
 
                 <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
-                  {(runtime?.countryIcons || []).map((country) => {
+                  {runtime.countryIcons.map((country) => {
                     const code = resolveCountryCode(country);
-                    const active = (appliedFilters.country || []).some((entry) => entry.toLowerCase() === String(country || '').toLowerCase());
+                    const active = (appliedFilters.country || []).some((entry) => entry.toLowerCase() === String(country).toLowerCase());
                     return (
                       <button
                         key={`country-icon-${country}`}
@@ -654,7 +615,7 @@ export default function CategoryPageV2({
                   <h2 className="headline-lg text-[clamp(22px,3vw,34px)] text-[var(--text-primary)]">Featured Selection</h2>
                   <div
                     className="grid gap-6"
-                    style={{ gridTemplateColumns: `repeat(${Math.max(1, Number(runtime?.settings.primaryGridColumns || 3))}, minmax(0, 1fr))` }}
+                    style={{ gridTemplateColumns: `repeat(${Math.max(1, Number(runtime.settings.primaryGridColumns))}, minmax(0, 1fr))` }}
                   >
                     {featuredProducts.map((row) => (
                       renderCard(row, `primary-${row.id}`)
@@ -676,7 +637,7 @@ export default function CategoryPageV2({
                 ) : listingProducts.length === 0 ? (
                   <div className="text-center py-14 text-[var(--text-secondary)]">No products match the selected filters.</div>
                 ) : (
-                  <div className="grid gap-8" style={{ gridTemplateColumns: `repeat(${Math.max(1, Number(runtime?.settings.columns || 4))}, minmax(0, 1fr))` }}>
+                  <div className="grid gap-8" style={{ gridTemplateColumns: `repeat(${Math.max(1, Number(runtime.settings.columns))}, minmax(0, 1fr))` }}>
                     {listingProducts.map((row) => (
                       renderCard(row, `product-${row.sourceType}-${row.id}`)
                     ))}
@@ -684,7 +645,7 @@ export default function CategoryPageV2({
                 )}
               </div>
 
-              {runtime?.settings.showPagination && pages > 1 ? (
+              {runtime.settings.showPagination && pages > 1 ? (
                 <div className="flex items-center justify-center gap-3">
                   <button
                     type="button"

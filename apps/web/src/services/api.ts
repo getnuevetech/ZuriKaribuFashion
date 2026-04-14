@@ -8632,13 +8632,13 @@ async function writeDashboardClockWeatherSettingsWithFallback<T>(data: unknown) 
 const homepageSectionsApi = {
   // Public endpoints
   getVisibility: () =>
-    readHomepageVisibilityPublicWithFallback<{
+    apiService.get<{
       success: boolean;
       data: Record<string, boolean>;
-    }>(),
+    }>('/homepage-sections/visibility'),
 
   getTopStrip: () =>
-    readTopStripWithFallback<{
+    apiService.get<{
       success: boolean;
       data: {
         messages: string[];
@@ -8651,9 +8651,9 @@ const homepageSectionsApi = {
         textColor: string;
         backgroundColor: string;
       };
-    }>('public'),
+    }>('/homepage-sections/top-strip'),
   getStatsStrip: () =>
-    readStatsStripWithFallback<{
+    apiService.get<{
       success: boolean;
       data: {
         items: Array<{ value: string; suffix: string; label: string; displayOrder: number; isActive: boolean }>;
@@ -8665,7 +8665,7 @@ const homepageSectionsApi = {
         suffixColor: string;
         labelColor: string;
       };
-    }>('public'),
+    }>('/homepage-sections/stats-strip'),
   getFeaturedProductDescriptionSettings: () =>
     readFeaturedProductDescriptionSettingsWithFallback<{
       success: boolean;
@@ -9084,13 +9084,13 @@ const homepageSectionsApi = {
     }>('public'),
 
   getCategories: () =>
-    readHomepageCategoriesWithFallback<{ success: boolean; data: any[] }>(),
+    apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/categories'),
 
   getDesignerSpotlight: () =>
     apiService.get<{ success: boolean; data: any }>('/homepage-sections/designer-spotlight'),
 
   getDesignerSpotlights: () =>
-    readDesignerSpotlightsWithFallback<{ success: boolean; data: any[] }>(),
+    apiService.get<{ success: boolean; data: any[] }>('/homepage-sections/designer-spotlights'),
 
   getHeritage: () =>
     apiService.get<{ success: boolean; data: any }>('/homepage-sections/heritage'),
@@ -9103,7 +9103,7 @@ const homepageSectionsApi = {
 
   // Admin endpoints - Countries
   getAdminVisibility: () =>
-    readHomepageVisibilityAdminWithFallback<{
+    apiService.get<{
       success: boolean;
       data: {
         source: 'DATABASE' | 'DEFAULT';
@@ -9115,10 +9115,10 @@ const homepageSectionsApi = {
           enabled: boolean;
         }>;
       };
-    }>(),
+    }>('/homepage-sections/admin/visibility'),
 
   updateAdminVisibility: (visibility: Record<string, boolean>) =>
-    writeHomepageVisibilityAdminWithFallback<{
+    apiService.put<{
       success: boolean;
       data: {
         source: 'DATABASE' | 'DEFAULT';
@@ -9130,10 +9130,10 @@ const homepageSectionsApi = {
           enabled: boolean;
         }>;
       };
-    }>(visibility),
+    }>('/homepage-sections/admin/visibility', { visibility }),
 
   getAdminTopStrip: () =>
-    readTopStripWithFallback<{
+    apiService.get<{
       success: boolean;
       data: {
         messages: string[];
@@ -9148,9 +9148,9 @@ const homepageSectionsApi = {
         source?: 'DATABASE' | 'DEFAULT';
         updatedAt?: string | null;
       };
-    }>('admin'),
+    }>('/homepage-sections/admin/top-strip'),
   getAdminStatsStrip: () =>
-    readStatsStripWithFallback<{
+    apiService.get<{
       success: boolean;
       data: {
         items: Array<{ value: string; suffix: string; label: string; displayOrder: number; isActive: boolean }>;
@@ -9164,7 +9164,7 @@ const homepageSectionsApi = {
         source?: 'DATABASE' | 'DEFAULT';
         updatedAt?: string | null;
       };
-    }>('admin'),
+    }>('/homepage-sections/admin/stats-strip'),
   getAdminFeaturedProductDescriptionSettings: () =>
     readFeaturedProductDescriptionSettingsWithFallback<{
       success: boolean;
@@ -10201,7 +10201,7 @@ const homepageSectionsApi = {
     textColor?: string;
     backgroundColor?: string;
   }) =>
-    writeTopStripWithFallback<{
+    apiService.put<{
       success: boolean;
       data: {
         messages: string[];
@@ -10214,7 +10214,7 @@ const homepageSectionsApi = {
         textColor: string;
         backgroundColor: string;
       };
-    }>(data),
+    }>('/homepage-sections/admin/top-strip', data),
   updateAdminStatsStrip: (data: {
     items: Array<{ value: string; suffix?: string; label: string; displayOrder?: number; isActive?: boolean }>;
     backgroundImage?: string;
@@ -10225,7 +10225,7 @@ const homepageSectionsApi = {
     suffixColor?: string;
     labelColor?: string;
   }) =>
-    writeStatsStripWithFallback<{
+    apiService.put<{
       success: boolean;
       data: {
         items: Array<{ value: string; suffix: string; label: string; displayOrder: number; isActive: boolean }>;
@@ -10237,7 +10237,7 @@ const homepageSectionsApi = {
         suffixColor: string;
         labelColor: string;
       };
-    }>(data),
+    }>('/homepage-sections/admin/stats-strip', data),
   updateAdminFeaturedProductDescriptionSettings: (data: { wordLimit: number }) =>
     writeFeaturedProductDescriptionSettingsWithFallback<{
       success: boolean;

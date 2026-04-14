@@ -47,23 +47,6 @@ type ProductCard = {
 
 const QUICK_COUNTRY_CODES = ['NG', 'GH', 'KE', 'ZA', 'MA', 'SN', 'ET', 'TZ', 'UG', 'ML', 'EG', 'CM'] as const;
 
-const FABRIC_FALLBACK_FILTERS = [
-  'Ankara',
-  'Kente',
-  'Adire',
-  'Mud Cloth',
-  'Silk',
-  'Cotton',
-  'Kanga',
-  'Raffia',
-  'Shweshwe',
-  'Toghu',
-];
-
-const READY_FALLBACK_FILTERS = ['Dresses', 'Kaftan', 'Agbada', 'Skirt Sets', 'Shirts', 'Jackets', 'Occasion', 'Casual'];
-
-const CUSTOM_FALLBACK_FILTERS = ['Bridal', 'Traditional', 'Modern', 'Menswear', 'Womenswear', 'Luxury', 'Event', 'Bespoke'];
-
 const asText = (value: unknown, fallback = '') => {
   const text = String(value || '').trim();
   return text || fallback;
@@ -92,7 +75,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
   const [selectedCountry, setSelectedCountry] = useState('');
   const [selectedTaxonomyId, setSelectedTaxonomyId] = useState('');
   const [taxonomyOptions, setTaxonomyOptions] = useState<TaxonomyOption[]>([]);
-  const [taxonomyLoadedFromApi, setTaxonomyLoadedFromApi] = useState(true);
+  const [taxonomyError, setTaxonomyError] = useState('');
   const [products, setProducts] = useState<ProductCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -129,44 +112,39 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
 
   useEffect(() => {
     const loadTaxonomy = async () => {
+      setTaxonomyError('');
       try {
         if (mode === 'FABRICS') {
           const response = await api.products.getFabricCategories();
-          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-            setTaxonomyOptions(
-              sortByName(
-                response.data.map((entry: any) => ({
-                  id: asText(entry?.id, ''),
-                  name: asText(entry?.name, ''),
-                }))
-              )
-            );
-            setTaxonomyLoadedFromApi(true);
-            return;
-          }
-        } else {
-          const response = await api.products.getCategories();
-          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-            setTaxonomyOptions(
-              sortByName(
-                response.data.map((entry: any) => ({
-                  id: asText(entry?.id, ''),
-                  name: asText(entry?.name, ''),
-                }))
-              )
-            );
-            setTaxonomyLoadedFromApi(true);
-            return;
-          }
+          if (!response.success || !Array.isArray(response.data)) throw new Error('Unable to load categories.');
+          const options = sortByName(
+            response.data
+              .map((entry: any) => ({
+                id: asText(entry?.id, ''),
+                name: asText(entry?.name, ''),
+              }))
+              .filter((entry) => Boolean(entry.id && entry.name))
+          );
+          if (options.length === 0) throw new Error('No category filters configured.');
+          setTaxonomyOptions(options);
+          return;
         }
+        const response = await api.products.getCategories();
+        if (!response.success || !Array.isArray(response.data)) throw new Error('Unable to load categories.');
+        const options = sortByName(
+          response.data
+            .map((entry: any) => ({
+              id: asText(entry?.id, ''),
+              name: asText(entry?.name, ''),
+            }))
+            .filter((entry) => Boolean(entry.id && entry.name))
+        );
+        if (options.length === 0) throw new Error('No category filters configured.');
+        setTaxonomyOptions(options);
       } catch {
-        // Keep graceful fallback.
+        setTaxonomyOptions([]);
+        setTaxonomyError('Unable to load category filters.');
       }
-
-      const fallbackNames =
-        mode === 'FABRICS' ? FABRIC_FALLBACK_FILTERS : mode === 'READY' ? READY_FALLBACK_FILTERS : CUSTOM_FALLBACK_FILTERS;
-      setTaxonomyOptions(fallbackNames.map((name) => ({ id: name.toLowerCase().replace(/\s+/g, '-'), name })));
-      setTaxonomyLoadedFromApi(false);
     };
 
     setSelectedTaxonomyId('');
@@ -178,50 +156,33 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
       setLoading(true);
       setError('');
       try {
-        const fallbackTaxonomyToken =
-          !taxonomyLoadedFromApi && selectedTaxonomyId
-            ? String(taxonomyOptions.find((entry) => entry.id === selectedTaxonomyId)?.name || selectedTaxonomyId || '')
-                .trim()
-                .toLowerCase()
-            : '';
-
         if (mode === 'FABRICS') {
           const response = await api.products.getFabrics({
             country: selectedCountry || undefined,
-            fabricCategoryId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
+            fabricCategoryId: selectedTaxonomyId || undefined,
             page: 1,
             limit: 32,
           });
           if (!response.success) throw new Error('Unable to load fabrics.');
           const sourceRows = Array.isArray(response.data?.fabrics) ? response.data.fabrics : [];
-          const rows = fallbackTaxonomyToken
-            ? sourceRows.filter((row: any) => {
-                const haystack = [
-                  row?.name,
-                  row?.description,
-                  row?.fabricCategory?.name,
-                  row?.fabricCategoryName,
-                  row?.materialType?.name,
-                  row?.materialTypeName,
-                ]
-                  .map((entry) => asText(entry, '').toLowerCase())
-                  .join(' ');
-                return haystack.includes(fallbackTaxonomyToken);
-              })
-            : sourceRows;
           setProducts(
-            rows.map((row: any) => ({
-              id: asText(row?.id, ''),
-              name: asText(row?.name, 'Fabric'),
-              ownerName: asText(row?.seller?.businessName, 'Seller'),
-              country: asText(row?.seller?.country, ''),
-              image: asText(row?.images?.[0]?.url, '/images/placeholder.jpg'),
-              priceUsd: toNumber(row?.pricePerMeter, row?.finalPrice, row?.sellerPrice, 0),
-              href: `${routeBase}/${asText(row?.id, '')}`,
-              labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
-              material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
-              isNew: true,
-            }))
+            sourceRows
+              .map((row: any) => {
+                const id = asText(row?.id, '');
+                return {
+                  id,
+                  name: asText(row?.name, ''),
+                  ownerName: asText(row?.seller?.businessName, ''),
+                  country: asText(row?.seller?.country, ''),
+                  image: asText(row?.images?.[0]?.url, ''),
+                  priceUsd: toNumber(row?.pricePerMeter, row?.finalPrice, row?.sellerPrice, 0),
+                  href: `${routeBase}/${id}`,
+                  labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
+                  material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
+                  isNew: Boolean(row?.isNew),
+                } satisfies ProductCard;
+              })
+              .filter((row) => Boolean(row.id && row.name))
           );
           return;
         }
@@ -229,72 +190,64 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
         if (mode === 'READY') {
           const response = await api.products.getReadyToWear({
             country: selectedCountry || undefined,
-            categoryId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
+            categoryId: selectedTaxonomyId || undefined,
             page: 1,
             limit: 32,
           });
           if (!response.success) throw new Error('Unable to load ready-to-wear products.');
           const sourceRows = Array.isArray(response.data?.products) ? response.data.products : [];
-          const rows = fallbackTaxonomyToken
-            ? sourceRows.filter((row: any) => {
-                const haystack = [row?.name, row?.description, row?.category?.name, row?.categoryName]
-                  .map((entry) => asText(entry, '').toLowerCase())
-                  .join(' ');
-                return haystack.includes(fallbackTaxonomyToken);
-              })
-            : sourceRows;
           setProducts(
-            rows.map((row: any) => {
-              const variationPrices = (Array.isArray(row?.sizeVariations) ? row.sizeVariations : [])
-                .map((entry: any) => toNumber(entry?.price, 0))
-                .filter((value: number) => value > 0);
-              const price = variationPrices.length > 0 ? Math.min(...variationPrices) : toNumber(row?.basePrice, row?.finalPrice, 0);
-              return {
-                id: asText(row?.id, ''),
-                name: asText(row?.name, 'Ready To Wear'),
-                ownerName: asText(row?.designer?.businessName, 'Designer'),
-                country: asText(row?.designer?.country, ''),
-                image: asText(row?.images?.[0]?.url, '/images/placeholder.jpg'),
-                priceUsd: price,
-                href: `${routeBase}/${asText(row?.id, '')}`,
-                labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
-                material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
-                isNew: true,
-              } satisfies ProductCard;
-            })
+            sourceRows
+              .map((row: any) => {
+                const id = asText(row?.id, '');
+                const variationPrices = (Array.isArray(row?.sizeVariations) ? row.sizeVariations : [])
+                  .map((entry: any) => toNumber(entry?.price, 0))
+                  .filter((value: number) => value > 0);
+                const price = variationPrices.length > 0 ? Math.min(...variationPrices) : toNumber(row?.basePrice, row?.finalPrice, 0);
+                return {
+                  id,
+                  name: asText(row?.name, ''),
+                  ownerName: asText(row?.designer?.businessName, ''),
+                  country: asText(row?.designer?.country, ''),
+                  image: asText(row?.images?.[0]?.url, ''),
+                  priceUsd: price,
+                  href: `${routeBase}/${id}`,
+                  labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
+                  material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
+                  isNew: Boolean(row?.isNew),
+                } satisfies ProductCard;
+              })
+              .filter((row) => Boolean(row.id && row.name))
           );
           return;
         }
 
         const response = await api.products.getDesigns({
           country: selectedCountry || undefined,
-          categoryId: taxonomyLoadedFromApi && selectedTaxonomyId ? selectedTaxonomyId : undefined,
+          categoryId: selectedTaxonomyId || undefined,
           page: 1,
           limit: 32,
         });
         if (!response.success) throw new Error('Unable to load custom products.');
         const sourceRows = Array.isArray(response.data?.designs) ? response.data.designs : [];
-        const rows = fallbackTaxonomyToken
-          ? sourceRows.filter((row: any) => {
-              const haystack = [row?.name, row?.description, row?.category?.name, row?.categoryName]
-                .map((entry) => asText(entry, '').toLowerCase())
-                .join(' ');
-              return haystack.includes(fallbackTaxonomyToken);
-            })
-          : sourceRows;
         setProducts(
-          rows.map((row: any) => ({
-            id: asText(row?.id, ''),
-            name: asText(row?.name, 'Custom To Wear'),
-            ownerName: asText(row?.designer?.businessName, 'Designer'),
-            country: asText(row?.designer?.country, ''),
-            image: asText(row?.images?.[0]?.url, '/images/placeholder.jpg'),
-            priceUsd: toNumber(row?.finalPrice, row?.basePrice, 0),
-            href: `${routeBase}/${asText(row?.id, '')}`,
-            labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
-            material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
-            isNew: true,
-          }))
+          sourceRows
+            .map((row: any) => {
+              const id = asText(row?.id, '');
+              return {
+                id,
+                name: asText(row?.name, ''),
+                ownerName: asText(row?.designer?.businessName, ''),
+                country: asText(row?.designer?.country, ''),
+                image: asText(row?.images?.[0]?.url, ''),
+                priceUsd: toNumber(row?.finalPrice, row?.basePrice, 0),
+                href: `${routeBase}/${id}`,
+                labels: Array.isArray(row?.productLabels) ? row.productLabels : [],
+                material: asText(row?.materialType?.name, asText(row?.materialTypeName, '')),
+                isNew: Boolean(row?.isNew),
+              } satisfies ProductCard;
+            })
+            .filter((row) => Boolean(row.id && row.name))
         );
       } catch (loadError) {
         setProducts([]);
@@ -305,7 +258,7 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
     };
 
     void loadProducts();
-  }, [mode, routeBase, selectedCountry, selectedTaxonomyId, taxonomyLoadedFromApi, taxonomyOptions]);
+  }, [mode, routeBase, selectedCountry, selectedTaxonomyId]);
 
   return (
     <div className="min-h-screen bg-[#F8F6F1] text-[#1A1A1A]">
@@ -362,6 +315,9 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
 
           <div className="mt-4">
             <p className="label-mono mb-2 text-[#6B6B6B]">{taxonomyLabel}</p>
+            {taxonomyError ? (
+              <div className="mb-3 border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{taxonomyError}</div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {taxonomyOptions.map((option) => {
                 const active = selectedTaxonomyId === option.id;
@@ -407,11 +363,13 @@ export default function JenksV14CategoryPage({ mode, routeBase }: JenksV14Catego
                   className={`product-card group bg-white ${index % 5 === 0 ? 'sm:col-span-2 lg:col-span-1' : ''}`}
                 >
                   <div className="relative aspect-[3/4] overflow-hidden bg-[#ece8df]">
-                    <img
-                      src={product.image || '/images/placeholder.jpg'}
-                      alt={product.name}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
+                    {product.image ? (
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : null}
                     <div className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[16px] shadow">
                       {flagEmoji(countryCode || 'NG')}
                     </div>

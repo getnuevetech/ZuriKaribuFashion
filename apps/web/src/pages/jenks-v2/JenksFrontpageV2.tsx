@@ -1557,11 +1557,7 @@ export default function JenksFrontpageV2() {
       label: string;
     }>
   >([]);
-  const [frontpageProductCardByType, setFrontpageProductCardByType] = useState<Record<ProductCardPageType, ProductCardStyle>>({
-    READY_TO_WEAR: PRODUCT_CARD_FALLBACK_STYLE,
-    FABRIC_TO_BUY: PRODUCT_CARD_FALLBACK_STYLE,
-    CUSTOM_TO_WEAR: PRODUCT_CARD_FALLBACK_STYLE,
-  });
+  const [frontpageProductCardByType, setFrontpageProductCardByType] = useState<Record<ProductCardPageType, ProductCardStyle> | null>(null);
   const [instantBuyAutoProducts, setInstantBuyAutoProducts] = useState<Record<'RTW' | 'FTB', InstantBuyAutoProduct[]>>({
     RTW: [],
     FTB: [],
@@ -3534,12 +3530,12 @@ export default function JenksFrontpageV2() {
         cancelled = true;
       };
     }
-  const loadProductReviews = async () => {
+    const loadProductReviews = async () => {
       try {
         const [ready, designs, fabrics] = await Promise.all([
-          api.products.getReadyToWear({ page: 1, limit: 8 }).catch(() => null),
-          api.products.getDesigns({ page: 1, limit: 8 }).catch(() => null),
-          api.products.getFabrics({ page: 1, limit: 8 }).catch(() => null),
+          api.products.getReadyToWear({ page: 1, limit: 8 }),
+          api.products.getDesigns({ page: 1, limit: 8 }),
+          api.products.getFabrics({ page: 1, limit: 8 }),
         ]);
         const seeds: Array<{ type: 'ready-to-wear' | 'design' | 'fabric'; id: string; location: string }> = [];
         const pushSeed = (type: 'ready-to-wear' | 'design' | 'fabric', row: unknown) => {
@@ -3558,7 +3554,7 @@ export default function JenksFrontpageV2() {
         const uniqueSeeds = Array.from(new Map(seeds.map((seed) => [`${seed.type}:${seed.id}`, seed])).values()).slice(0, 10);
         const reviewResponses = await Promise.all(
           uniqueSeeds.map(async (seed) => {
-            const response = await api.products.getProductReviews(seed.type, seed.id, 3).catch(() => null);
+            const response = await api.products.getProductReviews(seed.type, seed.id, 3);
             return { seed, response };
           })
         );
@@ -3600,11 +3596,14 @@ export default function JenksFrontpageV2() {
     const loadFrontpageProductCardSettings = async () => {
       try {
         const [rtw, ftb, ctw] = await Promise.all([
-          api.products.getCategoryPageSettings('READY_TO_WEAR').catch(() => null),
-          api.products.getCategoryPageSettings('FABRIC_TO_BUY').catch(() => null),
-          api.products.getCategoryPageSettings('CUSTOM_TO_WEAR').catch(() => null),
+          api.products.getCategoryPageSettings('READY_TO_WEAR'),
+          api.products.getCategoryPageSettings('FABRIC_TO_BUY'),
+          api.products.getCategoryPageSettings('CUSTOM_TO_WEAR'),
         ]);
         if (cancelled) return;
+        if (!rtw?.success || !ftb?.success || !ctw?.success) {
+          throw new Error('Unable to load frontpage product card settings.');
+        }
         setFrontpageProductCardByType({
           READY_TO_WEAR: normalizeProductCardStyle(asRecord(asRecord(rtw).data).settings?.productCard),
           FABRIC_TO_BUY: normalizeProductCardStyle(asRecord(asRecord(ftb).data).settings?.productCard),
@@ -3612,11 +3611,7 @@ export default function JenksFrontpageV2() {
         });
       } catch {
         if (cancelled) return;
-        setFrontpageProductCardByType({
-          READY_TO_WEAR: PRODUCT_CARD_FALLBACK_STYLE,
-          FABRIC_TO_BUY: PRODUCT_CARD_FALLBACK_STYLE,
-          CUSTOM_TO_WEAR: PRODUCT_CARD_FALLBACK_STYLE,
-        });
+        setFrontpageProductCardByType(null);
       }
     };
     void loadFrontpageProductCardSettings();
@@ -3635,9 +3630,9 @@ export default function JenksFrontpageV2() {
         }
         const rowsPerSource = Math.max(8, Math.round(asNumber(freshDropsCfg.rows, 2)) * Math.round(asNumber(freshDropsCfg.columns, 4)) * 2);
         const [ready, designs, fabrics] = await Promise.all([
-          api.products.getReadyToWear({ page: 1, limit: rowsPerSource }).catch(() => null),
-          api.products.getDesigns({ page: 1, limit: rowsPerSource }).catch(() => null),
-          api.products.getFabrics({ page: 1, limit: rowsPerSource }).catch(() => null),
+          api.products.getReadyToWear({ page: 1, limit: rowsPerSource }),
+          api.products.getDesigns({ page: 1, limit: rowsPerSource }),
+          api.products.getFabrics({ page: 1, limit: rowsPerSource }),
         ]);
 
         const toTimestamp = (value: unknown) => {
@@ -5247,7 +5242,7 @@ export default function JenksFrontpageV2() {
           >
             {freshDropsCards.map((drop) => {
               const productPageType = PRODUCT_PAGE_BY_SECTION_KEY[drop.category || 'RTW'];
-              const cardCfg = frontpageProductCardByType[productPageType] || PRODUCT_CARD_FALLBACK_STYLE;
+              const cardCfg = frontpageProductCardByType?.[productPageType] ?? PRODUCT_CARD_FALLBACK_STYLE;
               const labelText = asString(drop.productLabel?.name, asString(drop.label, '')).trim();
               const fieldRenderers: Record<ProductCardFieldKey, () => JSX.Element | null> = {
                 DESIGNER_NAME: () =>
