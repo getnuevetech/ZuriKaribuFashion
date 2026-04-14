@@ -10880,6 +10880,16 @@ const jenksV2FrontpageManagerApi = {
       success: boolean;
       data: any;
     }>('/jenks-v2-frontpage/admin/config', data),
+  recoverFromSectionSnapshots: () =>
+    apiService.post<{
+      success: boolean;
+      data: any;
+      meta?: {
+        appliedTemplateCount: number;
+        appliedTemplates: string[];
+      };
+      message?: string;
+    }>('/jenks-v2-frontpage/admin/recover-from-section-snapshots', {}),
   duplicateSection: (payload: {
     name: string;
     templateKey:
