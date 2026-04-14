@@ -3431,29 +3431,6 @@ export default function JenksFrontpageV2() {
     };
   }, []);
 
-  if (!managerConfigLoaded) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f3ee] px-6 text-center text-sm text-black/70">
-        Loading primary homepage configuration...
-      </div>
-    );
-  }
-
-  if (managerConfigLoadError && !managerConfig) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#f5f3ee] px-6 text-center">
-        <p className="text-sm font-medium text-black/80">{managerConfigLoadError}</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="rounded border border-black/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-black hover:bg-black/5"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
   useEffect(() => {
     if (enabledShopByTabs.length === 0) return;
     if (!enabledShopByTabs.includes(shopByTab)) {
@@ -4250,6 +4227,29 @@ export default function JenksFrontpageV2() {
       </div>
     </Link>
   );
+
+  if (!managerConfigLoaded) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f5f3ee] px-6 text-center text-sm text-black/70">
+        Loading primary homepage configuration...
+      </div>
+    );
+  }
+
+  if (managerConfigLoadError && !managerConfig) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#f5f3ee] px-6 text-center">
+        <p className="text-sm font-medium text-black/80">{managerConfigLoadError}</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="rounded border border-black/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-black hover:bg-black/5"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="kimi-site flex flex-col bg-[#f5f3ee] text-[#111]">
