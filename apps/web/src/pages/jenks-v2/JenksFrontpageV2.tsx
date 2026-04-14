@@ -520,7 +520,6 @@ type TextIconCardStyleConfig = {
   cardWidth: number;
   sectionHeightPx: number;
   imageHeightPx: number;
-  backgroundImage: string;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -2730,7 +2729,6 @@ export default function JenksFrontpageV2() {
           0,
           Math.min(2400, Math.round(asNumber(row.imageHeightPx, asNumber(fallbackStyle.imageHeightPx, 180))))
         ),
-        backgroundImage: resolveManagerImage(row.backgroundImage, resolveManagerImage(fallbackStyle.backgroundImage, '')),
         iconSize: Math.max(20, Math.min(120, Math.round(asNumber(row.iconSize, asNumber(fallbackStyle.iconSize, 44))))),
         titleFontSize: Math.max(
           8,
@@ -2769,6 +2767,7 @@ export default function JenksFrontpageV2() {
         title: asString(entry.title, target === 'SHOP_WITH_CONFIDENCE' ? 'Trust' : target === 'CUSTOM' ? 'Custom' : 'Step').toUpperCase(),
         sub: asString(entry.description, ''),
         Icon: iconFromKey(entry.icon, target === 'SHOP_WITH_CONFIDENCE' ? ShieldCheck : Sparkles),
+        backgroundImage: resolveManagerImage((entry as Record<string, unknown>).backgroundImage, ''),
       }));
     if (rows.length > 0) return rows;
     if (allRows.length > 0) return [];
@@ -2777,6 +2776,7 @@ export default function JenksFrontpageV2() {
       title: asString(row.title || row.label, 'Card').toUpperCase(),
       sub: asString(row.sub, ''),
       Icon: row.Icon,
+      backgroundImage: '',
     }));
   };
 
@@ -2798,20 +2798,6 @@ export default function JenksFrontpageV2() {
   const howItWorksSectionHeightPx = Math.max(0, Math.round(asNumber(textIconSectionStyles.HOW_IT_WORKS.sectionHeightPx, 0)));
   const customTextIconSectionHeightPx = Math.max(0, Math.round(asNumber(textIconSectionStyles.CUSTOM.sectionHeightPx, 0)));
   const trustSectionHeightPx = Math.max(0, Math.round(asNumber(textIconSectionStyles.SHOP_WITH_CONFIDENCE.sectionHeightPx, 0)));
-  const howItWorksSectionBackgroundImage = resolveManagerImage(textIconSectionStyles.HOW_IT_WORKS.backgroundImage, '');
-  const customSectionBackgroundImage = resolveManagerImage(textIconSectionStyles.CUSTOM.backgroundImage, '');
-  const trustSectionBackgroundImage = resolveManagerImage(textIconSectionStyles.SHOP_WITH_CONFIDENCE.backgroundImage, '');
-  const textIconSectionSurfaceStyle = (minHeightPx: number, image: string): CSSProperties => ({
-    minHeight: minHeightPx > 0 ? `${minHeightPx}px` : undefined,
-    ...(hasImageSource(image)
-      ? {
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.78), rgba(255,255,255,0.78)), ${toSafeBackgroundImage(image)}`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-        }
-      : {}),
-  });
   const getTextIconHeadingConfig = (sectionType: TextIconSectionType): TextIconSectionHeadingConfig => {
     if (sectionType === 'HOW_IT_WORKS') return textIconSectionHeadings.HOW_IT_WORKS;
     if (sectionType === 'CUSTOM') return textIconSectionHeadings.CUSTOM;
@@ -2825,11 +2811,13 @@ export default function JenksFrontpageV2() {
   };
   const renderTextIconCard = (
     sectionType: TextIconSectionType,
-    item: { id: string; title: string; sub: string; Icon: IconComponent }
+    item: { id: string; title: string; sub: string; Icon: IconComponent; backgroundImage: string }
   ) => {
     const textIconCardStyle = textIconSectionStyles[sectionType];
     const iconSize = textIconCardStyle.iconSize;
     const iconGlyphSize = Math.max(14, Math.round(iconSize * 0.45));
+    const imageHeightPx = Math.max(0, Math.round(asNumber(textIconCardStyle.imageHeightPx, 180)));
+    const hasBackgroundImage = hasImageSource(item.backgroundImage);
     return (
       <article
         key={item.id}
@@ -2842,6 +2830,16 @@ export default function JenksFrontpageV2() {
           marginRight: 'auto',
         }}
       >
+        {hasBackgroundImage ? (
+          <div className="-mx-4 -mt-8 mb-4 w-[calc(100%+2rem)]">
+            <BrandImageWithFallback
+              src={item.backgroundImage}
+              alt={item.title}
+              className="w-full object-cover"
+              style={{ height: `${imageHeightPx}px` }}
+            />
+          </div>
+        ) : null}
         <div
           className="flex items-center justify-center rounded-full border border-black/15 bg-white"
           style={{ width: `${iconSize}px`, height: `${iconSize}px` }}
@@ -5047,7 +5045,7 @@ export default function JenksFrontpageV2() {
         data-kimi-anim="fade-up"
         style={{
           order: getSectionOrder('HOW_IT_WORKS'),
-          ...textIconSectionSurfaceStyle(howItWorksSectionHeightPx, howItWorksSectionBackgroundImage),
+          minHeight: howItWorksSectionHeightPx > 0 ? `${howItWorksSectionHeightPx}px` : undefined,
         }}
       >
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
@@ -5081,7 +5079,7 @@ export default function JenksFrontpageV2() {
         data-kimi-anim="fade-up"
         style={{
           order: getSectionOrder('CUSTOM_TEXT_ICON'),
-          ...textIconSectionSurfaceStyle(customTextIconSectionHeightPx, customSectionBackgroundImage),
+          minHeight: customTextIconSectionHeightPx > 0 ? `${customTextIconSectionHeightPx}px` : undefined,
         }}
       >
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
@@ -5705,7 +5703,7 @@ export default function JenksFrontpageV2() {
           data-kimi-anim="fade-up"
           style={{
             order: getSectionOrder('SHOP_WITH_CONFIDENCE'),
-            ...textIconSectionSurfaceStyle(trustSectionHeightPx, trustSectionBackgroundImage),
+            minHeight: trustSectionHeightPx > 0 ? `${trustSectionHeightPx}px` : undefined,
           }}
         >
         <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">

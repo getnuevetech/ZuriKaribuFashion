@@ -272,6 +272,7 @@ type TextIconCard = {
   title: string;
   description: string;
   icon: string;
+  backgroundImage?: string;
   enabled: boolean;
   displayOrder: number;
 };
@@ -281,7 +282,6 @@ type TextIconCardStyle = {
   cardWidth: number;
   sectionHeightPx: number;
   imageHeightPx: number;
-  backgroundImage: string;
   iconSize: number;
   titleFontSize: number;
   descriptionFontSize: number;
@@ -1413,7 +1413,6 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         cardWidth: 320,
         sectionHeightPx: 0,
         imageHeightPx: 180,
-        backgroundImage: '',
         iconSize: 44,
         titleFontSize: 11,
         descriptionFontSize: 12,
@@ -1424,7 +1423,6 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           cardWidth: 320,
           sectionHeightPx: 0,
           imageHeightPx: 180,
-          backgroundImage: '',
           iconSize: 44,
           titleFontSize: 11,
           descriptionFontSize: 12,
@@ -1434,7 +1432,6 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           cardWidth: 320,
           sectionHeightPx: 0,
           imageHeightPx: 180,
-          backgroundImage: '',
           iconSize: 44,
           titleFontSize: 11,
           descriptionFontSize: 12,
@@ -1444,7 +1441,6 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
           cardWidth: 320,
           sectionHeightPx: 0,
           imageHeightPx: 180,
-          backgroundImage: '',
           iconSize: 44,
           titleFontSize: 11,
           descriptionFontSize: 12,
@@ -2678,11 +2674,6 @@ const normalizeTextIconCards = (
       0,
       2400
     ),
-    backgroundImage: (
-      Object.prototype.hasOwnProperty.call(input, 'backgroundImage')
-        ? String(input.backgroundImage || '')
-        : fallbackStyle.backgroundImage
-    ).slice(0, 2000),
     iconSize: clamp(Math.round(getNumber(input.iconSize) ?? fallbackStyle.iconSize), 20, 120),
     titleFontSize: clamp(Math.round(getNumber(input.titleFontSize) ?? fallbackStyle.titleFontSize), 8, 72),
     descriptionFontSize: clamp(Math.round(getNumber(input.descriptionFontSize) ?? fallbackStyle.descriptionFontSize), 8, 72),
@@ -2690,48 +2681,15 @@ const normalizeTextIconCards = (
   const cardStyle = normalizeCardStyle(rawCardStyle, fallbackCardStyle);
   const rawSectionStyles = asRecord(row.sectionStyles);
   const fallbackSectionStyles = fallback.sectionStyles;
-  const rows = Array.isArray(row.cards) ? row.cards : fallback.cards;
-  const resolveLegacySectionBackgroundImage = (target: TextIconSectionType): string => {
-    const matched = rows
-      .map((entry) => asRecord(entry))
-      .find((entry) => String(entry.sectionType || '').trim().toUpperCase() === target);
-    return getString(matched?.backgroundImage) || '';
-  };
   const sectionStyles = {
-    howItWorks: (() => {
-      const sectionRow = asRecord(rawSectionStyles.howItWorks);
-      return {
-        ...normalizeCardStyle(sectionRow, fallbackSectionStyles.howItWorks),
-        backgroundImage: (
-          Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')
-            ? String(sectionRow.backgroundImage || '')
-            : resolveLegacySectionBackgroundImage('HOW_IT_WORKS') || fallbackSectionStyles.howItWorks.backgroundImage
-        ).slice(0, 2000),
-      };
-    })(),
-    custom: (() => {
-      const sectionRow = asRecord(rawSectionStyles.custom);
-      return {
-        ...normalizeCardStyle(sectionRow, fallbackSectionStyles.custom),
-        backgroundImage: (
-          Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')
-            ? String(sectionRow.backgroundImage || '')
-            : resolveLegacySectionBackgroundImage('CUSTOM') || fallbackSectionStyles.custom.backgroundImage
-        ).slice(0, 2000),
-      };
-    })(),
-    shopWithConfidence: (() => {
-      const sectionRow = asRecord(rawSectionStyles.shopWithConfidence);
-      return {
-        ...normalizeCardStyle(sectionRow, fallbackSectionStyles.shopWithConfidence),
-        backgroundImage: (
-          Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')
-            ? String(sectionRow.backgroundImage || '')
-            : resolveLegacySectionBackgroundImage('SHOP_WITH_CONFIDENCE') || fallbackSectionStyles.shopWithConfidence.backgroundImage
-        ).slice(0, 2000),
-      };
-    })(),
+    howItWorks: normalizeCardStyle(asRecord(rawSectionStyles.howItWorks), fallbackSectionStyles.howItWorks),
+    custom: normalizeCardStyle(asRecord(rawSectionStyles.custom), fallbackSectionStyles.custom),
+    shopWithConfidence: normalizeCardStyle(
+      asRecord(rawSectionStyles.shopWithConfidence),
+      fallbackSectionStyles.shopWithConfidence
+    ),
   };
+  const rows = Array.isArray(row.cards) ? row.cards : fallback.cards;
   const cards = rows
     .map((entry, index) => {
       const item = asRecord(entry);
