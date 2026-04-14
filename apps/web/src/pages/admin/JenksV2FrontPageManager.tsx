@@ -2858,13 +2858,18 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             0,
             2400
           ),
-          backgroundImage: String(
-            ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.howItWorks as
-              | Record<string, unknown>
-              | undefined)?.backgroundImage ||
+          backgroundImage: (() => {
+            const sectionRow = asRecord(
+              (textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.howItWorks
+            );
+            if (Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')) {
+              return String(sectionRow.backgroundImage || '');
+            }
+            return (
               resolveLegacyTextIconSectionBackground('HOW_IT_WORKS') ||
               DEFAULT_CONFIG.textIconCards.sectionStyles.howItWorks.backgroundImage
-          ),
+            );
+          })(),
         },
         custom: {
           ...DEFAULT_CONFIG.textIconCards.sectionStyles.custom,
@@ -2897,13 +2902,18 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             0,
             2400
           ),
-          backgroundImage: String(
-            ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.custom as
-              | Record<string, unknown>
-              | undefined)?.backgroundImage ||
+          backgroundImage: (() => {
+            const sectionRow = asRecord(
+              (textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.custom
+            );
+            if (Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')) {
+              return String(sectionRow.backgroundImage || '');
+            }
+            return (
               resolveLegacyTextIconSectionBackground('CUSTOM') ||
               DEFAULT_CONFIG.textIconCards.sectionStyles.custom.backgroundImage
-          ),
+            );
+          })(),
         },
         shopWithConfidence: {
           ...DEFAULT_CONFIG.textIconCards.sectionStyles.shopWithConfidence,
@@ -2940,13 +2950,18 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
             0,
             2400
           ),
-          backgroundImage: String(
-            ((textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.shopWithConfidence as
-              | Record<string, unknown>
-              | undefined)?.backgroundImage ||
+          backgroundImage: (() => {
+            const sectionRow = asRecord(
+              (textIconCards?.sectionStyles as unknown as Record<string, unknown>)?.shopWithConfidence
+            );
+            if (Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')) {
+              return String(sectionRow.backgroundImage || '');
+            }
+            return (
               resolveLegacyTextIconSectionBackground('SHOP_WITH_CONFIDENCE') ||
               DEFAULT_CONFIG.textIconCards.sectionStyles.shopWithConfidence.backgroundImage
-          ),
+            );
+          })(),
         },
       },
       cards: Array.isArray(textIconCards?.cards)

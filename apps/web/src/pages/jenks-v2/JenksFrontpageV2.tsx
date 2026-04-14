@@ -2798,6 +2798,18 @@ export default function JenksFrontpageV2() {
   const howItWorksSectionHeightPx = Math.max(0, Math.round(asNumber(textIconSectionStyles.HOW_IT_WORKS.sectionHeightPx, 0)));
   const customTextIconSectionHeightPx = Math.max(0, Math.round(asNumber(textIconSectionStyles.CUSTOM.sectionHeightPx, 0)));
   const trustSectionHeightPx = Math.max(0, Math.round(asNumber(textIconSectionStyles.SHOP_WITH_CONFIDENCE.sectionHeightPx, 0)));
+  const howItWorksSectionBackgroundImage = resolveManagerImage(textIconSectionStyles.HOW_IT_WORKS.backgroundImage, '');
+  const customSectionBackgroundImage = resolveManagerImage(textIconSectionStyles.CUSTOM.backgroundImage, '');
+  const trustSectionBackgroundImage = resolveManagerImage(textIconSectionStyles.SHOP_WITH_CONFIDENCE.backgroundImage, '');
+  const hasHowItWorksSectionBackgroundImage = hasImageSource(howItWorksSectionBackgroundImage);
+  const hasCustomSectionBackgroundImage = hasImageSource(customSectionBackgroundImage);
+  const hasTrustSectionBackgroundImage = hasImageSource(trustSectionBackgroundImage);
+  const textIconSectionBackgroundStyle = (image: string): CSSProperties => ({
+    backgroundImage: toSafeBackgroundImage(image),
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+  });
   const getTextIconHeadingConfig = (sectionType: TextIconSectionType): TextIconSectionHeadingConfig => {
     if (sectionType === 'HOW_IT_WORKS') return textIconSectionHeadings.HOW_IT_WORKS;
     if (sectionType === 'CUSTOM') return textIconSectionHeadings.CUSTOM;
@@ -2816,9 +2828,6 @@ export default function JenksFrontpageV2() {
     const textIconCardStyle = textIconSectionStyles[sectionType];
     const iconSize = textIconCardStyle.iconSize;
     const iconGlyphSize = Math.max(14, Math.round(iconSize * 0.45));
-    const imageHeightPx = Math.max(0, Math.round(asNumber(textIconCardStyle.imageHeightPx, 180)));
-    const sectionBackgroundImage = resolveManagerImage(textIconCardStyle.backgroundImage, '');
-    const hasBackgroundImage = hasImageSource(sectionBackgroundImage);
     return (
       <article
         key={item.id}
@@ -2831,16 +2840,6 @@ export default function JenksFrontpageV2() {
           marginRight: 'auto',
         }}
       >
-        {hasBackgroundImage ? (
-          <div className="-mx-4 -mt-8 mb-4 w-[calc(100%+2rem)]">
-            <BrandImageWithFallback
-              src={sectionBackgroundImage}
-              alt={item.title}
-              className="w-full object-cover"
-              style={{ height: `${imageHeightPx}px` }}
-            />
-          </div>
-        ) : null}
         <div
           className="flex items-center justify-center rounded-full border border-black/15 bg-white"
           style={{ width: `${iconSize}px`, height: `${iconSize}px` }}
@@ -5042,14 +5041,20 @@ export default function JenksFrontpageV2() {
       {/* HOW IT WORKS */}
       {showHowItWorksSection ? (
       <section
-        className="bg-white py-12"
+        className="relative overflow-hidden bg-white py-12"
         data-kimi-anim="fade-up"
         style={{
           order: getSectionOrder('HOW_IT_WORKS'),
           minHeight: howItWorksSectionHeightPx > 0 ? `${howItWorksSectionHeightPx}px` : undefined,
         }}
       >
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+        {hasHowItWorksSectionBackgroundImage ? (
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-0 opacity-30" style={textIconSectionBackgroundStyle(howItWorksSectionBackgroundImage)} />
+            <div className="absolute inset-0 bg-white/75" />
+          </div>
+        ) : null}
+        <div className="relative z-[1] w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           {sectionTitlesEnabled && getTextIconHeadingConfig('HOW_IT_WORKS').titleEnabled ? (
             <h2
               className={`font-['Oswald'] font-bold uppercase ${textIconSectionTitleClass('HOW_IT_WORKS')}`}
@@ -5076,14 +5081,20 @@ export default function JenksFrontpageV2() {
       {/* CUSTOM TEXT & ICON */}
       {showCustomTextIconSection ? (
       <section
-        className="bg-white py-12"
+        className="relative overflow-hidden bg-white py-12"
         data-kimi-anim="fade-up"
         style={{
           order: getSectionOrder('CUSTOM_TEXT_ICON'),
           minHeight: customTextIconSectionHeightPx > 0 ? `${customTextIconSectionHeightPx}px` : undefined,
         }}
       >
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+        {hasCustomSectionBackgroundImage ? (
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-0 opacity-30" style={textIconSectionBackgroundStyle(customSectionBackgroundImage)} />
+            <div className="absolute inset-0 bg-white/75" />
+          </div>
+        ) : null}
+        <div className="relative z-[1] w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           {sectionTitlesEnabled && getTextIconHeadingConfig('CUSTOM').titleEnabled ? (
             <h2
               className={`font-['Oswald'] font-bold uppercase ${textIconSectionTitleClass('CUSTOM')}`}
@@ -5700,14 +5711,20 @@ export default function JenksFrontpageV2() {
       {/* TRUST */}
       {showTrustSection ? (
         <section
-          className="bg-white py-16 lg:py-20"
+          className="relative overflow-hidden bg-white py-16 lg:py-20"
           data-kimi-anim="fade-up"
           style={{
             order: getSectionOrder('SHOP_WITH_CONFIDENCE'),
             minHeight: trustSectionHeightPx > 0 ? `${trustSectionHeightPx}px` : undefined,
           }}
         >
-        <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-20">
+        {hasTrustSectionBackgroundImage ? (
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-0 opacity-30" style={textIconSectionBackgroundStyle(trustSectionBackgroundImage)} />
+            <div className="absolute inset-0 bg-white/75" />
+          </div>
+        ) : null}
+        <div className="relative z-[1] w-full px-4 sm:px-6 lg:px-12 xl:px-20">
           {sectionTitlesEnabled && getTextIconHeadingConfig('SHOP_WITH_CONFIDENCE').titleEnabled ? (
             <h2
               className={`font-['Oswald'] font-bold uppercase leading-none ${textIconSectionTitleClass('SHOP_WITH_CONFIDENCE')}`}

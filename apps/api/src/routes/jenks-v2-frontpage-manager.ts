@@ -2678,7 +2678,11 @@ const normalizeTextIconCards = (
       0,
       2400
     ),
-    backgroundImage: (getString(input.backgroundImage) || fallbackStyle.backgroundImage).slice(0, 2000),
+    backgroundImage: (
+      Object.prototype.hasOwnProperty.call(input, 'backgroundImage')
+        ? String(input.backgroundImage || '')
+        : fallbackStyle.backgroundImage
+    ).slice(0, 2000),
     iconSize: clamp(Math.round(getNumber(input.iconSize) ?? fallbackStyle.iconSize), 20, 120),
     titleFontSize: clamp(Math.round(getNumber(input.titleFontSize) ?? fallbackStyle.titleFontSize), 8, 72),
     descriptionFontSize: clamp(Math.round(getNumber(input.descriptionFontSize) ?? fallbackStyle.descriptionFontSize), 8, 72),
@@ -2694,27 +2698,39 @@ const normalizeTextIconCards = (
     return getString(matched?.backgroundImage) || '';
   };
   const sectionStyles = {
-    howItWorks: {
-      ...normalizeCardStyle(asRecord(rawSectionStyles.howItWorks), fallbackSectionStyles.howItWorks),
-      backgroundImage:
-        getString(asRecord(rawSectionStyles.howItWorks).backgroundImage) ||
-        resolveLegacySectionBackgroundImage('HOW_IT_WORKS') ||
-        fallbackSectionStyles.howItWorks.backgroundImage,
-    },
-    custom: {
-      ...normalizeCardStyle(asRecord(rawSectionStyles.custom), fallbackSectionStyles.custom),
-      backgroundImage:
-        getString(asRecord(rawSectionStyles.custom).backgroundImage) ||
-        resolveLegacySectionBackgroundImage('CUSTOM') ||
-        fallbackSectionStyles.custom.backgroundImage,
-    },
-    shopWithConfidence: {
-      ...normalizeCardStyle(asRecord(rawSectionStyles.shopWithConfidence), fallbackSectionStyles.shopWithConfidence),
-      backgroundImage:
-        getString(asRecord(rawSectionStyles.shopWithConfidence).backgroundImage) ||
-        resolveLegacySectionBackgroundImage('SHOP_WITH_CONFIDENCE') ||
-        fallbackSectionStyles.shopWithConfidence.backgroundImage,
-    },
+    howItWorks: (() => {
+      const sectionRow = asRecord(rawSectionStyles.howItWorks);
+      return {
+        ...normalizeCardStyle(sectionRow, fallbackSectionStyles.howItWorks),
+        backgroundImage: (
+          Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')
+            ? String(sectionRow.backgroundImage || '')
+            : resolveLegacySectionBackgroundImage('HOW_IT_WORKS') || fallbackSectionStyles.howItWorks.backgroundImage
+        ).slice(0, 2000),
+      };
+    })(),
+    custom: (() => {
+      const sectionRow = asRecord(rawSectionStyles.custom);
+      return {
+        ...normalizeCardStyle(sectionRow, fallbackSectionStyles.custom),
+        backgroundImage: (
+          Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')
+            ? String(sectionRow.backgroundImage || '')
+            : resolveLegacySectionBackgroundImage('CUSTOM') || fallbackSectionStyles.custom.backgroundImage
+        ).slice(0, 2000),
+      };
+    })(),
+    shopWithConfidence: (() => {
+      const sectionRow = asRecord(rawSectionStyles.shopWithConfidence);
+      return {
+        ...normalizeCardStyle(sectionRow, fallbackSectionStyles.shopWithConfidence),
+        backgroundImage: (
+          Object.prototype.hasOwnProperty.call(sectionRow, 'backgroundImage')
+            ? String(sectionRow.backgroundImage || '')
+            : resolveLegacySectionBackgroundImage('SHOP_WITH_CONFIDENCE') || fallbackSectionStyles.shopWithConfidence.backgroundImage
+        ).slice(0, 2000),
+      };
+    })(),
   };
   const cards = rows
     .map((entry, index) => {
