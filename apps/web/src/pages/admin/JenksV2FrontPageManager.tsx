@@ -833,6 +833,8 @@ const toNumber = (value: string, fallback: number) => {
 };
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const toBoolean = (value: unknown, fallback: boolean) => (typeof value === 'boolean' ? value : fallback);
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
 
 const defaultCategoryStepCards = (keyRaw: string): CategoryStepCard[] => {
