@@ -3799,9 +3799,22 @@ const readSettings = async () => {
   }
   try {
     const parsed = JSON.parse(String(row.value || '{}'));
+    const normalized = normalizeSettings(parsed, defaults);
+    const hasSectionSnapshots =
+      Array.isArray(normalized.sectionVisibility.sections) &&
+      normalized.sectionVisibility.sections.some((section) => {
+        const snapshot = asRecord(section.configSnapshot);
+        return Object.keys(snapshot).length > 0;
+      });
+    const recovered =
+      hasSectionSnapshots && normalized.sectionVisibility.sections.length > 0
+        ? recoverSettingsFromSectionSnapshots(normalized)
+        : null;
+    const resolvedSettings =
+      recovered && recovered.appliedTemplates.length > 0 ? recovered.recovered : normalized;
     return {
       rowId: String(row.id),
-      settings: normalizeSettings(parsed, defaults),
+      settings: resolvedSettings,
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };
