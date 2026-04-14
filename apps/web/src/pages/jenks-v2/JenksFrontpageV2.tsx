@@ -1527,8 +1527,6 @@ const normalizeInstantBuyCategoryKey = (value: unknown): InstantBuyCategoryKey =
 
 export default function JenksFrontpageV2() {
   const [managerConfig, setManagerConfig] = useState<JenksV2ManagerPayload | null>(null);
-  const [managerConfigLoaded, setManagerConfigLoaded] = useState(false);
-  const [managerConfigLoadError, setManagerConfigLoadError] = useState('');
   const [index, setIndex] = useState(0);
   const [shopByTab, setShopByTab] = useState<ShopByTab>('CATEGORY');
   const [countryRegion, setCountryRegion] = useState<CountryRegion>('ALL');
@@ -3411,20 +3409,11 @@ export default function JenksFrontpageV2() {
         const response = await api.jenksV2Frontpage.getPublicConfig();
         if (!cancelled && response.success && response.data) {
           setManagerConfig(response.data as JenksV2ManagerPayload);
-          setManagerConfigLoadError('');
-        } else if (!cancelled) {
-          setManagerConfig(null);
-          setManagerConfigLoadError('Primary homepage configuration is unavailable.');
         }
-      } catch (error: any) {
+      } catch {
         if (!cancelled) {
           setManagerConfig(null);
-          setManagerConfigLoadError(
-            error?.response?.data?.message || error?.message || 'Failed to load primary homepage configuration.'
-          );
         }
-      } finally {
-        if (!cancelled) setManagerConfigLoaded(true);
       }
     };
     void loadConfig();
@@ -4229,29 +4218,6 @@ export default function JenksFrontpageV2() {
       </div>
     </Link>
   );
-
-  if (!managerConfigLoaded) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f3ee] px-6 text-center text-sm text-black/70">
-        Loading primary homepage configuration...
-      </div>
-    );
-  }
-
-  if (managerConfigLoadError && !managerConfig) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#f5f3ee] px-6 text-center">
-        <p className="text-sm font-medium text-black/80">{managerConfigLoadError}</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="rounded border border-black/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-black hover:bg-black/5"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className="kimi-site flex flex-col bg-[#f5f3ee] text-[#111]">

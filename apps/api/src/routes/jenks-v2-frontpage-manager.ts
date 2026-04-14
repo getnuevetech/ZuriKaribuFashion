@@ -3799,22 +3799,9 @@ const readSettings = async () => {
   }
   try {
     const parsed = JSON.parse(String(row.value || '{}'));
-    const normalized = normalizeSettings(parsed, defaults);
-    const hasSectionSnapshots =
-      Array.isArray(normalized.sectionVisibility.sections) &&
-      normalized.sectionVisibility.sections.some((section) => {
-        const snapshot = asRecord(section.configSnapshot);
-        return Object.keys(snapshot).length > 0;
-      });
-    const recovered =
-      hasSectionSnapshots && normalized.sectionVisibility.sections.length > 0
-        ? recoverSettingsFromSectionSnapshots(normalized)
-        : null;
-    const resolvedSettings =
-      recovered && recovered.appliedTemplates.length > 0 ? recovered.recovered : normalized;
     return {
       rowId: String(row.id),
-      settings: resolvedSettings,
+      settings: normalizeSettings(parsed, defaults),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };
@@ -3917,35 +3904,6 @@ const saveSettings = async (next: Partial<JenksV2FrontpageManagerSettings>) => {
     );
   }
   return merged;
-};
-
-const recoverSettingsFromSectionSnapshots = (source: JenksV2FrontpageManagerSettings) => {
-  const sortedSections = [...source.sectionVisibility.sections]
-    .filter((section) => !section.isCustom)
-    .sort((a, b) => a.order - b.order);
-
-  let recovered = defaultSettings();
-  const appliedTemplates: TemplateKey[] = [];
-  for (const section of sortedSections) {
-    const templateToken = String(section.templateKey || '').trim().toUpperCase();
-    if (!TEMPLATE_KEYS.includes(templateToken as TemplateKey)) continue;
-    const templateKey = templateToken as TemplateKey;
-    const snapshot = asRecord(section.configSnapshot);
-    if (Object.keys(snapshot).length === 0) continue;
-    recovered = applyTemplateSnapshotToSettings(recovered, templateKey, snapshot);
-    appliedTemplates.push(templateKey);
-  }
-
-  // Keep current section visibility ordering/labels and normalize against recovered content.
-  recovered.sectionVisibility = normalizeSectionVisibility(
-    source.sectionVisibility,
-    source.sectionVisibility,
-    recovered
-  );
-  return {
-    recovered: normalizeSettings(recovered, defaultSettings()),
-    appliedTemplates,
-  };
 };
 
 const cloneTextCardsWithType = (cards: unknown[], sectionType: TextIconSectionType) =>
@@ -4059,33 +4017,6 @@ const applyUpdate = async (req: any, res: any) => {
 
 router.put('/admin/config', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), applyUpdate);
 router.patch('/admin/config', authenticate, authorizePermissions(Permissions.HOMEPAGE_MANAGE), applyUpdate);
-
-router.post(
-  '/admin/recover-from-section-snapshots',
-  authenticate,
-  authorizePermissions(Permissions.HOMEPAGE_MANAGE),
-  async (_req, res) => {
-    try {
-      const existing = await readSettings();
-      const { recovered, appliedTemplates } = recoverSettingsFromSectionSnapshots(existing.settings);
-      const saved = await saveSettings(recovered);
-      return res.json({
-        success: true,
-        data: saved,
-        meta: {
-          appliedTemplateCount: appliedTemplates.length,
-          appliedTemplates,
-        },
-        message: 'Recovered Jenks-V2 settings from section snapshots.',
-      });
-    } catch (error) {
-      console.error('Error recovering Jenks-V2 settings from section snapshots:', error);
-      return res
-        .status(500)
-        .json({ success: false, message: 'Failed to recover Jenks-V2 settings from section snapshots.' });
-    }
-  }
-);
 
 router.post(
   '/admin/section-visibility/duplicate',
