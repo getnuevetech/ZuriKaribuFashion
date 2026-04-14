@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../db';
+import { parseStoredJsonValue } from './parse-stored-json-value';
 
 export const CHECKOUT_PRICING_SETTINGS_KEY = 'CHECKOUT_PRICING_SETTINGS_V1';
 
@@ -68,7 +69,7 @@ export const readCheckoutPricingSettings = async () => {
       rowId: String(row.id),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
-      settings: normalizeCheckoutPricingSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeCheckoutPricingSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return {

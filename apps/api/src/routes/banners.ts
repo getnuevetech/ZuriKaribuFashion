@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../db';
 import { authenticate, authorizePermissions } from '../middleware/auth';
 import { Permissions } from '../rbac';
+import { parseStoredJsonValue } from '../utils/parse-stored-json-value';
 
 const router = Router();
 const HOMEPAGE_PROMO_BADGE_SETTINGS_KEY = 'HOMEPAGE_PROMO_BADGE';
@@ -66,7 +67,7 @@ const readPromoBadgeSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizePromoBadgeSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizePromoBadgeSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...PROMO_BADGE_DEFAULTS } };

@@ -5,6 +5,7 @@ import { prisma, UserRole } from '../db';
 import { authenticate, authorizePermissions, authorizeSuperAdmin } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import { AFRICAN_CURRENCY_BASELINE } from '../constants/africanCurrencies';
+import { parseStoredJsonValue } from '../utils/parse-stored-json-value';
 
 const router = Router();
 
@@ -1485,11 +1486,6 @@ type JenksHomepageConfig = {
   cta: JenksHomepageCtaSettings;
 };
 
-const runtimeRollbackSchema = z.object({
-  auditId: z.string().trim().min(1).max(128).optional(),
-  reason: z.string().trim().max(280).optional(),
-});
-
 const TOP_STRIP_DEFAULTS: TopStripSettings = {
   messages: ['Free shipping on orders over $250', 'New arrivals weekly', 'Authentic African designs'],
   separator: '•',
@@ -1690,7 +1686,7 @@ const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
   spotlightVariant: 'CAROUSEL',
   homepageTemplate: 'JENKS',
   rolloutMode: 'PREVIEW_SAFE',
-  allowPreviewQuery: true,
+  allowPreviewQuery: false,
   previewQueryParam: 'zkHomePreview',
   legacyHomepageEnabled: false,
   requireReasonForRuntimeActions: false,
@@ -1729,6 +1725,14 @@ const HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS: HomepageExperienceSettings = {
     quickPathFabricsLabel: 'Fabrics',
   },
 };
+const enforceJenksOnlyRuntime = (
+  settings: HomepageExperienceSettings
+): HomepageExperienceSettings => ({
+  ...settings,
+  homepageTemplate: 'JENKS',
+  legacyHomepageEnabled: false,
+  allowPreviewQuery: false,
+});
 const JENKS_HOMEPAGE_CTA_DEFAULTS: JenksHomepageCtaSettings = {
   enabled: true,
   title: 'Ready to Wear African Fashion?',
@@ -2340,7 +2344,7 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
     quickPathFabricsLabel: (getString(copyInput.quickPathFabricsLabel) || defaultCopy.quickPathFabricsLabel).slice(0, 32),
   };
 
-  return {
+  return enforceJenksOnlyRuntime({
     enabledModes,
     defaultMode,
     allowUserModeOverride: getBoolean(row.allowUserModeOverride) ?? HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS.allowUserModeOverride,
@@ -2366,7 +2370,7 @@ const normalizeHomepageExperienceSettings = (raw: unknown): HomepageExperienceSe
     trustBadges: trustBadges.length > 0 ? trustBadges : fallbackTrustBadges,
     trustBadgeStyle,
     jenksCopy,
-  };
+  });
 };
 
 const normalizeJenksHomepageCtaSettings = (
@@ -2532,7 +2536,7 @@ const readHomepageSectionVisibility = async () => {
 
   let parsed: HomepageSectionVisibility = { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS };
   try {
-    parsed = normalizeHomepageSectionVisibility(JSON.parse(String(row.value || '{}')));
+    parsed = normalizeHomepageSectionVisibility(parseStoredJsonValue(row.value));
   } catch {
     parsed = { ...HOMEPAGE_SECTION_VISIBILITY_DEFAULTS };
   }
@@ -2604,7 +2608,7 @@ const readTopStripSettings = async () => {
   }
   let parsed = { ...TOP_STRIP_DEFAULTS };
   try {
-    parsed = normalizeTopStripSettings(JSON.parse(String(row.value || '{}')));
+    parsed = normalizeTopStripSettings(parseStoredJsonValue(row.value));
   } catch {
     parsed = { ...TOP_STRIP_DEFAULTS };
   }
@@ -2661,7 +2665,7 @@ const readStatsStripSettings = async () => {
   }
   let parsed = { ...STATS_STRIP_DEFAULTS, items: [...STATS_STRIP_DEFAULTS.items] };
   try {
-    parsed = normalizeStatsStripSettings(JSON.parse(String(row.value || '{}')));
+    parsed = normalizeStatsStripSettings(parseStoredJsonValue(row.value));
   } catch {
     parsed = { ...STATS_STRIP_DEFAULTS, items: [...STATS_STRIP_DEFAULTS.items] };
   }
@@ -2718,7 +2722,7 @@ const readFeaturedProductDescriptionSettings = async () => {
   }
   let parsed = { ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS };
   try {
-    parsed = normalizeFeaturedProductDescriptionSettings(JSON.parse(String(row.value || '{}')));
+    parsed = normalizeFeaturedProductDescriptionSettings(parseStoredJsonValue(row.value));
   } catch {
     parsed = { ...FEATURED_PRODUCT_DESCRIPTION_DEFAULTS };
   }
@@ -2775,7 +2779,7 @@ const readHowItWorksStyleSettings = async () => {
   }
   let parsed = { ...HOW_IT_WORKS_STYLE_DEFAULTS };
   try {
-    parsed = normalizeHowItWorksStyleSettings(JSON.parse(String(row.value || '{}')));
+    parsed = normalizeHowItWorksStyleSettings(parseStoredJsonValue(row.value));
   } catch {
     parsed = { ...HOW_IT_WORKS_STYLE_DEFAULTS };
   }
@@ -2834,7 +2838,7 @@ const readAuthPageSettings = async () => {
     }
     let parsed = { ...AUTH_PAGE_SETTINGS_DEFAULTS };
     try {
-      parsed = normalizeAuthPageSettings(JSON.parse(String(row.value || '{}')));
+      parsed = normalizeAuthPageSettings(parseStoredJsonValue(row.value));
     } catch {
       parsed = { ...AUTH_PAGE_SETTINGS_DEFAULTS };
     }
@@ -2901,7 +2905,7 @@ const readDashboardClockWeatherSettings = async () => {
     }
     let parsed = { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS };
     try {
-      parsed = normalizeDashboardClockWeatherSettings(JSON.parse(String(row.value || '{}')));
+      parsed = normalizeDashboardClockWeatherSettings(parseStoredJsonValue(row.value));
     } catch {
       parsed = { ...DASHBOARD_CLOCK_WEATHER_SETTINGS_DEFAULTS };
     }
@@ -2966,7 +2970,7 @@ const readHomepageExperienceSettings = async () => {
   }
   let parsed = { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS };
   try {
-    parsed = normalizeHomepageExperienceSettings(JSON.parse(String(row.value || '{}')));
+    parsed = normalizeHomepageExperienceSettings(parseStoredJsonValue(row.value));
   } catch {
     parsed = { ...HOMEPAGE_EXPERIENCE_SETTINGS_DEFAULTS };
   }
@@ -2980,10 +2984,10 @@ const readHomepageExperienceSettings = async () => {
 
 const saveHomepageExperienceSettings = async (next: HomepageExperienceSettingsPatch) => {
   const existing = await readHomepageExperienceSettings();
-  const merged = normalizeHomepageExperienceSettings({
+  const merged = enforceJenksOnlyRuntime(normalizeHomepageExperienceSettings({
     ...existing.settings,
     ...next,
-  });
+  }));
   const payload = JSON.stringify(merged);
   if (existing.rowId) {
     await prisma.$executeRawUnsafe(
@@ -3025,7 +3029,7 @@ const readShopByBlocksSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeShopByBlocksSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeShopByBlocksSettings(parseStoredJsonValue(row.value)),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };
@@ -3085,7 +3089,7 @@ const readFreshDropsSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeFreshDropsSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeFreshDropsSettings(parseStoredJsonValue(row.value)),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };
@@ -3145,7 +3149,7 @@ const readNewsletterSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeNewsletterSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeNewsletterSettings(parseStoredJsonValue(row.value)),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };
@@ -3205,7 +3209,7 @@ const readNavigationSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeNavigationSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeNavigationSettings(parseStoredJsonValue(row.value)),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };
@@ -3265,7 +3269,7 @@ const readHeroSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeHeroSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeHeroSettings(parseStoredJsonValue(row.value)),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };
@@ -3359,7 +3363,7 @@ const readJenksHomepageConfig = async () => {
     };
   }
   try {
-    const parsed = JSON.parse(String(row.value || '{}'));
+    const parsed = parseStoredJsonValue(row.value);
     return {
       rowId: String(row.id),
       settings: normalizeJenksHomepageConfig(parsed, baseline),
@@ -3476,56 +3480,6 @@ const normalizeHomepageRuntimeSnapshot = (input: unknown): HomepageRuntimeSnapsh
   };
 };
 
-const parseHomepageRuntimeAuditEntry = (row: any): HomepageRuntimeAuditEntry | null => {
-  const action = String(row?.action || '').trim().toUpperCase() as HomepageRuntimeAuditAction;
-  if (!HOMEPAGE_RUNTIME_AUDIT_ACTIONS.includes(action)) return null;
-  let previousRaw: unknown = null;
-  let nextRaw: unknown = null;
-  let healthSummaryRaw: unknown = null;
-  let metadataRaw: unknown = null;
-  try {
-    previousRaw = JSON.parse(String(row?.previousValue || '{}'));
-  } catch {
-    previousRaw = null;
-  }
-  try {
-    nextRaw = JSON.parse(String(row?.nextValue || '{}'));
-  } catch {
-    nextRaw = null;
-  }
-  try {
-    healthSummaryRaw = row?.healthSummary ? JSON.parse(String(row.healthSummary)) : null;
-  } catch {
-    healthSummaryRaw = null;
-  }
-  try {
-    metadataRaw = row?.metadata ? JSON.parse(String(row.metadata)) : {};
-  } catch {
-    metadataRaw = {};
-  }
-  const previous = normalizeHomepageRuntimeSnapshot(previousRaw);
-  const next = normalizeHomepageRuntimeSnapshot(nextRaw);
-  if (!previous || !next) return null;
-  const parsedHealthSummary =
-    healthSummaryRaw && typeof healthSummaryRaw === 'object'
-      ? (healthSummaryRaw as HomepageRuntimeHealthResult)
-      : null;
-  const metadata =
-    metadataRaw && typeof metadataRaw === 'object' ? (metadataRaw as Record<string, unknown>) : {};
-  return {
-    id: String(row?.id || ''),
-    action,
-    reason: String(row?.reason || '').trim(),
-    previous,
-    next,
-    healthSummary: parsedHealthSummary,
-    metadata,
-    performedByUserId: getString(row?.performedByUserId) || null,
-    performedByEmail: getString(row?.performedByEmail) || null,
-    createdAt: row?.createdAt ? new Date(row.createdAt) : null,
-  };
-};
-
 const parseDateInput = (value: unknown): Date | null => {
   const raw = getString(value);
   if (!raw) return null;
@@ -3533,260 +3487,7 @@ const parseDateInput = (value: unknown): Date | null => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const normalizeHomepageRuntimeAuditFilters = (input: Record<string, unknown>): HomepageRuntimeAuditFilters => {
-  const actionCandidate = String(input.action || '')
-    .trim()
-    .toUpperCase() as HomepageRuntimeAuditAction;
-  const from = parseDateInput(input.from);
-  const to = parseDateInput(input.to);
-  const normalized: HomepageRuntimeAuditFilters = {
-    action: HOMEPAGE_RUNTIME_AUDIT_ACTIONS.includes(actionCandidate) ? actionCandidate : undefined,
-    performedByEmail: getString(input.performedByEmail)?.slice(0, 160),
-    from: from || undefined,
-    to: to || undefined,
-  };
-  if (normalized.from && normalized.to && normalized.from.getTime() > normalized.to.getTime()) {
-    const swap = normalized.from;
-    normalized.from = normalized.to;
-    normalized.to = swap;
-  }
-  return normalized;
-};
-
-const listHomepageRuntimeAudit = async (
-  limit: number,
-  filters: HomepageRuntimeAuditFilters = {},
-  maxLimit = 100
-) => {
-  const normalizedMaxLimit = Number.isFinite(maxLimit) ? Math.max(1, Math.floor(maxLimit)) : 100;
-  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(normalizedMaxLimit, Math.floor(limit))) : 25;
-  const params: unknown[] = [];
-  const whereParts: string[] = [];
-  if (filters.action) {
-    params.push(filters.action);
-    whereParts.push(`"action" = $${params.length}`);
-  }
-  if (filters.performedByEmail) {
-    params.push(`%${String(filters.performedByEmail).toLowerCase()}%`);
-    whereParts.push(`LOWER(COALESCE("performedByEmail", '')) LIKE $${params.length}`);
-  }
-  if (filters.from) {
-    params.push(filters.from);
-    whereParts.push(`"createdAt" >= $${params.length}`);
-  }
-  if (filters.to) {
-    params.push(filters.to);
-    whereParts.push(`"createdAt" <= $${params.length}`);
-  }
-  params.push(safeLimit);
-  const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT
-        "id",
-        "action",
-        "reason",
-        "previousValue",
-        "nextValue",
-        "healthSummary",
-        "metadata",
-        "performedByUserId",
-        "performedByEmail",
-        "createdAt"
-      FROM "HomepageRuntimeAudit"
-      ${whereClause}
-      ORDER BY "createdAt" DESC
-      LIMIT $${params.length}`,
-    ...params
-  );
-  return (Array.isArray(rows) ? rows : [])
-    .map((entry) => parseHomepageRuntimeAuditEntry(entry))
-    .filter((entry): entry is HomepageRuntimeAuditEntry => Boolean(entry));
-};
-
 const stringifyCsvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-
-const buildHomepageRuntimeAuditCsv = (entries: HomepageRuntimeAuditEntry[]) => {
-  const header = [
-    'id',
-    'createdAt',
-    'action',
-    'fromTemplate',
-    'fromRolloutMode',
-    'fromAllowPreviewQuery',
-    'fromPreviewQueryParam',
-    'toTemplate',
-    'toRolloutMode',
-    'toAllowPreviewQuery',
-    'toPreviewQueryParam',
-    'performedByEmail',
-    'reason',
-  ];
-  const rows = entries.map((entry) => [
-    entry.id,
-    entry.createdAt ? entry.createdAt.toISOString() : '',
-    entry.action,
-    entry.previous.homepageTemplate,
-    entry.previous.rolloutMode,
-    entry.previous.allowPreviewQuery ? 'true' : 'false',
-    entry.previous.previewQueryParam,
-    entry.next.homepageTemplate,
-    entry.next.rolloutMode,
-    entry.next.allowPreviewQuery ? 'true' : 'false',
-    entry.next.previewQueryParam,
-    entry.performedByEmail || '',
-    entry.reason || '',
-  ]);
-  return [header, ...rows].map((row) => row.map((cell) => stringifyCsvCell(cell)).join(',')).join('\n');
-};
-
-const writeHomepageRuntimeAuditEntry = async (input: {
-  action: HomepageRuntimeAuditAction;
-  reason?: string;
-  previous: HomepageRuntimeSnapshot;
-  next: HomepageRuntimeSnapshot;
-  healthSummary?: HomepageRuntimeHealthResult | null;
-  metadata?: Record<string, unknown>;
-  performedByUserId?: string | null;
-  performedByEmail?: string | null;
-}) => {
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "HomepageRuntimeAudit"
-      ("id", "action", "reason", "previousValue", "nextValue", "healthSummary", "metadata", "performedByUserId", "performedByEmail", "createdAt")
-     VALUES
-      ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
-    randomUUID(),
-    input.action,
-    String(input.reason || '').trim(),
-    JSON.stringify(input.previous),
-    JSON.stringify(input.next),
-    input.healthSummary ? JSON.stringify(input.healthSummary) : null,
-    input.metadata ? JSON.stringify(input.metadata) : null,
-    input.performedByUserId || null,
-    input.performedByEmail || null
-  );
-};
-
-const buildHomepageRuntimeHealth = async (nextSettings: HomepageExperienceSettings): Promise<HomepageRuntimeHealthResult> => {
-  const checks: HomepageRuntimeHealthCheck[] = [];
-
-  try {
-    await prisma.$queryRawUnsafe(`SELECT 1`);
-    checks.push({
-      key: 'database',
-      label: 'Database connectivity',
-      status: 'PASS',
-      detail: 'Database read check passed.',
-    });
-  } catch {
-    checks.push({
-      key: 'database',
-      label: 'Database connectivity',
-      status: 'FAIL',
-      detail: 'Failed to query the database.',
-    });
-  }
-
-  const previewParamValid = /^[A-Za-z0-9_-]{2,40}$/.test(nextSettings.previewQueryParam);
-  checks.push({
-    key: 'previewParam',
-    label: 'Preview query parameter',
-    status: previewParamValid ? 'PASS' : 'FAIL',
-    detail: previewParamValid
-      ? `Preview query parameter "${nextSettings.previewQueryParam}" is valid.`
-      : 'Preview query parameter must match /^[A-Za-z0-9_-]{2,40}$/',
-  });
-  checks.push({
-    key: 'legacyRuntimeGate',
-    label: 'Legacy runtime gate',
-    status:
-      nextSettings.legacyHomepageEnabled || nextSettings.homepageTemplate !== 'LEGACY'
-        ? 'PASS'
-        : 'FAIL',
-    detail:
-      nextSettings.legacyHomepageEnabled
-        ? 'Legacy homepage is enabled by runtime policy.'
-        : nextSettings.homepageTemplate === 'LEGACY'
-          ? 'Legacy homepage is disabled. Switch template to JENKS.'
-          : 'Legacy homepage is disabled; Jenks-only mode is active.',
-  });
-
-  const enabledBadgesCount = (Array.isArray(nextSettings.trustBadges) ? nextSettings.trustBadges : []).filter(
-    (badge) => badge.enabled !== false
-  ).length;
-  checks.push({
-    key: 'trustBadges',
-    label: 'Trust badges',
-    status: enabledBadgesCount > 0 ? 'PASS' : 'FAIL',
-    detail:
-      enabledBadgesCount > 0
-        ? `${enabledBadgesCount} trust badge(s) enabled.`
-        : 'No trust badges are enabled for the selected runtime.',
-  });
-
-  try {
-    const [activeCountries, activeCategories] = await Promise.all([
-      prisma.countryMarquee.count({ where: { isActive: true } }),
-      prisma.shopCategory.count({ where: { isActive: true } }),
-    ]);
-    checks.push({
-      key: 'contentCountries',
-      label: 'Country content readiness',
-      status: activeCountries >= 6 ? 'PASS' : 'WARN',
-      detail: `${activeCountries} active country card(s) found.`,
-    });
-    checks.push({
-      key: 'contentCategories',
-      label: 'Category content readiness',
-      status: activeCategories >= 3 ? 'PASS' : 'WARN',
-      detail: `${activeCategories} active category card(s) found.`,
-    });
-  } catch {
-    checks.push({
-      key: 'contentCountries',
-      label: 'Country content readiness',
-      status: 'FAIL',
-      detail: 'Could not validate country content readiness.',
-    });
-    checks.push({
-      key: 'contentCategories',
-      label: 'Category content readiness',
-      status: 'FAIL',
-      detail: 'Could not validate category content readiness.',
-    });
-  }
-
-  if (nextSettings.homepageTemplate === 'JENKS') {
-    const requiredCopyFields: Array<keyof HomepageJenksCopy> = [
-      'heroEyebrow',
-      'shopByEyebrow',
-      'shopByTitle',
-      'featuredRtwTitle',
-      'featuredFabricsTitle',
-      'featuredDesignsTitle',
-      'designerSpotlightTitle',
-      'quickPathRtwLabel',
-      'quickPathCustomLabel',
-      'quickPathFabricsLabel',
-    ];
-    const missingCopyFields = requiredCopyFields.filter((key) => !String(nextSettings.jenksCopy?.[key] || '').trim());
-    checks.push({
-      key: 'jenksCopy',
-      label: 'Jenks copy completeness',
-      status: missingCopyFields.length === 0 ? 'PASS' : 'FAIL',
-      detail:
-        missingCopyFields.length === 0
-          ? 'All required Jenks copy fields are configured.'
-          : `Missing Jenks copy fields: ${missingCopyFields.join(', ')}`,
-    });
-  }
-
-  const ok = checks.every((check) => check.status !== 'FAIL');
-  return {
-    ok,
-    checkedAt: new Date().toISOString(),
-    checks,
-  };
-};
 
 const readCountryImageGenerationSettings = async () => {
   const rows = await prisma.$queryRawUnsafe<any[]>(
@@ -3808,7 +3509,7 @@ const readCountryImageGenerationSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeCountryImageGenerationSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeCountryImageGenerationSettings(parseStoredJsonValue(row.value)),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };
@@ -4447,7 +4148,7 @@ router.get(['/jenks-homepage-payload'], async (_req, res) => {
     const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
     if (!row?.value) return { ...PROMO_BADGE_DEFAULTS };
     try {
-      const parsed = JSON.parse(String(row.value || '{}')) as Record<string, unknown>;
+      const parsed = parseStoredJsonValue(row.value) as Record<string, unknown>;
       const valueText = getString(parsed.valueText) || PROMO_BADGE_DEFAULTS.valueText;
       const labelText = getString(parsed.labelText) || PROMO_BADGE_DEFAULTS.labelText;
       return { valueText, labelText };
@@ -5254,14 +4955,6 @@ router.get(
   }
 );
 
-const resolveRuntimeActor = (req: any) => {
-  const user = req?.user || {};
-  return {
-    performedByUserId: getString(user.id) || null,
-    performedByEmail: getString(user.email) || null,
-  };
-};
-
 const applyHomepageExperienceSettingsUpdate = async (req: any, res: any) => {
   try {
     const payload = homepageExperienceSettingsUpdateSchema.parse(req.body);
@@ -5278,61 +4971,8 @@ const applyHomepageExperienceSettingsUpdate = async (req: any, res: any) => {
           },
         }
       : payload;
-    const reason =
-      typeof req.body?.changeReason === 'string' ? String(req.body.changeReason).trim().slice(0, 280) : '';
-
-    const existing = await readHomepageExperienceSettings();
-    const currentRuntime = getHomepageRuntimeSnapshot(existing.settings);
-    const nextMergedSettings = normalizeHomepageExperienceSettings({
-      ...existing.settings,
-      ...normalizedPayload,
-    });
-    const nextRuntime = getHomepageRuntimeSnapshot(nextMergedSettings);
-    const runtimeChanged = !areHomepageRuntimeSnapshotsEqual(currentRuntime, nextRuntime);
-    const reasonRequired = nextMergedSettings.requireReasonForRuntimeActions === true;
-
-    if (runtimeChanged && reasonRequired && !reason) {
-      return res.status(400).json({
-        success: false,
-        message: 'A reason is required before switching homepage runtime.',
-      });
-    }
-
-    let runtimeHealth: HomepageRuntimeHealthResult | null = null;
-    if (runtimeChanged && nextRuntime.homepageTemplate === 'JENKS' && nextRuntime.rolloutMode === 'LIVE') {
-      runtimeHealth = await buildHomepageRuntimeHealth(nextMergedSettings);
-      if (!runtimeHealth.ok) {
-        return res.status(409).json({
-          success: false,
-          message: 'Runtime health checks failed. Resolve failing checks before switching Jenks live.',
-          data: { runtimeHealth },
-        });
-      }
-    }
-
-    const settings = await saveHomepageExperienceSettings(payload);
-
-    if (runtimeChanged) {
-      if (!runtimeHealth && settings.homepageTemplate === 'JENKS' && settings.rolloutMode === 'LIVE') {
-        runtimeHealth = await buildHomepageRuntimeHealth(settings);
-      }
-      const actor = resolveRuntimeActor(req);
-      await writeHomepageRuntimeAuditEntry({
-        action: 'RUNTIME_SWITCH',
-        reason,
-        previous: currentRuntime,
-        next: getHomepageRuntimeSnapshot(settings),
-        healthSummary: runtimeHealth,
-        metadata: {
-          source: 'admin-experience-settings',
-          changedFields: Object.keys(payload || {}),
-        },
-        performedByUserId: actor.performedByUserId,
-        performedByEmail: actor.performedByEmail,
-      });
-    }
-
-    res.json({ success: true, data: settings, runtimeHealth });
+    const settings = await saveHomepageExperienceSettings(normalizedPayload);
+    res.json({ success: true, data: settings, runtimeHealth: null });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
@@ -5654,188 +5294,55 @@ router.get(
   '/admin/runtime-health',
   authenticate,
   authorizePermissions(Permissions.HOMEPAGE_MANAGE),
-  async (_req, res) => {
-    try {
-      const { settings } = await readHomepageExperienceSettings();
-      const runtimeHealth = await buildHomepageRuntimeHealth(settings);
-      res.json({
-        success: true,
-        data: {
-          runtime: getHomepageRuntimeSnapshot(settings),
-          runtimeHealth,
-        },
-      });
-    } catch (error) {
-      console.error('Error fetching homepage runtime health:', error);
-      res.status(500).json({ success: false, message: 'Failed to fetch runtime health.' });
-    }
-  }
+  async (_req, res) =>
+    res.status(410).json({
+      success: false,
+      message: 'Homepage runtime health checks are disabled. Jenks-only runtime is enforced.',
+    })
 );
 
 router.post(
   '/admin/runtime-health/dry-run',
   authenticate,
   authorizePermissions(Permissions.HOMEPAGE_MANAGE),
-  async (req, res) => {
-    try {
-      const payload = homepageExperienceSettingsUpdateSchema.parse(req.body || {});
-      const legacyCopyPayload =
-        req.body && typeof req.body === 'object'
-          ? (req.body as Record<string, unknown>)[LEGACY_COPY_FIELD_KEY]
-          : undefined;
-      const normalizedPayload = payload.jenksCopy || legacyCopyPayload
-        ? {
-            ...payload,
-            jenksCopy: {
-              ...(legacyCopyPayload && typeof legacyCopyPayload === 'object' ? (legacyCopyPayload as Record<string, unknown>) : {}),
-              ...(payload.jenksCopy || {}),
-            },
-          }
-        : payload;
-      const { settings: currentSettings } = await readHomepageExperienceSettings();
-      const nextSettings = normalizeHomepageExperienceSettings({
-        ...currentSettings,
-        ...normalizedPayload,
-      });
-      const runtimeHealth = await buildHomepageRuntimeHealth(nextSettings);
-      res.json({
-        success: true,
-        data: {
-          runtime: getHomepageRuntimeSnapshot(nextSettings),
-          runtimeHealth,
-        },
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
-      }
-      console.error('Error running homepage runtime dry-run health check:', error);
-      res.status(500).json({ success: false, message: 'Failed to run runtime health dry-run.' });
-    }
-  }
+  async (_req, res) =>
+    res.status(410).json({
+      success: false,
+      message: 'Homepage runtime dry-run is disabled. Jenks-only runtime is enforced.',
+    })
 );
 
 router.get(
   '/admin/runtime-audit',
   authenticate,
   authorizePermissions(Permissions.HOMEPAGE_MANAGE),
-  async (req, res) => {
-    try {
-      const limit = Math.max(1, Math.min(100, Math.floor(Number(req.query.limit) || 25)));
-      const filters = normalizeHomepageRuntimeAuditFilters(req.query as Record<string, unknown>);
-      const entries = await listHomepageRuntimeAudit(limit, filters);
-      res.json({ success: true, data: entries });
-    } catch (error) {
-      console.error('Error fetching homepage runtime audit trail:', error);
-      res.status(500).json({ success: false, message: 'Failed to fetch runtime audit trail.' });
-    }
-  }
+  async (_req, res) =>
+    res.status(410).json({
+      success: false,
+      message: 'Homepage runtime audit is disabled. Jenks-only runtime is enforced.',
+    })
 );
 
 router.get(
   '/admin/runtime-audit/export',
   authenticate,
   authorizePermissions(Permissions.HOMEPAGE_MANAGE),
-  async (req, res) => {
-    try {
-      const limit = Math.max(1, Math.min(5000, Math.floor(Number(req.query.limit) || 1000)));
-      const filters = normalizeHomepageRuntimeAuditFilters(req.query as Record<string, unknown>);
-      const entries = await listHomepageRuntimeAudit(limit, filters, 5000);
-      const csv = buildHomepageRuntimeAuditCsv(entries);
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="homepage-runtime-audit-${stamp}.csv"`);
-      res.status(200).send(csv);
-    } catch (error) {
-      console.error('Error exporting homepage runtime audit trail:', error);
-      res.status(500).json({ success: false, message: 'Failed to export runtime audit trail.' });
-    }
-  }
+  async (_req, res) =>
+    res.status(410).json({
+      success: false,
+      message: 'Homepage runtime audit export is disabled. Jenks-only runtime is enforced.',
+    })
 );
 
 router.post(
   '/admin/runtime-rollback',
   authenticate,
   authorizePermissions(Permissions.HOMEPAGE_MANAGE),
-  async (req, res) => {
-    try {
-      const payload = runtimeRollbackSchema.parse(req.body || {});
-      const rows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT
-            "id",
-            "action",
-            "reason",
-            "previousValue",
-            "nextValue",
-            "healthSummary",
-            "metadata",
-            "performedByUserId",
-            "performedByEmail",
-            "createdAt"
-         FROM "HomepageRuntimeAudit"
-         ${payload.auditId ? 'WHERE "id" = $1' : ''}
-         ORDER BY "createdAt" DESC
-         LIMIT 1`,
-        ...(payload.auditId ? [payload.auditId] : [])
-      );
-      const selectedEntry =
-        Array.isArray(rows) && rows.length > 0 ? parseHomepageRuntimeAuditEntry(rows[0]) : null;
-      if (!selectedEntry) {
-        return res.status(404).json({ success: false, message: 'No runtime audit entry found to roll back.' });
-      }
-
-      const { settings: currentSettings } = await readHomepageExperienceSettings();
-      const currentRuntime = getHomepageRuntimeSnapshot(currentSettings);
-      const targetRuntime = selectedEntry.previous;
-      const reasonRequired = currentSettings.requireReasonForRuntimeActions === true;
-      if (reasonRequired && !String(payload.reason || '').trim()) {
-        return res.status(400).json({
-          success: false,
-          message: 'A reason is required before rolling back homepage runtime.',
-        });
-      }
-
-      if (areHomepageRuntimeSnapshotsEqual(currentRuntime, targetRuntime)) {
-        return res.json({
-          success: true,
-          message: 'Runtime already matches selected rollback snapshot.',
-          data: {
-            settings: currentSettings,
-            rolledBackFromAuditId: selectedEntry.id,
-          },
-        });
-      }
-
-      const nextSettings = await saveHomepageExperienceSettings(targetRuntime);
-      const actor = resolveRuntimeActor(req);
-      await writeHomepageRuntimeAuditEntry({
-        action: 'RUNTIME_ROLLBACK',
-        reason:
-          payload.reason ||
-          `Rollback applied from audit ${selectedEntry.id}`,
-        previous: currentRuntime,
-        next: getHomepageRuntimeSnapshot(nextSettings),
-        metadata: {
-          source: 'admin-runtime-rollback',
-          rollbackFromAuditId: selectedEntry.id,
-        },
-        performedByUserId: actor.performedByUserId,
-        performedByEmail: actor.performedByEmail,
-      });
-      res.json({
-        success: true,
-        data: {
-          settings: nextSettings,
-          rolledBackFromAuditId: selectedEntry.id,
-        },
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
-      }
-      console.error('Error rolling back homepage runtime:', error);
-      res.status(500).json({ success: false, message: 'Failed to roll back homepage runtime.' });
-    }
+  async (_req, res) => {
+    return res.status(410).json({
+      success: false,
+      message: 'Homepage runtime rollback is disabled. Jenks-only runtime is enforced.',
+    });
   }
 );
 

@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma, ProductStatus } from '../db';
+import { parseStoredJsonValue } from './parse-stored-json-value';
 
 export const CATEGORY_PAGE_TYPES = [
   'READY_TO_WEAR',
@@ -530,7 +531,7 @@ export async function readCategoryPageSettings(pageType: CategoryPageType) {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeCategoryPageSettings(pageType, JSON.parse(String(row.value || '{}'))),
+      settings: normalizeCategoryPageSettings(pageType, parseStoredJsonValue(row.value)),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
     };

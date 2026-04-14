@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../db';
+import { parseStoredJsonValue } from './parse-stored-json-value';
 
 export const TRY_ON_SETTINGS_KEY = 'TRY_ON_SETTINGS_V1';
 
@@ -199,7 +200,7 @@ export const readTryOnSettings = async () => {
       rowId: String(row.id),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
-      settings: normalizeTryOnSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeTryOnSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return {

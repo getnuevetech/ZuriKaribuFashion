@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma, ProductStatus } from '../db';
 import { applyActivePricingRules, readActivePricingRules, type ActivePricingRule } from './pricing-rules';
 import { generateProductSku, readProductSkuSettings } from './product-sku';
+import { parseStoredJsonValue } from './parse-stored-json-value';
 
 export const CATEGORY_PAGE_V2_TYPES = [
   'READY_TO_WEAR',
@@ -797,7 +798,7 @@ const readProductLabelSettings = async () => {
     );
     const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
     if (!row) return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
-    return normalizeProductLabelSettings(JSON.parse(String(row.value || '{}')));
+    return normalizeProductLabelSettings(parseStoredJsonValue(row.value));
   } catch {
     return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
   }
@@ -1376,7 +1377,7 @@ export async function readCategoryPageV2Settings(pageType: CategoryPageV2Type) {
       rowId: String(row.id),
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
-      settings: normalizeSettings(pageType, JSON.parse(String(row.value || '{}'))),
+      settings: normalizeSettings(pageType, parseStoredJsonValue(row.value)),
     };
   } catch {
     return {

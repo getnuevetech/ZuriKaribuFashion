@@ -96,7 +96,6 @@ const AdminAuthenticatorSettings = lazy(() => import('./pages/admin/Authenticato
 const AdminHelpCenterContent = lazy(() => import('./pages/admin/HelpCenterContent'));
 const AdminContactPageManager = lazy(() => import('./pages/admin/ContactPageManager'));
 const AdminModuleRuntimeSettings = lazy(() => import('./pages/admin/ModuleRuntimeSettings'));
-const AdminHomepageRuntimeSwitchboard = lazy(() => import('./pages/admin/HomepageRuntimeSwitchboard'));
 const AdminJenksHomepageManage = lazy(() => import('./pages/admin/JenksHomepageManage'));
 const AdminJenksV2FrontPageManager = lazy(() => import('./pages/admin/JenksV2FrontPageManager'));
 
@@ -744,14 +743,6 @@ function App() {
                   element={
                     <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
                       <AdminJenksV2FrontPageManager />
-                    </AdminPermissionGuard>
-                  }
-                />
-                <Route
-                  path="/admin/homepage-runtime"
-                  element={
-                    <AdminPermissionGuard required={['homepage:manage']} superAdminOnly>
-                      <AdminHomepageRuntimeSwitchboard />
                     </AdminPermissionGuard>
                   }
                 />

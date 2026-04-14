@@ -129,7 +129,6 @@ const navItems: Record<DashboardType, NavItem[]> = {
     { label: 'Homepage', href: '/admin/homepage', icon: LayoutTemplate },
     { label: 'Jenks FrontPage Manage', href: '/admin/jenks-homepage', icon: LayoutGrid },
     { label: 'Jenks-V2 FrontPage Manager', href: '/admin/jenks-v2-frontpage-manager', icon: LayoutGrid },
-    { label: 'Homepage Runtime Switchboard', href: '/admin/homepage-runtime', icon: LayoutGrid },
     { label: 'Category Pages Manager', href: '/admin/category-pages', icon: LayoutGrid },
     { label: 'Blogs', href: '/admin/blogs', icon: FileText },
     { label: 'Help Center Content', href: '/admin/help-center-content', icon: FileText },
@@ -420,7 +419,6 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
         href === '/admin/homepage-visibility' ||
         href === '/admin/homepage-sections' ||
         href === '/admin/jenks-homepage' ||
-        href === '/admin/homepage-runtime' ||
         href === '/admin/jenks-v2-frontpage-manager' ||
         href.startsWith('/admin/jenks-v2-frontpage-manager/')) &&
       !isSuperAdmin
@@ -493,7 +491,6 @@ export default function DashboardLayout({ userType }: DashboardLayoutProps) {
       '/admin/jenks-v2-frontpage-manager/heritage': ['homepage:manage'],
       '/admin/jenks-v2-frontpage-manager/newsletter-footer': ['homepage:manage'],
       '/admin/jenks-v2-frontpage-manager/section-visibility': ['homepage:manage'],
-      '/admin/homepage-runtime': ['homepage:manage'],
       '/admin/category-pages': ['homepage:manage'],
       '/admin/blogs': ['homepage:manage'],
       '/admin/help-center-content': ['help_center:manage|homepage:manage'],

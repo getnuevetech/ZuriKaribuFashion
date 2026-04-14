@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'crypto';
 import { prisma } from '../db';
+import { parseStoredJsonValue } from './parse-stored-json-value';
 
 export const PRODUCT_SKU_SETTINGS_KEY = 'PRODUCT_SKU_SETTINGS';
 
@@ -83,7 +84,7 @@ export async function readProductSkuSettings() {
     };
   }
   try {
-    const parsed = JSON.parse(String(row.value || '{}'));
+    const parsed = parseStoredJsonValue(row.value);
     return {
       source: 'DATABASE' as const,
       updatedAt: row.updatedAt,

@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../db';
+import { parseStoredJsonValue } from './parse-stored-json-value';
 
 const DESIGNER_FABRIC_COUNTRY_ACCESS_SETTINGS_KEY = 'DESIGNER_FABRIC_COUNTRY_ACCESS_V1';
 const DESIGNER_FABRIC_COUNTRY_ACCESS_REQUESTS_SETTINGS_KEY = 'DESIGNER_FABRIC_COUNTRY_ACCESS_REQUESTS_V1';
@@ -128,7 +129,7 @@ export async function readDesignerFabricCountryAccessSettings() {
     };
   }
   try {
-    const parsed = JSON.parse(String(row.value || '{}'));
+    const parsed = parseStoredJsonValue(row.value);
     return {
       rowId: String(row.id),
       settings: normalizeSettingsPayload(parsed),
@@ -181,7 +182,7 @@ async function readDesignerFabricCountryAccessRequestsSettings() {
     };
   }
   try {
-    const parsed = JSON.parse(String(row.value || '{}'));
+    const parsed = parseStoredJsonValue(row.value);
     return {
       rowId: String(row.id),
       settings: normalizeRequestPayload(parsed),

@@ -37,6 +37,7 @@ import {
 } from '../utils/fabric-attributes';
 import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
 import { syncReadyToWearAvailabilityById } from '../utils/product-stock-monitor';
+import { parseStoredJsonValue } from '../utils/parse-stored-json-value';
 import {
   clearProductAutomationOutcome,
   evaluateProductAutomationChecks,
@@ -400,7 +401,7 @@ async function readReadyToWearVariantRules() {
     };
   }
   try {
-    const parsed = JSON.parse(String(row.value || '{}')) as any;
+    const parsed = parseStoredJsonValue(row.value) as any;
     const list = Array.isArray(parsed?.sizes) ? parsed.sizes : [];
     const minVariantStockRaw = Number(parsed?.minVariantStock);
     const normalized = Array.from(

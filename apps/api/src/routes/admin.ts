@@ -38,6 +38,7 @@ import { markTemporaryPasswordRequired } from '../utils/password-policy';
 import { buildPasswordPolicyErrorMessage, evaluatePasswordSecurity } from '../utils/password-security';
 import { readProductAutomationOutcomesForProducts } from '../utils/automation-approval';
 import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
+import { parseStoredJsonValue } from '../utils/parse-stored-json-value';
 import { isSmtpConfigured, readSmtpSettings, sendEmailWithRuntimeSmtp } from '../utils/smtp-settings';
 import { generateProductSku, normalizeProductSkuSettings, readProductSkuSettings, saveProductSkuSettings, type ProductSkuSettings } from '../utils/product-sku';
 
@@ -1045,7 +1046,7 @@ const readAdminTopStripSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeAdminTopStripSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeAdminTopStripSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...ADMIN_TOP_STRIP_DEFAULTS } };
@@ -1093,7 +1094,7 @@ const readAdminCountryImageGenerationSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeAdminCountryImageGenerationSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeAdminCountryImageGenerationSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...ADMIN_COUNTRY_IMAGE_GENERATION_DEFAULTS } };
@@ -1141,7 +1142,7 @@ const readAdminHowItWorksStyleSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeAdminHowItWorksStyleSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeAdminHowItWorksStyleSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...ADMIN_HOW_IT_WORKS_STYLE_DEFAULTS } };
@@ -1188,7 +1189,7 @@ const readAdminFeaturedProductDescriptionSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeAdminFeaturedProductDescriptionSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeAdminFeaturedProductDescriptionSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...ADMIN_FEATURED_PRODUCT_DESCRIPTION_DEFAULTS } };
@@ -1210,7 +1211,7 @@ const readAdminStatsStripSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeAdminStatsStripSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeAdminStatsStripSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...ADMIN_STATS_STRIP_DEFAULTS, items: [...ADMIN_STATS_STRIP_DEFAULTS.items] } };
@@ -1280,7 +1281,7 @@ const readAdminReadyToWearSizesSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeAdminReadyToWearSizesSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeAdminReadyToWearSizesSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...ADMIN_READY_TO_WEAR_SIZES_DEFAULTS } };
@@ -1336,7 +1337,7 @@ const readAdminReadyToWearSizeGuideSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeAdminReadyToWearSizeGuideSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeAdminReadyToWearSizeGuideSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...ADMIN_READY_TO_WEAR_SIZE_GUIDE_DEFAULTS } };
@@ -1385,7 +1386,7 @@ const readAdminProductLabelSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeAdminProductLabelSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeAdminProductLabelSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return {

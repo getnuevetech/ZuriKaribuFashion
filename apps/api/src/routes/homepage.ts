@@ -5,6 +5,7 @@ import { prisma } from '../db';
 import { authenticate, authorizePermissions, authorizeSuperAdmin } from '../middleware/auth';
 import { Permissions } from '../rbac';
 import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
+import { parseStoredJsonValue } from '../utils/parse-stored-json-value';
 
 const router = Router();
 const HOMEPAGE_TOP_STRIP_SETTINGS_KEY = 'HOMEPAGE_TOP_STRIP';
@@ -403,7 +404,7 @@ async function readProductLabelSettings() {
     );
     const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
     if (!row) return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
-    return normalizeProductLabelSettings(JSON.parse(String(row.value || '{}')));
+    return normalizeProductLabelSettings(parseStoredJsonValue(row.value));
   } catch {
     return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
   }
@@ -722,7 +723,7 @@ const readTopStripSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeTopStripSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeTopStripSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...TOP_STRIP_DEFAULTS } };
@@ -771,7 +772,7 @@ const readHowItWorksStyleSettings = async () => {
   try {
     return {
       rowId: String(row.id),
-      settings: normalizeHowItWorksStyleSettings(JSON.parse(String(row.value || '{}'))),
+      settings: normalizeHowItWorksStyleSettings(parseStoredJsonValue(row.value)),
     };
   } catch {
     return { rowId: String(row.id), settings: { ...HOW_IT_WORKS_STYLE_DEFAULTS } };

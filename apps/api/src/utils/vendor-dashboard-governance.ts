@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../db';
+import { parseStoredJsonValue } from './parse-stored-json-value';
 
 export const VENDOR_DASHBOARD_GOVERNANCE_SETTINGS_KEY = 'VENDOR_DASHBOARD_GOVERNANCE';
 
@@ -299,12 +300,7 @@ export const readVendorDashboardGovernanceSettings = async () => {
     };
   }
   try {
-    const rawValue =
-      typeof row.value === 'string'
-        ? JSON.parse(String(row.value || '{}'))
-        : row.value && typeof row.value === 'object'
-          ? row.value
-          : {};
+    const rawValue = parseStoredJsonValue(row.value);
     return {
       rowId: String(row.id),
       source: 'DATABASE' as const,

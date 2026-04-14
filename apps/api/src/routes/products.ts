@@ -8,6 +8,7 @@ import { readCategoryPageSettings, type CategoryPageType } from '../utils/catego
 import { readOrderWorkflowSettings } from '../utils/order-workflow';
 import { applyActivePricingRules, readActivePricingRules } from '../utils/pricing-rules';
 import { ensureProductTaxonomySchema } from '../utils/product-taxonomy-schema';
+import { parseStoredJsonValue } from '../utils/parse-stored-json-value';
 
 const router = Router();
 router.use(async (_req, _res, next) => {
@@ -413,7 +414,7 @@ async function readReadyToWearSizeGuide() {
     );
     const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
     if (!row) return { ...DEFAULT_READY_TO_WEAR_SIZE_GUIDE };
-    const parsed = JSON.parse(String(row.value || '{}')) as Record<string, unknown>;
+    const parsed = parseStoredJsonValue(row.value) as Record<string, unknown>;
     const title = String(parsed.title || '').trim();
     const content = String(parsed.content || '').trim();
     return {
@@ -596,7 +597,7 @@ async function readProductLabelSettings() {
     );
     const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
     if (!row) return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
-    return normalizeProductLabelSettings(JSON.parse(String(row.value || '{}')));
+    return normalizeProductLabelSettings(parseStoredJsonValue(row.value));
   } catch {
     return normalizeProductLabelSettings(DEFAULT_PRODUCT_LABEL_SETTINGS);
   }
