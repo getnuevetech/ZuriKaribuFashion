@@ -4837,6 +4837,30 @@ export default function JenksV2FrontPageManager() {
     }
   };
 
+  const recoverFromSectionSnapshots = async () => {
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await api.jenksV2Frontpage.recoverFromSectionSnapshots();
+      if (!response.success) throw new Error('Failed to recover Jenks-V2 settings from section snapshots.');
+      const nextConfig = sanitizeConfigHrefs(asApiConfig(response.data));
+      setConfig({
+        ...nextConfig,
+        sectionVisibility: ensureCompleteSectionVisibility(nextConfig.sectionVisibility),
+      });
+      setSuccess('Recovered Jenks-V2 settings from section snapshots.');
+    } catch (recoveryError: any) {
+      setError(
+        recoveryError?.response?.data?.message ||
+          recoveryError?.message ||
+          'Failed to recover Jenks-V2 settings from section snapshots.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const createTemplateSection = async () => {
     if (!templateName.trim()) {
       setError('Section name is required.');
@@ -4929,6 +4953,9 @@ export default function JenksV2FrontPageManager() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => void fetchConfig()} disabled={saving}>
             Refresh
+          </Button>
+          <Button variant="outline" onClick={() => void recoverFromSectionSnapshots()} disabled={saving} isLoading={saving}>
+            Emergency Recover
           </Button>
           <Button onClick={() => void saveConfig()} isLoading={saving}>
             Save All
