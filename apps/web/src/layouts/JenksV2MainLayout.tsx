@@ -13,6 +13,7 @@ import CustomerServiceChatWidgetBoundary from '../components/chat/CustomerServic
 const CustomerServiceChatWidget = lazy(() => import('../components/chat/CustomerServiceChatWidget'));
 
 type ThemeMode = 'LIGHT' | 'DARK';
+type ThemeModeSetting = ThemeMode | 'SYSTEM';
 type IconComponent = LucideIcon;
 
 type MenuLinkMode = 'PAGE' | 'CUSTOM_URL';
@@ -126,6 +127,44 @@ const resolveConfiguredMenuHref = (
   return toSafeInternalHref(pageHref);
 };
 
+const THEME_MODE_STORAGE_KEY = 'jenks-v2-theme-mode';
+
+const resolveSystemThemeMode = (): ThemeMode => {
+  if (typeof window === 'undefined') return 'LIGHT';
+  try {
+    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'DARK'
+      : 'LIGHT';
+  } catch {
+    return 'LIGHT';
+  }
+};
+
+const readStoredThemeMode = (): ThemeMode | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const token = String(window.localStorage.getItem(THEME_MODE_STORAGE_KEY) || '')
+      .trim()
+      .toUpperCase();
+    return token === 'LIGHT' || token === 'DARK' ? (token as ThemeMode) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredThemeMode = (mode: ThemeMode | null) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!mode) {
+      window.localStorage.removeItem(THEME_MODE_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Ignore storage write failures in restricted browsing contexts.
+  }
+};
+
 export default function JenksV2MainLayout() {
   const location = useLocation();
   const { isAuthenticated, user } = useAuthStore();
@@ -134,7 +173,7 @@ export default function JenksV2MainLayout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [topStripPaused, setTopStripPaused] = useState(false);
-  const [themeMode, setThemeMode] = useState<ThemeMode>('LIGHT');
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredThemeMode() || resolveSystemThemeMode());
 
   const {
     data: frontpageConfig,
@@ -177,6 +216,11 @@ export default function JenksV2MainLayout() {
   const themeCfg = useMemo(() => asRecord(asRecord(topNavigationsCfg.controllers).theme), [topNavigationsCfg.controllers]);
   const ThemeIcon = iconFromKey(themeCfg.icon, Sun);
   const ComputedThemeIcon = themeMode === 'DARK' ? Moon : ThemeIcon;
+  const configuredThemeMode = useMemo<ThemeModeSetting>(() => {
+    const token = asString(themeCfg.mode, 'SYSTEM').toUpperCase();
+    if (token === 'LIGHT' || token === 'DARK') return token as ThemeMode;
+    return 'SYSTEM';
+  }, [themeCfg.mode]);
   const showImageLogo = asString(logoCfg.mode, '').toUpperCase() === 'IMAGE' && asString(logoCfg.imageUrl, '').length > 0;
   const showTextLogo = !showImageLogo && (logoTextSplit.left.length > 0 || logoTextSplit.right.length > 0);
   const navigationConfigReady = Object.keys(topNavigationsCfg).length > 0;
@@ -232,33 +276,62 @@ export default function JenksV2MainLayout() {
 
   const hamburgerMenuFontSize = Math.max(16, Math.min(72, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontSize, 32))));
   const hamburgerMenuFontWeight = Math.max(500, Math.min(900, Math.round(asNumber(topNavigationsCfg.hamburgerMenuFontWeight, 800))));
+  const additionalTopMenuFontSize = Math.max(8, Math.min(40, Math.round(asNumber(topNavigationsCfg.additionalTopMenuFontSize, 12))));
+  const additionalTopMenuFontWeight = Math.max(
+    100,
+    Math.min(900, Math.round(asNumber(topNavigationsCfg.additionalTopMenuFontWeight, 600)))
+  );
+  const signInFontSize = Math.max(8, Math.min(40, Math.round(asNumber(topNavigationsCfg.signInFontSize, 12))));
+  const signInFontWeight = Math.max(100, Math.min(900, Math.round(asNumber(topNavigationsCfg.signInFontWeight, 600))));
+  const themeIconSize = Math.max(12, Math.min(32, Math.round(asNumber(themeCfg.iconSize, 16))));
+  const themeToggleSize = Math.max(28, themeIconSize + 16);
+  const themeModeLocked = configuredThemeMode !== 'SYSTEM';
 
-  useEffect(() => {
-    const token = asString(themeCfg.mode, 'LIGHT').toUpperCase();
-    if (token === 'LIGHT' || token === 'DARK') {
-      setThemeMode(token as ThemeMode);
+  const handleThemeToggle = () => {
+    if (themeModeLocked) {
+      setThemeMode(configuredThemeMode as ThemeMode);
       return;
     }
-    if (typeof window === 'undefined') return;
-    try {
-      const prefersDark =
-        typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setThemeMode(prefersDark ? 'DARK' : 'LIGHT');
-    } catch {
-      setThemeMode('LIGHT');
+    setThemeMode((prev) => {
+      const next = prev === 'LIGHT' ? 'DARK' : 'LIGHT';
+      writeStoredThemeMode(next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (configuredThemeMode === 'LIGHT' || configuredThemeMode === 'DARK') {
+      setThemeMode(configuredThemeMode);
+      writeStoredThemeMode(null);
+      return;
     }
-  }, [themeCfg.mode]);
+    const stored = readStoredThemeMode();
+    setThemeMode(stored || resolveSystemThemeMode());
+  }, [configuredThemeMode]);
+
+  useEffect(() => {
+    if (configuredThemeMode !== 'SYSTEM' || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    if (readStoredThemeMode()) return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => setThemeMode(media.matches ? 'DARK' : 'LIGHT');
+    try {
+      media.addEventListener('change', onChange);
+      return () => media.removeEventListener('change', onChange);
+    } catch {
+      media.addListener(onChange);
+      return () => media.removeListener(onChange);
+    }
+  }, [configuredThemeMode]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
-    root.classList.toggle('dark', themeMode === 'DARK');
-    document.body.style.backgroundColor = themeMode === 'DARK' ? '#111111' : '#f5f3ee';
-    document.body.style.color = themeMode === 'DARK' ? '#f5f3ee' : '#111111';
-    return () => {
-      document.body.style.backgroundColor = '';
-      document.body.style.color = '';
-    };
+    const isDark = themeMode === 'DARK';
+    root.classList.toggle('dark', isDark);
+    root.dataset.jenksTheme = isDark ? 'dark' : 'light';
+    document.body.dataset.jenksTheme = isDark ? 'dark' : 'light';
+    document.body.style.backgroundColor = isDark ? '#111111' : '#f5f3ee';
+    document.body.style.color = isDark ? '#f5f3ee' : '#111111';
   }, [themeMode]);
 
   useEffect(() => {
@@ -378,7 +451,15 @@ export default function JenksV2MainLayout() {
                 <div className="flex items-center gap-3 text-black/75">
                   <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.12em] text-black/75 md:flex">
                     {additionalTopMenuLinks.map((link) => (
-                      <Link key={`${link.label}-${link.href}`} to={toSafeInternalHref(link.href)} className="hover:text-black">
+                      <Link
+                        key={`${link.label}-${link.href}`}
+                        to={toSafeInternalHref(link.href)}
+                        className="hover:text-black"
+                        style={{
+                          fontSize: `${additionalTopMenuFontSize}px`,
+                          fontWeight: additionalTopMenuFontWeight,
+                        }}
+                      >
                         {link.label}
                       </Link>
                     ))}
@@ -387,11 +468,18 @@ export default function JenksV2MainLayout() {
                   {asBoolean(themeCfg.enabled, true) ? (
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/20"
-                      aria-label="Toggle theme"
-                      onClick={() => setThemeMode((prev) => (prev === 'LIGHT' ? 'DARK' : 'LIGHT'))}
+                      className="inline-flex items-center justify-center rounded-full border border-black/20"
+                      aria-label={themeModeLocked ? 'Theme controlled by admin mode' : 'Toggle theme'}
+                      onClick={handleThemeToggle}
+                      style={{
+                        width: `${themeToggleSize}px`,
+                        height: `${themeToggleSize}px`,
+                      }}
                     >
-                      <ComputedThemeIcon className="h-4 w-4 text-[#e66045]" />
+                      <ComputedThemeIcon
+                        className="text-[#e66045]"
+                        style={{ width: `${themeIconSize}px`, height: `${themeIconSize}px` }}
+                      />
                     </button>
                   ) : null}
 
@@ -409,7 +497,11 @@ export default function JenksV2MainLayout() {
                   {asBoolean(signInCfg.enabled, true) ? (
                     <Link
                       to={isAuthenticated ? profileRoute : resolveConfiguredMenuHref(signInCfg, '/auth/login')}
-                      className="hidden text-xs font-semibold uppercase tracking-[0.12em] hover:text-black sm:inline"
+                      className="hidden uppercase tracking-[0.12em] hover:text-black sm:inline"
+                      style={{
+                        fontSize: `${signInFontSize}px`,
+                        fontWeight: signInFontWeight,
+                      }}
                     >
                       {isAuthenticated ? 'Dashboard' : asString(signInCfg.label, 'Sign In')}
                     </Link>

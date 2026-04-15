@@ -306,6 +306,7 @@ type JenksV2ManagerPayload = Record<string, unknown>;
 type IconComponent = ComponentType<{ className?: string }>;
 type ProductCardPageType = 'READY_TO_WEAR' | 'FABRIC_TO_BUY' | 'CUSTOM_TO_WEAR';
 type FrontpageProductCardCategory = 'RTW' | 'FTB' | 'CTW';
+type ThemeMode = 'LIGHT' | 'DARK';
 
 const ASSET_BASE = 'https://african-fashion-zurikaribu.vercel.app';
 const HERO_HEIGHT_CLASS = 'min-h-[106vh]';
@@ -637,6 +638,44 @@ const mapSourceCategoryToDetailHref = (
   if (category === 'RTW') return `/readytowear/${safeId}`;
   if (category === 'CTW') return `/customtowear/${safeId}`;
   return `/fabricstobuy/${safeId}`;
+};
+
+const THEME_MODE_STORAGE_KEY = 'jenks-v2-frontpage-theme-mode';
+
+const resolveSystemThemeMode = (): ThemeMode => {
+  if (typeof window === 'undefined') return 'LIGHT';
+  try {
+    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'DARK'
+      : 'LIGHT';
+  } catch {
+    return 'LIGHT';
+  }
+};
+
+const readStoredThemeMode = (): ThemeMode | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const token = String(window.localStorage.getItem(THEME_MODE_STORAGE_KEY) || '')
+      .trim()
+      .toUpperCase();
+    return token === 'LIGHT' || token === 'DARK' ? (token as ThemeMode) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredThemeMode = (mode: ThemeMode | null) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!mode) {
+      window.localStorage.removeItem(THEME_MODE_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Ignore storage failures in restricted contexts.
+  }
 };
 
 const resolveSpotlightProductHref = (fallbackHref: string, productId: string) => {
@@ -1536,7 +1575,7 @@ export default function JenksFrontpageV2() {
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [themeMode, setThemeMode] = useState<'LIGHT' | 'DARK'>('LIGHT');
+  const [themeMode, setThemeMode] = useState<ThemeMode>('LIGHT');
   const [freshDropsProducts, setFreshDropsProducts] = useState<
     Array<{
       id: string;
@@ -3276,6 +3315,17 @@ export default function JenksFrontpageV2() {
   const topStripTextColor = asString(topStripCfg.textColor, '#ffffff');
   const topStripBackgroundColor = asString(topStripCfg.backgroundColor, '#111111');
   const showTopStrip = asBoolean(topNavigationsCfg.topStripEnabled, false) && topStripItems.length > 0;
+  const additionalTopMenuFontSize = Math.max(
+    9,
+    Math.min(42, Math.round(asNumber(topNavigationsCfg.additionalTopMenuFontSize, 12)))
+  );
+  const additionalTopMenuFontWeight = Math.max(
+    100,
+    Math.min(900, Math.round(asNumber(topNavigationsCfg.additionalTopMenuFontWeight, 600)))
+  );
+  const signInFontSize = Math.max(9, Math.min(42, Math.round(asNumber(topNavigationsCfg.signInFontSize, 12))));
+  const signInFontWeight = Math.max(100, Math.min(900, Math.round(asNumber(topNavigationsCfg.signInFontWeight, 600))));
+  const themeIconSize = Math.max(10, Math.min(36, Math.round(asNumber(themeCfg.iconSize, 16))));
   const customerReviewsSourceMode = ((): 'STATIC_ONLY' | 'PRODUCT_REVIEWS_ONLY' | 'BOTH' => {
     const token = asString(customerReviewsCfg.sourceMode, 'BOTH').toUpperCase();
     if (token === 'STATIC_ONLY' || token === 'PRODUCT_REVIEWS_ONLY' || token === 'BOTH') return token;
@@ -3369,21 +3419,29 @@ export default function JenksFrontpageV2() {
     () => (dedicatedCountryExpanded ? fullDedicatedCountries : filteredCountryShowcase.slice(0, 12)),
     [dedicatedCountryExpanded, filteredCountryShowcase, fullDedicatedCountries]
   );
-  const resolvedThemeMode = useMemo<'LIGHT' | 'DARK'>(() => {
-    const token = asString(themeCfg.mode, 'LIGHT').toUpperCase();
-    if (token === 'DARK') return 'DARK';
-    if (token === 'SYSTEM' && typeof window !== 'undefined') {
-      try {
-        if (typeof window.matchMedia === 'function') {
-          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'DARK' : 'LIGHT';
-        }
-      } catch {
-        return 'LIGHT';
-      }
-    }
-    return 'LIGHT';
+  const configuredThemeMode = useMemo<ThemeMode | 'SYSTEM'>(() => {
+    const token = asString(themeCfg.mode, 'SYSTEM').toUpperCase();
+    if (token === 'DARK' || token === 'LIGHT') return token as ThemeMode;
+    return 'SYSTEM';
   }, [themeCfg.mode]);
+  const resolvedThemeMode = useMemo<ThemeMode>(() => {
+    if (configuredThemeMode === 'DARK' || configuredThemeMode === 'LIGHT') return configuredThemeMode;
+    return resolveSystemThemeMode();
+  }, [configuredThemeMode]);
   const ComputedThemeIcon = themeMode === 'DARK' ? Moon : ThemeIcon;
+  const themeModeLocked = configuredThemeMode !== 'SYSTEM';
+  const themeButtonSize = Math.max(28, Math.min(56, themeIconSize + 16));
+  const handleThemeToggle = () => {
+    if (themeModeLocked) {
+      setThemeMode(configuredThemeMode as ThemeMode);
+      return;
+    }
+    setThemeMode((prev) => {
+      const next: ThemeMode = prev === 'LIGHT' ? 'DARK' : 'LIGHT';
+      writeStoredThemeMode(next);
+      return next;
+    });
+  };
   const customerReviewCards = useMemo(() => {
     const staticRows = staticReviewCards.filter((entry) => entry.message.length > 0);
     const productRows = productReviewCards.filter((entry) => entry.message.length > 0);
@@ -3500,23 +3558,45 @@ export default function JenksFrontpageV2() {
   }, [searchOpen]);
 
   useEffect(() => {
-    setThemeMode(resolvedThemeMode);
-  }, [resolvedThemeMode]);
+    if (configuredThemeMode === 'LIGHT' || configuredThemeMode === 'DARK') {
+      setThemeMode(configuredThemeMode);
+      writeStoredThemeMode(null);
+      return;
+    }
+    const stored = readStoredThemeMode();
+    setThemeMode(stored || resolvedThemeMode);
+  }, [configuredThemeMode, resolvedThemeMode]);
 
   useEffect(() => {
-    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    if (typeof document === 'undefined') return;
     const root = document.documentElement;
     const body = document.body;
     const isDark = themeMode === 'DARK';
     root.classList.toggle('dark', isDark);
+    root.dataset.themeMode = isDark ? 'dark' : 'light';
     body.style.backgroundColor = isDark ? '#090b10' : '#f5f3ee';
     body.style.color = isDark ? '#f5f3ee' : '#111111';
     return () => {
-      root.classList.remove('dark');
+      delete root.dataset.themeMode;
       body.style.backgroundColor = '';
       body.style.color = '';
     };
   }, [themeMode]);
+  useEffect(() => {
+    if (configuredThemeMode !== 'SYSTEM' || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    if (readStoredThemeMode()) return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => {
+      setThemeMode(media.matches ? 'DARK' : 'LIGHT');
+    };
+    try {
+      media.addEventListener('change', onChange);
+      return () => media.removeEventListener('change', onChange);
+    } catch {
+      media.addListener(onChange);
+      return () => media.removeListener(onChange);
+    }
+  }, [configuredThemeMode]);
   useEffect(() => {
     let cancelled = false;
     const shouldLoadProducts =
@@ -4333,7 +4413,15 @@ export default function JenksFrontpageV2() {
               <div className="flex items-center gap-3 text-black/75">
                 <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.12em] text-black/75 md:flex">
                   {additionalTopMenuLinks.map((link) => (
-                    <Link key={`${link.label}-${link.href}`} to={toSafeInternalHref(link.href)} className="hover:text-black">
+                    <Link
+                      key={`${link.label}-${link.href}`}
+                      to={toSafeInternalHref(link.href)}
+                      className="hover:text-black"
+                      style={{
+                        fontSize: `${additionalTopMenuFontSize}px`,
+                        fontWeight: additionalTopMenuFontWeight,
+                      }}
+                    >
                       {link.label}
                     </Link>
                   ))}
@@ -4341,14 +4429,18 @@ export default function JenksFrontpageV2() {
                 {asBoolean(themeCfg.enabled, true) ? (
                   <button
                     type="button"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/20"
-                    aria-label="Toggle theme"
-                    onClick={() => setThemeMode((prev) => (prev === 'LIGHT' ? 'DARK' : 'LIGHT'))}
+                    className="inline-flex items-center justify-center rounded-full border border-black/20"
+                    aria-label={themeModeLocked ? 'Theme controlled by admin mode' : 'Toggle theme'}
+                    onClick={handleThemeToggle}
+                    style={{
+                      width: `${themeButtonSize}px`,
+                      height: `${themeButtonSize}px`,
+                    }}
                   >
                     {ComputedThemeIcon ? (
-                      <ComputedThemeIcon className="h-4 w-4 text-[#e66045]" />
+                      <ComputedThemeIcon className="text-[#e66045]" style={{ width: `${themeIconSize}px`, height: `${themeIconSize}px` }} />
                     ) : (
-                      <Sun className="h-4 w-4 text-[#e66045]" />
+                      <Sun className="text-[#e66045]" style={{ width: `${themeIconSize}px`, height: `${themeIconSize}px` }} />
                     )}
                   </button>
                 ) : null}
@@ -4361,7 +4453,11 @@ export default function JenksFrontpageV2() {
                 {asBoolean(signInCfg.enabled, true) ? (
                   <Link
                     to={toSafeInternalHref(normalizeHref(signInCfg.href, '/auth/login', signInCfg.routeKey))}
-                    className="hidden text-xs font-semibold uppercase tracking-[0.12em] hover:text-black sm:inline"
+                    className="hidden uppercase tracking-[0.12em] hover:text-black sm:inline"
+                    style={{
+                      fontSize: `${signInFontSize}px`,
+                      fontWeight: signInFontWeight,
+                    }}
                   >
                     {asString(signInCfg.label, 'Sign In')}
                   </Link>

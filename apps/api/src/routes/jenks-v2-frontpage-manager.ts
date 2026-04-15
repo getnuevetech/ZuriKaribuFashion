@@ -131,6 +131,8 @@ type TopNavigationsSettings = {
     height: number;
   };
   additionalTopMenu: MenuLink[];
+  additionalTopMenuFontSize: number;
+  additionalTopMenuFontWeight: number;
   signInMenu: {
     enabled: boolean;
     label: string;
@@ -141,12 +143,15 @@ type TopNavigationsSettings = {
     customUrl?: string;
     icon: string;
   };
+  signInFontSize: number;
+  signInFontWeight: number;
   controllers: {
     showControllerIcons: boolean;
     theme: {
       enabled: boolean;
       mode: ThemeMode;
       icon: string;
+      iconSize: number;
     };
   };
   heroBanners: HeroBanner[];
@@ -922,6 +927,8 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         defaultMenuLink('Shop', '/Shop', 'SHOP'),
         defaultMenuLink('Contact', '/contact', 'CONTACT'),
       ],
+      additionalTopMenuFontSize: 12,
+      additionalTopMenuFontWeight: 600,
       signInMenu: {
         enabled: true,
         label: 'Sign In',
@@ -932,12 +939,15 @@ const defaultSettings = (): JenksV2FrontpageManagerSettings => {
         customUrl: '',
         icon: 'User',
       },
+      signInFontSize: 12,
+      signInFontWeight: 600,
       controllers: {
         showControllerIcons: true,
         theme: {
           enabled: true,
           mode: 'SYSTEM',
           icon: 'MoonStar',
+          iconSize: 16,
         },
       },
       heroBanners: [
@@ -2113,6 +2123,16 @@ const normalizeTopNavigations = (raw: unknown, fallback: TopNavigationsSettings)
     additionalTopMenu: (Array.isArray(row.additionalTopMenu) ? row.additionalTopMenu : fallback.additionalTopMenu)
       .map((entry, index) => normalizeMenuLink(entry, fallback.additionalTopMenu[index] || defaultMenuLink('Link', '/')))
       .slice(0, 40),
+    additionalTopMenuFontSize: clamp(
+      Math.round(getNumber(row.additionalTopMenuFontSize) ?? fallback.additionalTopMenuFontSize),
+      8,
+      40
+    ),
+    additionalTopMenuFontWeight: clamp(
+      Math.round(getNumber(row.additionalTopMenuFontWeight) ?? fallback.additionalTopMenuFontWeight),
+      100,
+      900
+    ),
     signInMenu: {
       ...(fallback.signInMenu || {}),
       enabled: getBoolean(asRecord(row.signInMenu).enabled) ?? fallback.signInMenu.enabled,
@@ -2156,12 +2176,15 @@ const normalizeTopNavigations = (raw: unknown, fallback: TopNavigationsSettings)
             ),
       icon: (getString(asRecord(row.signInMenu).icon) || fallback.signInMenu.icon).slice(0, 60),
     },
+    signInFontSize: clamp(Math.round(getNumber(row.signInFontSize) ?? fallback.signInFontSize), 8, 40),
+    signInFontWeight: clamp(Math.round(getNumber(row.signInFontWeight) ?? fallback.signInFontWeight), 100, 900),
     controllers: {
       showControllerIcons: getBoolean(controllersRaw.showControllerIcons) ?? fallback.controllers.showControllerIcons,
       theme: {
         enabled: getBoolean(themeRaw.enabled) ?? fallback.controllers.theme.enabled,
         mode,
         icon: (getString(themeRaw.icon) || fallback.controllers.theme.icon).slice(0, 60),
+        iconSize: clamp(Math.round(getNumber(themeRaw.iconSize) ?? fallback.controllers.theme.iconSize), 12, 32),
       },
     },
     heroBanners: (heroRows.length > 0 ? heroRows : fallbackHero)

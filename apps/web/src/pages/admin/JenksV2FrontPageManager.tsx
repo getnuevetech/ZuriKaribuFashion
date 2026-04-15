@@ -110,6 +110,8 @@ type TopNavigations = {
     height: number;
   };
   additionalTopMenu: MenuLink[];
+  additionalTopMenuFontSize: number;
+  additionalTopMenuFontWeight: number;
   signInMenu: {
     enabled: boolean;
     label: string;
@@ -120,12 +122,15 @@ type TopNavigations = {
     customUrl?: string;
     icon: string;
   };
+  signInFontSize: number;
+  signInFontWeight: number;
   controllers: {
     showControllerIcons: boolean;
     theme: {
       enabled: boolean;
       mode: ThemeMode;
       icon: string;
+      iconSize: number;
     };
   };
   heroBanners: HeroBanner[];
@@ -1090,6 +1095,8 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       height: 50,
     },
     additionalTopMenu: [defaultLink('Shop', '/shop', 'SHOP')],
+    additionalTopMenuFontSize: 12,
+    additionalTopMenuFontWeight: 600,
     signInMenu: {
       enabled: true,
       label: 'Sign In',
@@ -1100,12 +1107,15 @@ const DEFAULT_CONFIG: JenksV2FrontpageConfig = {
       customUrl: '',
       icon: 'User',
     },
+    signInFontSize: 12,
+    signInFontWeight: 600,
     controllers: {
       showControllerIcons: true,
       theme: {
         enabled: true,
         mode: 'SYSTEM',
         icon: 'MoonStar',
+        iconSize: 16,
       },
     },
     heroBanners: [
@@ -2672,6 +2682,70 @@ const asApiConfig = (input: unknown): JenksV2FrontpageConfig => {
         100,
         900
       ),
+      additionalTopMenuFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((topNavigations as TopNavigations).additionalTopMenuFontSize ?? DEFAULT_CONFIG.topNavigations.additionalTopMenuFontSize),
+            DEFAULT_CONFIG.topNavigations.additionalTopMenuFontSize
+          )
+        ),
+        8,
+        40
+      ),
+      additionalTopMenuFontWeight: clamp(
+        Math.round(
+          toNumber(
+            String(
+              (topNavigations as TopNavigations).additionalTopMenuFontWeight ??
+                DEFAULT_CONFIG.topNavigations.additionalTopMenuFontWeight
+            ),
+            DEFAULT_CONFIG.topNavigations.additionalTopMenuFontWeight
+          )
+        ),
+        100,
+        900
+      ),
+      signInFontSize: clamp(
+        Math.round(
+          toNumber(
+            String((topNavigations as TopNavigations).signInFontSize ?? DEFAULT_CONFIG.topNavigations.signInFontSize),
+            DEFAULT_CONFIG.topNavigations.signInFontSize
+          )
+        ),
+        8,
+        40
+      ),
+      signInFontWeight: clamp(
+        Math.round(
+          toNumber(
+            String((topNavigations as TopNavigations).signInFontWeight ?? DEFAULT_CONFIG.topNavigations.signInFontWeight),
+            DEFAULT_CONFIG.topNavigations.signInFontWeight
+          )
+        ),
+        100,
+        900
+      ),
+      controllers: {
+        ...DEFAULT_CONFIG.topNavigations.controllers,
+        ...(topNavigations.controllers || {}),
+        theme: {
+          ...DEFAULT_CONFIG.topNavigations.controllers.theme,
+          ...((topNavigations.controllers || {}).theme || {}),
+          iconSize: clamp(
+            Math.round(
+              toNumber(
+                String(
+                  (topNavigations.controllers || {}).theme?.iconSize ??
+                    DEFAULT_CONFIG.topNavigations.controllers.theme.iconSize
+                ),
+                DEFAULT_CONFIG.topNavigations.controllers.theme.iconSize
+              )
+            ),
+            12,
+            32
+          ),
+        },
+      },
       heroBanners: Array.isArray(topNavigations.heroBanners)
         ? topNavigations.heroBanners.map((banner, index) => {
             const next = { ...fallbackHero, ...banner };
@@ -5661,7 +5735,138 @@ export default function JenksV2FrontPageManager() {
             </div>
 
             <div className="rounded-lg border p-4 space-y-3">
-              <h3 className="text-sm font-semibold">Additional Top Menu + Sign In + Theme Controller</h3>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold">Additional Top Menu + Sign In + Theme Controller</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      topNavigations: {
+                        ...prev.topNavigations,
+                        additionalTopMenu: [
+                          ...prev.topNavigations.additionalTopMenu,
+                          defaultLink(
+                            `Menu ${prev.topNavigations.additionalTopMenu.length + 1}`,
+                            '/shop',
+                            'SHOP'
+                          ),
+                        ],
+                      },
+                    }))
+                  }
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add Menu Link
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+                <label className="text-xs">
+                  Additional Menu Font Size (px)
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={config.topNavigations.additionalTopMenuFontSize}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        topNavigations: {
+                          ...prev.topNavigations,
+                          additionalTopMenuFontSize: clamp(
+                            toNumber(event.target.value, prev.topNavigations.additionalTopMenuFontSize),
+                            8,
+                            40
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Additional Menu Font Weight
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={config.topNavigations.additionalTopMenuFontWeight}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        topNavigations: {
+                          ...prev.topNavigations,
+                          additionalTopMenuFontWeight: clamp(
+                            toNumber(event.target.value, prev.topNavigations.additionalTopMenuFontWeight),
+                            100,
+                            900
+                          ),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Sign In Font Size (px)
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={config.topNavigations.signInFontSize}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        topNavigations: {
+                          ...prev.topNavigations,
+                          signInFontSize: clamp(toNumber(event.target.value, prev.topNavigations.signInFontSize), 8, 40),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Sign In Font Weight
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={config.topNavigations.signInFontWeight}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        topNavigations: {
+                          ...prev.topNavigations,
+                          signInFontWeight: clamp(toNumber(event.target.value, prev.topNavigations.signInFontWeight), 100, 900),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-xs">
+                  Theme Icon Size (px)
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded border px-2 py-1.5"
+                    value={config.topNavigations.controllers.theme.iconSize}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        topNavigations: {
+                          ...prev.topNavigations,
+                          controllers: {
+                            ...prev.topNavigations.controllers,
+                            theme: {
+                              ...prev.topNavigations.controllers.theme,
+                              iconSize: clamp(
+                                toNumber(event.target.value, prev.topNavigations.controllers.theme.iconSize),
+                                12,
+                                32
+                              ),
+                            },
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
               <div className="space-y-2">
                 {config.topNavigations.additionalTopMenu.map((item, index) => (
                   <div key={item.id} className="grid grid-cols-1 gap-2 rounded border p-2 md:grid-cols-12">
