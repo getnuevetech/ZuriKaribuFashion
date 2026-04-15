@@ -46,8 +46,8 @@ export default {
         cream: '#FFF8F0',
       },
       fontFamily: {
-        display: ['Playfair Display', 'serif'],
-        sans: ['Inter', 'sans-serif'],
+        display: ['Oswald', 'sans-serif'],
+        sans: ['Inter Tight', 'Inter', 'sans-serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out',

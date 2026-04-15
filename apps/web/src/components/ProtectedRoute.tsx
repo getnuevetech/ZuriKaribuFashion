@@ -1,34 +1,35 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-
-type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'FASHION_DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
+import type { UserRole } from '../types';
+import { getHomeRouteForRole, normalizeRole } from '../auth/rbac';
 
 interface ProtectedRouteProps {
   allowedRoles?: UserRole[];
 }
 
 export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, token } = useAuthStore();
+  const location = useLocation();
+  const normalizedRole = normalizeRole(user?.role);
+  const returnTo = `${location.pathname || '/'}${location.search || ''}${location.hash || ''}`;
+  const loginPath = `/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  if (!isAuthenticated || !token) {
+    return <Navigate to={loginPath} replace state={{ from: location }} />;
   }
 
-  if (allowedRoles && user?.role) {
-    if (!allowedRoles.includes(user.role as UserRole)) {
-      // Redirect to appropriate dashboard based on role
-      switch (user.role) {
-        case 'ADMINISTRATOR':
-          return <Navigate to="/admin" replace />;
-        case 'FABRIC_SELLER':
-          return <Navigate to="/seller" replace />;
-        case 'FASHION_DESIGNER':
-          return <Navigate to="/designer" replace />;
-        case 'QA_TEAM':
-          return <Navigate to="/qa" replace />;
-        default:
-          return <Navigate to="/" replace />;
-      }
+  const requiresPasswordChange = Boolean((user as any)?.requirePasswordChange);
+  if (requiresPasswordChange && location.pathname !== '/change-password-required') {
+    return <Navigate to="/change-password-required" replace />;
+  }
+
+  if (allowedRoles) {
+    if (!normalizedRole) {
+      return <Navigate to={loginPath} replace state={{ from: location }} />;
+    }
+
+    if (!allowedRoles.includes(normalizedRole)) {
+      return <Navigate to={getHomeRouteForRole(normalizedRole)} replace />;
     }
   }
 

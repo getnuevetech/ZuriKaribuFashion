@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zuri Karibu</title>
+    <script>
+      (function () {
+        var routeMap = {
+          '/': '/main',
+          '/home': '/main',
+          '/main': '/main',
+          '/jenks': '/main',
+          '/jenks-dynamic': '/main',
+          '/home-jenks': '/main',
+          '/home-legacy': '/main',
+          '/legacy': '/main',
+          '/home-kimi': '/main',
+          '/shop': '/main',
+          '/ready-to-wear': '/ready-to-wear',
+          '/rtw': '/ready-to-wear',
+          '/fabrics': '/fabrics',
+          '/ftb': '/fabrics',
+          '/fabric-to-buy': '/fabrics',
+          '/fabrics-to-buy': '/fabrics',
+          '/custom': '/custom',
+          '/ctw': '/custom',
+          '/customtowear': '/custom',
+          '/custom-to-wear': '/custom',
+          '/contact': '/contact',
+          '/contact-us': '/contact',
+          '/support': '/help-center',
+          '/faq': '/help-center',
+          '/terms': '/help-center',
+          '/privacy': '/help-center',
+          '/legal/terms': '/help-center',
+          '/legal/privacy': '/help-center',
+          '/login': '/auth/login',
+          '/auth/login': '/auth/login',
+          '/signin': '/auth/login',
+          '/sign-in': '/auth/login',
+          '/register': '/auth/register',
+          '/auth/register': '/auth/register',
+          '/signup': '/auth/register',
+          '/sign-up': '/auth/register',
+          '/forgot-password': '/auth/forgot-password',
+          '/auth/forgot-password': '/auth/forgot-password',
+          '/reset-password': '/auth/reset-password',
+          '/auth/reset-password': '/auth/reset-password'
+        };
+
+        var normalizeHashPath = function (hashValue) {
+          var value = String(hashValue || '').trim();
+          if (!value) return '';
+          if (value.indexOf('#') === 0) value = value.slice(1);
+          try {
+            value = decodeURIComponent(value);
+          } catch (_error) {}
+          // Normalize malformed static hashes like "#/#signin" or "#/#/signin".
+          value = value.replace(/^\/#\/?/, '/');
+          value = value.replace(/^#\/?/, '/');
+          if (value.indexOf('/') !== 0) value = '/' + value;
+          value = value.replace(/\/{2,}/g, '/');
+          var queryIndex = value.indexOf('?');
+          var pathPart = queryIndex >= 0 ? value.slice(0, queryIndex) : value;
+          var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
+          pathPart = pathPart.replace(/\/+$/, '');
+          if (!pathPart) pathPart = '/';
+          value = pathPart + queryPart;
+          return value;
+        };
+
+        var redirectFromHash = function () {
+          var rawHash = String(window.location.hash || '').trim();
+          if (!rawHash) return;
+          var value = normalizeHashPath(rawHash);
+          if (!value) return;
+          var queryIndex = value.indexOf('?');
+          var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
+          var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
+          var target = routeMap[pathPart];
+          if (!target) return;
+          window.location.replace(target + queryPart);
+        };
+
+        document.addEventListener(
+          'click',
+          function (event) {
+            var node = event.target;
+            while (node && node.tagName !== 'A') node = node.parentElement;
+            if (!node) return;
+            var href = String(node.getAttribute('href') || '').trim().toLowerCase();
+            if (
+              href === '#/#signin' ||
+              href === '#/signin' ||
+              href === '#signin' ||
+              href === '#/#sign-in' ||
+              href === '#/sign-in' ||
+              href === '#sign-in'
+            ) {
+              event.preventDefault();
+              window.location.replace('/auth/login');
+              return;
+            }
+            if (
+              href === '#/#shop' ||
+              href === '#/shop' ||
+              href === '#shop'
+            ) {
+              event.preventDefault();
+              window.location.replace('/main');
+            }
+          },
+          true
+        );
+        window.addEventListener('hashchange', redirectFromHash);
+        redirectFromHash();
+      })();
+    </script>
+    <script type="module" crossorigin src="/kimi-v14-r20260320-35/assets/index-D3KtpC4K.js"></script>
+    <link rel="stylesheet" crossorigin href="/kimi-v14-r20260320-35/assets/index-BeQQTtR9.css" />
+    <script defer src="/main/jenks-config-bridge.js?v=20260325i"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

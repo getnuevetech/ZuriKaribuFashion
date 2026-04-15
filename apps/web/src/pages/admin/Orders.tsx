@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Search, 
   Filter, 
@@ -7,11 +8,14 @@ import {
   CheckCircle,
   XCircle,
   UserCheck,
-  Package
+  Package,
+  MessageSquare
 } from 'lucide-react';
 import { api } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import OrderSupportModal from '../../components/orders/OrderSupportModal';
+import { useAuthStore } from '../../store/authStore';
 
 interface Order {
   id: string;
@@ -28,17 +32,147 @@ interface Order {
   createdAt: string;
 }
 
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeOrderRow = (input: any): Order => {
+  const customerFirst = String(input?.customer?.firstName || '').trim();
+  const customerLast = String(input?.customer?.lastName || '').trim();
+  const customerName =
+    String(input?.customerName || '').trim() ||
+    [customerFirst, customerLast].filter(Boolean).join(' ').trim() ||
+    'Customer';
+  const designName =
+    String(input?.designName || '').trim() ||
+    String(input?.designOrder?.design?.name || '').trim() ||
+    'N/A';
+  const designerName =
+    String(input?.designerName || '').trim() ||
+    String(input?.designOrder?.design?.designer?.businessName || '').trim() ||
+    'Designer';
+  const fabricSellerName =
+    String(input?.fabricSellerName || '').trim() ||
+    String(input?.fabricOrder?.fabric?.seller?.businessName || '').trim() ||
+    'Seller';
+
+  return {
+    id: String(input?.id || ''),
+    orderNumber: String(input?.orderNumber || '').trim() || 'ORDER',
+    customerName,
+    designName,
+    designerName,
+    fabricSellerName,
+    totalAmount: toFiniteNumber(input?.totalAmount ?? input?.total ?? 0, 0),
+    status: String(input?.status || 'PENDING').toUpperCase(),
+    designStatus: String(input?.designStatus || 'N/A'),
+    fabricStatus: String(input?.fabricStatus || 'N/A'),
+    qaStatus: String(input?.qaStatus || 'N/A'),
+    createdAt: String(input?.createdAt || new Date().toISOString()),
+  };
+};
+
+interface AdminTicketRow {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  orderStatus: string;
+  subject: string;
+  status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED';
+  assignedToRole: string | null;
+  assignedToUserId: string | null;
+  assignedToUserName: string;
+  customerName: string;
+  dueAt: string | null;
+  escalatedAt: string | null;
+  escalationStatus: string;
+  isOverdue: boolean;
+  messageCount: number;
+  lastMessagePreview: string;
+  updatedAt: string;
+}
+
+type OrderManagementTab = 'all' | 'list' | 'ticket-queue' | 'ticketing-workflow' | 'processing-workflow';
+
+const resolveOrderManagementTab = (value: unknown): OrderManagementTab => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'list') return 'list';
+  if (normalized === 'ticket-queue') return 'ticket-queue';
+  if (normalized === 'ticketing-workflow') return 'ticketing-workflow';
+  if (normalized === 'processing-workflow') return 'processing-workflow';
+  return 'all';
+};
+
 export default function AdminOrders() {
+  const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [workflowSettings, setWorkflowSettings] = useState<any | null>(null);
+  const [savingWorkflow, setSavingWorkflow] = useState(false);
+  const [workflowMessage, setWorkflowMessage] = useState('');
+  const [ticketingSettings, setTicketingSettings] = useState<any | null>(null);
+  const [translationSettings, setTranslationSettings] = useState<any | null>(null);
+  const [savingTicketing, setSavingTicketing] = useState(false);
+  const [savingTranslationSettings, setSavingTranslationSettings] = useState(false);
+  const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
+  const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
+  const [tickets, setTickets] = useState<AdminTicketRow[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState('');
+  const [ticketEscalatedFilter, setTicketEscalatedFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [ticketAssignedRoleFilter, setTicketAssignedRoleFilter] = useState('');
+  const [ticketPage, setTicketPage] = useState(1);
+  const [ticketPages, setTicketPages] = useState(1);
+  const [adminRoleOptions, setAdminRoleOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const { user } = useAuthStore();
+  const userPermissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  const canManageTicketingTranslations =
+    userPermissions.length === 0 ||
+    userPermissions.includes('*') ||
+    userPermissions.includes('orders:ticketing:translation:manage');
+  const activeManagementTab = resolveOrderManagementTab(searchParams.get('tab'));
+  const showOrderList = activeManagementTab === 'all' || activeManagementTab === 'list';
+  const showTicketQueue = activeManagementTab === 'all' || activeManagementTab === 'ticket-queue';
+  const showTicketingWorkflow = activeManagementTab === 'all' || activeManagementTab === 'ticketing-workflow';
+  const showProcessingWorkflow = activeManagementTab === 'all' || activeManagementTab === 'processing-workflow';
+  const formatTicketRoleLabel = (value: unknown) => {
+    const token = String(value || '').trim();
+    if (!token) return '';
+    if (token.startsWith('ADMIN_ROLE:')) {
+      const roleId = token.slice('ADMIN_ROLE:'.length);
+      const matched = adminRoleOptions.find((row) => row.id === roleId);
+      return matched ? `Admin Role: ${matched.name}` : 'Admin Role';
+    }
+    if (token === 'ADMINISTRATOR') return 'Admin';
+    if (token === 'QA_TEAM') return 'QA';
+    if (token === 'FABRIC_SELLER') return 'Seller';
+    if (token === 'FASHION_DESIGNER') return 'Designer';
+    if (token === 'CUSTOMER') return 'Customer';
+    return token;
+  };
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+    fetchWorkflowSettings();
+    fetchTicketingSettings();
+    void fetchTranslationSettings();
+    void fetchAdminRoles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManageTicketingTranslations]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void fetchTickets();
+    }, 250);
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketSearch, ticketStatusFilter, ticketEscalatedFilter, ticketAssignedRoleFilter, ticketPage]);
 
   const fetchOrders = async () => {
     try {
@@ -47,7 +181,8 @@ export default function AdminOrders() {
         status: statusFilter || undefined,
       });
       if (response.success) {
-        setOrders(response.data.orders);
+        const rows = Array.isArray((response.data as any)?.orders) ? (response.data as any).orders : [];
+        setOrders(rows.map((row: any) => normalizeOrderRow(row)));
       }
     } catch (error) {
       console.error('Failed to fetch orders:', error);
@@ -56,20 +191,151 @@ export default function AdminOrders() {
     }
   };
 
-  const handleAssignQA = async (orderId: string, qaId: string) => {
+  const fetchWorkflowSettings = async () => {
     try {
-      await api.admin.assignQA(orderId, qaId);
-      fetchOrders();
+      const response = await api.admin.getOrderWorkflowSettings();
+      if (response.success) {
+        setWorkflowSettings(response.data || null);
+      }
     } catch (error) {
-      console.error('Failed to assign QA:', error);
+      console.error('Failed to fetch workflow settings:', error);
+    }
+  };
+
+  const fetchTicketingSettings = async () => {
+    try {
+      const response = await api.admin.getOrderTicketingSettings();
+      if (response.success) setTicketingSettings(response.data || null);
+    } catch (error) {
+      console.error('Failed to load ticketing settings:', error);
+    }
+  };
+  const fetchTranslationSettings = async () => {
+    if (!canManageTicketingTranslations) {
+      setTranslationSettings(null);
+      return;
+    }
+    try {
+      const response = await api.admin.getOrderTicketingTranslationSettings();
+      if (response.success) {
+        setTranslationSettings(response.data || null);
+      }
+    } catch (error) {
+      console.error('Failed to load ticketing translation settings:', error);
+      setTranslationSettings(null);
+    }
+  };
+
+  const fetchAdminRoles = async () => {
+    try {
+      const response = await api.admin.getAdminRoles();
+      if (response.success) {
+        const rows = Array.isArray(response.data) ? response.data : [];
+        setAdminRoleOptions(
+          rows
+            .filter((row: any) => row?.isActive !== false)
+            .map((row: any) => ({ id: String(row.id || ''), name: String(row.name || '') }))
+            .filter((row) => row.id && row.name)
+        );
+      }
+    } catch (error) {
+      console.error('Failed to load admin roles for ticketing controls:', error);
+      setAdminRoleOptions([]);
+    }
+  };
+
+  const fetchTickets = async () => {
+    try {
+      setTicketsLoading(true);
+      const response = await api.orders.listAdminTickets({
+        search: ticketSearch || undefined,
+        status: ticketStatusFilter || undefined,
+        assignedRole: ticketAssignedRoleFilter || undefined,
+        escalated: ticketEscalatedFilter === 'all' ? undefined : ticketEscalatedFilter === 'yes',
+        page: ticketPage,
+        limit: 8,
+      });
+      if (response.success) {
+        setTickets(Array.isArray(response.data) ? (response.data as AdminTicketRow[]) : []);
+        setTicketPages(Math.max(1, Number((response as any)?.pagination?.pages || 1)));
+      }
+    } catch (error) {
+      console.error('Failed to load tickets:', error);
+    } finally {
+      setTicketsLoading(false);
+    }
+  };
+
+  const handleSaveWorkflowSettings = async () => {
+    if (!workflowSettings) return;
+    try {
+      setSavingWorkflow(true);
+      setWorkflowMessage('');
+      const response = await api.admin.updateOrderWorkflowSettings(workflowSettings);
+      if (response.success) {
+        setWorkflowSettings(response.data || workflowSettings);
+        setWorkflowMessage('Order workflow settings saved.');
+      }
+    } catch (error: any) {
+      setWorkflowMessage(error?.response?.data?.message || 'Failed to save workflow settings.');
+    } finally {
+      setSavingWorkflow(false);
+    }
+  };
+
+  const handleRunAutoClose = async () => {
+    try {
+      const response = await api.admin.autoCloseOverdueOrders();
+      setWorkflowMessage(response.message || 'Auto-close completed.');
+      fetchOrders();
+    } catch (error: any) {
+      setWorkflowMessage(error?.response?.data?.message || 'Auto-close failed.');
+    }
+  };
+
+  const handleSaveTicketingSettings = async () => {
+    if (!ticketingSettings) return;
+    try {
+      setSavingTicketing(true);
+      setWorkflowMessage('');
+      const response = await api.admin.updateOrderTicketingSettings(ticketingSettings);
+      if (response.success) {
+        setTicketingSettings(response.data || ticketingSettings);
+        setWorkflowMessage('Order ticketing settings saved.');
+      }
+    } catch (error: any) {
+      setWorkflowMessage(error?.response?.data?.message || 'Failed to save order ticketing settings.');
+    } finally {
+      setSavingTicketing(false);
+    }
+  };
+  const handleSaveTranslationSettings = async () => {
+    if (!translationSettings || !canManageTicketingTranslations) return;
+    try {
+      setSavingTranslationSettings(true);
+      setWorkflowMessage('');
+      const response = await api.admin.updateOrderTicketingTranslationSettings({
+        enabled: translationSettings.enabled !== false,
+        defaultLanguage: String(translationSettings.defaultLanguage || 'en').trim().toLowerCase() || 'en',
+      });
+      if (response.success) {
+        setTranslationSettings(response.data || translationSettings);
+        setWorkflowMessage('Ticket translation settings saved.');
+      }
+    } catch (error: any) {
+      setWorkflowMessage(error?.response?.data?.message || 'Failed to save ticket translation settings.');
+    } finally {
+      setSavingTranslationSettings(false);
     }
   };
 
   const filteredOrders = orders.filter(order => {
+    const orderNumber = String(order?.orderNumber || '').toLowerCase();
+    const customerName = String(order?.customerName || '').toLowerCase();
     const matchesSearch = 
-      order.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
-      order.customerName.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !statusFilter || order.status === statusFilter;
+      orderNumber.includes(search.toLowerCase()) ||
+      customerName.includes(search.toLowerCase());
+    const matchesStatus = !statusFilter || String(order?.status || '') === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -91,6 +357,7 @@ export default function AdminOrders() {
       </div>
 
       {/* Filters */}
+      {showOrderList ? (
       <div className="flex flex-wrap gap-4">
         <div className="flex-1 min-w-[200px]">
           <div className="relative">
@@ -110,13 +377,21 @@ export default function AdminOrders() {
           className="px-4 py-2 border rounded-lg"
         >
           <option value="">All Status</option>
-          <option value="PENDING">Pending</option>
-          <option value="CONFIRMED">Confirmed</option>
+          <option value="PENDING_PAYMENT">Pending Payment</option>
+          <option value="PAYMENT_CONFIRMED">Payment Confirmed</option>
+          <option value="FABRIC_PENDING">Fabric Pending</option>
+          <option value="FABRIC_CONFIRMED">Fabric Confirmed</option>
+          <option value="FABRIC_SHIPPED">Fabric Shipped</option>
+          <option value="FABRIC_RECEIVED">Fabric Received</option>
           <option value="IN_PRODUCTION">In Production</option>
-          <option value="QA_REVIEW">QA Review</option>
-          <option value="READY_FOR_SHIPPING">Ready for Shipping</option>
+          <option value="PRODUCTION_COMPLETE">Production Complete</option>
+          <option value="QA_PENDING">QA Pending</option>
+          <option value="QA_INSPECTING">QA Inspecting</option>
+          <option value="QA_APPROVED">QA Approved</option>
+          <option value="QA_REJECTED">QA Rejected</option>
           <option value="SHIPPED">Shipped</option>
           <option value="DELIVERED">Delivered</option>
+          <option value="COMPLETED">Completed</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
         <Button variant="outline" onClick={fetchOrders}>
@@ -124,8 +399,692 @@ export default function AdminOrders() {
           Filter
         </Button>
       </div>
+      ) : null}
+
+      {showProcessingWorkflow && workflowSettings ? (
+        <div className="bg-white rounded-xl border p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900">Order Processing Workflow</h2>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleRunAutoClose}>
+                Auto-close overdue delivered
+              </Button>
+              <Button onClick={handleSaveWorkflowSettings} disabled={savingWorkflow}>
+                {savingWorkflow ? 'Saving...' : 'Save Workflow'}
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="text-sm text-gray-700">
+              Processing mode
+              <select
+                value={workflowSettings.processingMode || 'MANUAL'}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({ ...prev, processingMode: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                <option value="MANUAL">Manual admin verification</option>
+                <option value="AUTO">Auto processing (criteria required)</option>
+              </select>
+            </label>
+            <label className="text-sm text-gray-700">
+              Auto-close window (days)
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={workflowSettings.autoCloseDays || 3}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({ ...prev, autoCloseDays: Number(event.target.value || 3) }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              Reminder lead time (hours)
+              <input
+                type="number"
+                min={1}
+                max={720}
+                value={workflowSettings.reminderLeadHours || 24}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    reminderLeadHours: Number(event.target.value || 24),
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <label className="text-sm text-gray-700">
+              Admin review SLA (hrs)
+              <input
+                type="number"
+                min={1}
+                value={workflowSettings.slaHours?.adminReview || 24}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    slaHours: { ...(prev?.slaHours || {}), adminReview: Number(event.target.value || 24) },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              Vendor fulfillment SLA (hrs)
+              <input
+                type="number"
+                min={1}
+                value={workflowSettings.slaHours?.vendorFulfillment || 72}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    slaHours: { ...(prev?.slaHours || {}), vendorFulfillment: Number(event.target.value || 72) },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              QA review SLA (hrs)
+              <input
+                type="number"
+                min={1}
+                value={workflowSettings.slaHours?.qaReview || 24}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    slaHours: { ...(prev?.slaHours || {}), qaReview: Number(event.target.value || 24) },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              Customer concern window (hrs)
+              <input
+                type="number"
+                min={1}
+                value={workflowSettings.slaHours?.customerConcernWindow || 72}
+                onChange={(event) =>
+                  setWorkflowSettings((prev: any) => ({
+                    ...prev,
+                    slaHours: {
+                      ...(prev?.slaHours || {}),
+                      customerConcernWindow: Number(event.target.value || 72),
+                    },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+          </div>
+          <div className="rounded-lg border border-gray-200 p-3">
+            <h3 className="text-sm font-semibold text-gray-900">Order Limits by Category</h3>
+            <p className="mt-1 text-xs text-gray-600">
+              Configure maximum/minimum checkout limits for Ready To Wear, Custom To Wear, and Fabric To Buy.
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+              <label className="text-sm text-gray-700">
+                RTW max units/order
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={Number(workflowSettings.orderLimits?.maxReadyToWearUnitsPerOrder || 3)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        maxReadyToWearUnitsPerOrder: Number(event.target.value || 3),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                CTW max items/checkout
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={Number(workflowSettings.orderLimits?.maxCustomToWearItemsPerCheckout || 3)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        maxCustomToWearItemsPerCheckout: Number(event.target.value || 3),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                CTW max suitable fabrics/design
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={Number(workflowSettings.orderLimits?.maxSuitableFabricsPerDesign || 5)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        maxSuitableFabricsPerDesign: Number(event.target.value || 5),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                FTB min yards/order
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={Number(workflowSettings.orderLimits?.minFabricYardsPerOrder || 3)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        minFabricYardsPerOrder: Number(event.target.value || 3),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                FTB max yards/checkout
+                <input
+                  type="number"
+                  min={1}
+                  max={5000}
+                  value={Number(workflowSettings.orderLimits?.maxFabricYardsPerOrder || 200)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderLimits: {
+                        ...(prev?.orderLimits || {}),
+                        maxFabricYardsPerOrder: Number(event.target.value || 200),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+            </div>
+          </div>
+          <div className="rounded-lg border border-gray-200 p-3">
+            <h3 className="text-sm font-semibold text-gray-900">Order Numbering</h3>
+            <p className="mt-1 text-xs text-gray-600">
+              Configure category prefixes and numbering style used during checkout order creation.
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+              <label className="text-sm text-gray-700">
+                RTW prefix
+                <input
+                  type="text"
+                  maxLength={8}
+                  value={String(workflowSettings.orderNumbering?.categoryPrefixes?.READY_TO_WEAR || 'RTW')}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        categoryPrefixes: {
+                          ...(prev?.orderNumbering?.categoryPrefixes || {}),
+                          READY_TO_WEAR: String(event.target.value || 'RTW')
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9]+/g, ''),
+                        },
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                CTW prefix
+                <input
+                  type="text"
+                  maxLength={8}
+                  value={String(workflowSettings.orderNumbering?.categoryPrefixes?.CUSTOM_DESIGN || 'CTW')}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        categoryPrefixes: {
+                          ...(prev?.orderNumbering?.categoryPrefixes || {}),
+                          CUSTOM_DESIGN: String(event.target.value || 'CTW')
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9]+/g, ''),
+                        },
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                FTB prefix
+                <input
+                  type="text"
+                  maxLength={8}
+                  value={String(workflowSettings.orderNumbering?.categoryPrefixes?.FABRIC_ONLY || 'FTB')}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        categoryPrefixes: {
+                          ...(prev?.orderNumbering?.categoryPrefixes || {}),
+                          FABRIC_ONLY: String(event.target.value || 'FTB')
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9]+/g, ''),
+                        },
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                Base token length
+                <input
+                  type="number"
+                  min={6}
+                  max={16}
+                  value={Number(workflowSettings.orderNumbering?.baseTokenLength || 8)}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        baseTokenLength: Number(event.target.value || 8),
+                      },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="inline-flex items-center gap-2 self-end rounded-lg border px-3 py-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={workflowSettings.orderNumbering?.useVariantSuffix !== false}
+                  onChange={(event) =>
+                    setWorkflowSettings((prev: any) => ({
+                      ...prev,
+                      orderNumbering: {
+                        ...(prev?.orderNumbering || {}),
+                        useVariantSuffix: event.target.checked,
+                      },
+                    }))
+                  }
+                />
+                Use suffix for split orders (-1, -2)
+              </label>
+            </div>
+          </div>
+          {workflowMessage ? <p className="text-xs text-emerald-700">{workflowMessage}</p> : null}
+        </div>
+      ) : null}
+
+      {showTicketingWorkflow && ticketingSettings ? (
+        <div className="bg-white rounded-xl border p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900">Order Ticketing Workflow Controls</h2>
+            <Button onClick={handleSaveTicketingSettings} disabled={savingTicketing}>
+              {savingTicketing ? 'Saving...' : 'Save Ticketing Settings'}
+            </Button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={ticketingSettings.enabled !== false}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), enabled: event.target.checked }))
+                }
+              />
+              Enable ticketing on orders
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(ticketingSettings.defaultVisibleToCustomer)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), defaultVisibleToCustomer: event.target.checked }))
+                }
+              />
+              Internal team messages visible to customer by default
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(ticketingSettings.allowVendorToVendorDirect)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), allowVendorToVendorDirect: event.target.checked }))
+                }
+              />
+              Allow Seller ↔ Designer messaging
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(ticketingSettings.allowVendorToCustomerDirect)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), allowVendorToCustomerDirect: event.target.checked }))
+                }
+              />
+              Allow Vendor → Customer messaging
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={Boolean(ticketingSettings.allowCustomerToVendorDirect)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), allowCustomerToVendorDirect: event.target.checked }))
+                }
+              />
+              Allow Customer → Vendor messaging
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={ticketingSettings.allowQaToVendorMessaging !== false}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), allowQaToVendorMessaging: event.target.checked }))
+                }
+              />
+              Allow QA ↔ Vendor messaging
+            </label>
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={ticketingSettings.autoAssignEnabled !== false}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), autoAssignEnabled: event.target.checked }))
+                }
+              />
+              Auto-assign new tickets
+            </label>
+            <label className="text-sm text-gray-700">
+              Auto-assign role
+              <select
+                value={String(ticketingSettings.autoAssignRole || 'QA_TEAM')}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), autoAssignRole: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                <option value="QA_TEAM">QA</option>
+                <option value="ADMINISTRATOR">Admin</option>
+                <option value="FABRIC_SELLER">Seller</option>
+                <option value="FASHION_DESIGNER">Designer</option>
+                {adminRoleOptions.map((role) => (
+                  <option key={`auto-${role.id}`} value={`ADMIN_ROLE:${role.id}`}>
+                    Admin Role: {role.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm text-gray-700">
+              Ticket response SLA (hours)
+              <input
+                type="number"
+                min={1}
+                max={720}
+                value={Number(ticketingSettings.slaResponseHours || 24)}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({
+                    ...(prev || {}),
+                    slaResponseHours: Number(event.target.value || 24),
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-gray-700">
+              Escalation role
+              <select
+                value={String(ticketingSettings.escalationRole || 'ADMINISTRATOR')}
+                onChange={(event) =>
+                  setTicketingSettings((prev: any) => ({ ...(prev || {}), escalationRole: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                <option value="ADMINISTRATOR">Admin</option>
+                <option value="QA_TEAM">QA</option>
+                <option value="FABRIC_SELLER">Seller</option>
+                <option value="FASHION_DESIGNER">Designer</option>
+                {adminRoleOptions.map((role) => (
+                  <option key={`esc-${role.id}`} value={`ADMIN_ROLE:${role.id}`}>
+                    Admin Role: {role.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      ) : null}
+
+      {showTicketingWorkflow && canManageTicketingTranslations && translationSettings ? (
+        <div className="bg-white rounded-xl border p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900">Ticket Translation Controls</h2>
+            <Button onClick={handleSaveTranslationSettings} disabled={savingTranslationSettings}>
+              {savingTranslationSettings ? 'Saving...' : 'Save Translation Settings'}
+            </Button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={translationSettings.enabled !== false}
+                onChange={(event) =>
+                  setTranslationSettings((prev: any) => ({ ...(prev || {}), enabled: event.target.checked }))
+                }
+              />
+              Enable multilingual message translation
+            </label>
+            <label className="text-sm text-gray-700">
+              Default ticket language
+              <select
+                value={String(translationSettings.defaultLanguage || 'en').toLowerCase()}
+                onChange={(event) =>
+                  setTranslationSettings((prev: any) => ({
+                    ...(prev || {}),
+                    defaultLanguage: String(event.target.value || 'en').toLowerCase(),
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                {(Array.isArray(translationSettings.supportedLanguages) ? translationSettings.supportedLanguages : []).map((row: any) => (
+                  <option key={`translation-language-${String(row?.code || '')}`} value={String(row?.code || '').toLowerCase()}>
+                    {String(row?.label || row?.code || '').trim() || 'Language'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+              Customers, QA, and Admin agents can select their own preferred language in the ticket console. Messages are
+              translated to the viewer preference automatically.
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showTicketQueue ? (
+      <div className="bg-white rounded-xl border p-4 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-gray-900">Ticket Queue</h2>
+          <Button variant="outline" onClick={() => void fetchTickets()} disabled={ticketsLoading}>
+            Refresh Tickets
+          </Button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          <input
+            value={ticketSearch}
+            onChange={(event) => {
+              setTicketPage(1);
+              setTicketSearch(event.target.value);
+            }}
+            placeholder="Search order #, subject, customer"
+            className="rounded-lg border px-3 py-2 text-sm"
+          />
+          <select
+            value={ticketStatusFilter}
+            onChange={(event) => {
+              setTicketPage(1);
+              setTicketStatusFilter(event.target.value);
+            }}
+            className="rounded-lg border px-3 py-2 text-sm"
+          >
+            <option value="">All statuses</option>
+            <option value="OPEN">OPEN</option>
+            <option value="PENDING">PENDING</option>
+            <option value="RESOLVED">RESOLVED</option>
+            <option value="CLOSED">CLOSED</option>
+          </select>
+          <select
+            value={ticketAssignedRoleFilter}
+            onChange={(event) => {
+              setTicketPage(1);
+              setTicketAssignedRoleFilter(event.target.value);
+            }}
+            className="rounded-lg border px-3 py-2 text-sm"
+          >
+            <option value="">All assignees</option>
+            <option value="ADMINISTRATOR">Admin</option>
+            <option value="QA_TEAM">QA</option>
+            <option value="FABRIC_SELLER">Seller</option>
+            <option value="FASHION_DESIGNER">Designer</option>
+            {adminRoleOptions.map((role) => (
+              <option key={`filter-${role.id}`} value={`ADMIN_ROLE:${role.id}`}>
+                Admin Role: {role.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={ticketEscalatedFilter}
+            onChange={(event) => {
+              setTicketPage(1);
+              setTicketEscalatedFilter(event.target.value as 'all' | 'yes' | 'no');
+            }}
+            className="rounded-lg border px-3 py-2 text-sm"
+          >
+            <option value="all">Escalation: all</option>
+            <option value="yes">Escalated only</option>
+            <option value="no">Not escalated</option>
+          </select>
+        </div>
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Order</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Ticket</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Assignee</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Due</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Messages</th>
+                <th className="px-3 py-2 text-left font-medium text-gray-600">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ticketsLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-gray-500">
+                    Loading tickets...
+                  </td>
+                </tr>
+              ) : tickets.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-gray-500">
+                    No tickets found.
+                  </td>
+                </tr>
+              ) : (
+                tickets.map((ticket) => (
+                  <tr key={ticket.id} className="border-t">
+                    <td className="px-3 py-2">
+                      <p className="font-medium text-gray-900">{ticket.orderNumber}</p>
+                      <p className="text-xs text-gray-500">{ticket.customerName}</p>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{ticket.status}</Badge>
+                        {ticket.escalatedAt ? <Badge variant="red">Escalated</Badge> : null}
+                      </div>
+                      <p className="mt-1 max-w-[300px] truncate text-xs text-gray-600">
+                        {ticket.subject || ticket.lastMessagePreview || 'No subject'}
+                      </p>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-700">
+                      {ticket.assignedToUserName || formatTicketRoleLabel(ticket.assignedToRole) || 'Unassigned'}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-700">
+                      {ticket.dueAt ? new Date(ticket.dueAt).toLocaleString() : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-700">{ticket.messageCount}</td>
+                    <td className="px-3 py-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSupportInitialTab('ticket');
+                          setSupportOrderId(ticket.orderId);
+                        }}
+                      >
+                        Open
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={ticketPage <= 1}
+            onClick={() => setTicketPage((previous) => Math.max(1, previous - 1))}
+          >
+            Prev
+          </Button>
+          <span className="text-xs text-gray-500">
+            Page {ticketPage} / {ticketPages}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={ticketPage >= ticketPages}
+            onClick={() => setTicketPage((previous) => Math.min(ticketPages, previous + 1))}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+      ) : null}
 
       {/* Orders Table */}
+      {showOrderList ? (
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -179,15 +1138,28 @@ export default function AdminOrders() {
                     {new Date(order.createdAt).toLocaleDateString()}
                   </td>
                   <td className="py-3 px-4">
-                    <button 
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setShowDetailModal(true);
-                      }}
-                      className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setShowDetailModal(true);
+                        }}
+                        className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg"
+                        title="View details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSupportInitialTab('ticket');
+                          setSupportOrderId(order.id);
+                        }}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                        title="Open ticket console"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -195,11 +1167,12 @@ export default function AdminOrders() {
           </table>
         </div>
       </div>
+      ) : null}
 
       {/* Order Detail Modal */}
       {showDetailModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-auto p-6">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-4xl rounded-2xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold">Order Details</h3>
               <button 
@@ -283,11 +1256,28 @@ export default function AdminOrders() {
                   <CheckCircle className="w-4 h-4 mr-2" />
                   Mark Complete
                 </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setSupportInitialTab('ticket');
+                    setSupportOrderId(selectedOrder.id);
+                  }}
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Ticket Console
+                </Button>
               </div>
             </div>
           </div>
         </div>
       )}
+      <OrderSupportModal
+        isOpen={Boolean(supportOrderId)}
+        orderId={supportOrderId}
+        initialTab={supportInitialTab}
+        onClose={() => setSupportOrderId(null)}
+      />
     </div>
   );
 }

@@ -1,8 +1,106 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
+import { z } from 'zod';
 import { prisma } from '../db';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizePermissions } from '../middleware/auth';
+import { Permissions } from '../rbac';
+import { parseStoredJsonValue } from '../utils/parse-stored-json-value';
 
 const router = Router();
+const HOMEPAGE_PROMO_BADGE_SETTINGS_KEY = 'HOMEPAGE_PROMO_BADGE';
+
+const promoBadgeUpdateSchema = z.object({
+  valueText: z.string().trim().min(1).max(30),
+  labelText: z.string().trim().min(1).max(120),
+});
+
+type PromoBadgeSettings = {
+  valueText: string;
+  labelText: string;
+};
+
+const PROMO_BADGE_DEFAULTS: PromoBadgeSettings = {
+  valueText: '50+',
+  labelText: 'New Arrivals',
+};
+
+const normalizePromoBadgeSettings = (raw: unknown): PromoBadgeSettings => {
+  if (!raw || typeof raw !== 'object') return { ...PROMO_BADGE_DEFAULTS };
+  const row = raw as Record<string, unknown>;
+  const valueText = String(row.valueText || '').trim();
+  const labelText = String(row.labelText || '').trim();
+  return {
+    valueText: valueText.length > 0 ? valueText.slice(0, 30) : PROMO_BADGE_DEFAULTS.valueText,
+    labelText: labelText.length > 0 ? labelText.slice(0, 120) : PROMO_BADGE_DEFAULTS.labelText,
+  };
+};
+
+const ensureHomepageSectionSettingTable = async () => {
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
+      "id" TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" TEXT NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "HomepageSectionSetting_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
+  );
+};
+
+const readPromoBadgeSettings = async () => {
+  await ensureHomepageSectionSettingTable();
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "id", "value"
+     FROM "HomepageSectionSetting"
+     WHERE "key" = $1
+     LIMIT 1`,
+    HOMEPAGE_PROMO_BADGE_SETTINGS_KEY
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) {
+    return { rowId: null as string | null, settings: { ...PROMO_BADGE_DEFAULTS } };
+  }
+  try {
+    return {
+      rowId: String(row.id),
+      settings: normalizePromoBadgeSettings(parseStoredJsonValue(row.value)),
+    };
+  } catch {
+    return { rowId: String(row.id), settings: { ...PROMO_BADGE_DEFAULTS } };
+  }
+};
+
+const savePromoBadgeSettings = async (rawInput: unknown) => {
+  const parsed = promoBadgeUpdateSchema.parse(rawInput);
+  const existing = await readPromoBadgeSettings();
+  const merged = normalizePromoBadgeSettings({
+    ...existing.settings,
+    ...parsed,
+  });
+  const payload = JSON.stringify(merged);
+  if (existing.rowId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting"
+       SET "value" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      payload,
+      existing.rowId
+    );
+    return merged;
+  }
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "HomepageSectionSetting" ("id", "key", "value", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, NOW(), NOW())`,
+    randomUUID(),
+    HOMEPAGE_PROMO_BADGE_SETTINGS_KEY,
+    payload
+  );
+  return merged;
+};
 
 // Get all banners (public - for frontend display)
 router.get('/', async (req, res) => {
@@ -41,7 +139,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get all banners for admin (including inactive) - MUST be before /:id
-router.get('/admin/all', authenticate, authorize('ADMINISTRATOR'), async (req, res) => {
+router.get('/admin/all', authenticate, authorizePermissions(Permissions.BANNERS_MANAGE), async (req, res) => {
   try {
     const banners = await prisma.banner.findMany({
       orderBy: {
@@ -62,8 +160,54 @@ router.get('/admin/all', authenticate, authorize('ADMINISTRATOR'), async (req, r
   }
 });
 
+router.get('/promo-badge', async (_req, res) => {
+  try {
+    const { settings } = await readPromoBadgeSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching promo badge settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch promo badge settings.' });
+  }
+});
+
+router.get('/admin/promo-badge', authenticate, authorizePermissions(Permissions.BANNERS_MANAGE), async (_req, res) => {
+  try {
+    const { settings } = await readPromoBadgeSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching admin promo badge settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch promo badge settings.' });
+  }
+});
+
+router.put('/admin/promo-badge', authenticate, authorizePermissions(Permissions.BANNERS_MANAGE), async (req, res) => {
+  try {
+    const settings = await savePromoBadgeSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating promo badge settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update promo badge settings.' });
+  }
+});
+
+router.patch('/admin/promo-badge', authenticate, authorizePermissions(Permissions.BANNERS_MANAGE), async (req, res) => {
+  try {
+    const settings = await savePromoBadgeSettings(req.body);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error updating promo badge settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update promo badge settings.' });
+  }
+});
+
 // Create new banner (admin only)
-router.post('/', authenticate, authorize('ADMINISTRATOR'), async (req, res) => {
+router.post('/', authenticate, authorizePermissions(Permissions.BANNERS_MANAGE), async (req, res) => {
   try {
     const { name, section, title, subtitle, ctaText, ctaLink, images, isActive, displayOrder } = req.body;
 
@@ -112,7 +256,7 @@ router.post('/', authenticate, authorize('ADMINISTRATOR'), async (req, res) => {
 });
 
 // Toggle banner active status (admin only) - MUST be before /:id
-router.patch('/:id/toggle', authenticate, authorize('ADMINISTRATOR'), async (req, res) => {
+router.patch('/:id/toggle', authenticate, authorizePermissions(Permissions.BANNERS_MANAGE), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -172,7 +316,7 @@ router.get('/meta/sections', async (req, res) => {
 });
 
 // Get banner by ID (admin only) - MUST be after static routes like /admin/all
-router.get('/:id', authenticate, authorize('ADMINISTRATOR'), async (req, res) => {
+router.get('/:id', authenticate, authorizePermissions(Permissions.BANNERS_MANAGE), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -201,7 +345,7 @@ router.get('/:id', authenticate, authorize('ADMINISTRATOR'), async (req, res) =>
 });
 
 // Update banner (admin only)
-router.put('/:id', authenticate, authorize('ADMINISTRATOR'), async (req, res) => {
+router.put('/:id', authenticate, authorizePermissions(Permissions.BANNERS_MANAGE), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, section, title, subtitle, ctaText, ctaLink, images, isActive, displayOrder } = req.body;
@@ -248,7 +392,7 @@ router.put('/:id', authenticate, authorize('ADMINISTRATOR'), async (req, res) =>
 });
 
 // Delete banner (admin only)
-router.delete('/:id', authenticate, authorize('ADMINISTRATOR'), async (req, res) => {
+router.delete('/:id', authenticate, authorizePermissions(Permissions.BANNERS_MANAGE), async (req, res) => {
   try {
     const { id } = req.params;
 

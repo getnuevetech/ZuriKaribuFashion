@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, useGLTF, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -17,8 +17,34 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useCartStore } from '../store/cartStore';
+import { useCurrencyStore } from '../store/currencyStore';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+
+const asText = (value: unknown, fallback = '') => {
+  const token = String(value || '').trim();
+  return token || fallback;
+};
+
+const toNumber = (...values: unknown[]) => {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+};
+
+const firstImageUrl = (value: unknown) => {
+  const rows = Array.isArray(value) ? value : [];
+  for (const row of rows) {
+    if (typeof row === 'string' && row.trim()) return row.trim();
+    if (row && typeof row === 'object') {
+      const url = String((row as any)?.url || '').trim();
+      if (url) return url;
+    }
+  }
+  return '/images/placeholder.jpg';
+};
 
 // 3D Avatar Component
 function Avatar({ measurements, garmentUrl, fabricColor }: { 
@@ -143,7 +169,9 @@ export default function TryOn() {
   const { id } = useParams<{ id: string }>;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { items, addItem } = useCartStore();
+  const location = useLocation();
+  const { addItem } = useCartStore();
+  const { formatFromUsd } = useCurrencyStore();
   
   const fabricId = searchParams.get('fabric');
   const [design, setDesign] = useState<any>(null);
@@ -155,6 +183,8 @@ export default function TryOn() {
   const [viewMode, setViewMode] = useState<'3d' | 'ar'>('3d');
   const [rotation, setRotation] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [selectedFabricMeters, setSelectedFabricMeters] = useState(3);
+  const [notice, setNotice] = useState('');
   const canvasRef = useRef<any>(null);
 
   useEffect(() => {
@@ -164,16 +194,53 @@ export default function TryOn() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setNotice('');
+      const draft = ((location.state as any)?.tryOnDraft || {}) as Record<string, unknown>;
       const [designRes, fabricRes] = await Promise.all([
         api.products.getDesignById(id!),
         fabricId ? api.products.getFabricById(fabricId) : Promise.resolve(null)
       ]);
       
       if (designRes.success) {
-        setDesign(designRes.data);
+        const designData = designRes.data;
+        setDesign(designData);
+        const measurementRows = Array.isArray(designData?.measurements) ? designData.measurements : [];
+        const seededMeasurements: Record<string, number> = {};
+        for (const row of measurementRows) {
+          const key = asText(row?.name, '');
+          if (!key) continue;
+          const draftValue = toNumber((draft.measurements as any)?.[key], 0);
+          seededMeasurements[key] = draftValue > 0 ? draftValue : 0;
+        }
+        setMeasurements(seededMeasurements);
+
+        let resolvedFabric: any | null = null;
+        if (fabricRes?.success) {
+          resolvedFabric = fabricRes.data;
+        } else {
+          resolvedFabric = designData?.suitableFabrics?.[0]?.fabric || null;
+        }
+        if (resolvedFabric) {
+          const normalizedPricePerMeter = toNumber(
+            resolvedFabric?.pricePerMeter,
+            resolvedFabric?.finalPrice,
+            resolvedFabric?.sellerPrice,
+            0
+          );
+          setFabric({
+            ...resolvedFabric,
+            pricePerMeter: normalizedPricePerMeter,
+            images: Array.isArray(resolvedFabric?.images) ? resolvedFabric.images : [],
+          });
+          const draftMeters = toNumber(draft.fabricMeters, 0);
+          const minMeters = Math.max(1, toNumber(resolvedFabric?.minOrderMeters, 1));
+          setSelectedFabricMeters(draftMeters > 0 ? Math.max(minMeters, draftMeters) : Math.max(3, minMeters));
+        } else {
+          setFabric(null);
+        }
       }
       if (fabricRes?.success) {
-        setFabric(fabricRes.data);
+        setFabric((prev: any) => prev || fabricRes.data);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -191,26 +258,46 @@ export default function TryOn() {
   };
 
   const handleAddToCart = () => {
-    if (!design || !fabric) return;
+    if (!design) return;
+    if (!avatarGenerated) {
+      setNotice('Please generate your 3D avatar preview before adding to cart.');
+      return;
+    }
+    if (!fabric) {
+      setNotice('Please select a suitable fabric before adding this design to cart.');
+      return;
+    }
+    const requiredRows = (Array.isArray(design?.measurements) ? design.measurements : []).filter(
+      (row: any) => row?.isRequired !== false
+    );
+    const missingRequired = requiredRows.some((row: any) => toNumber(measurements[asText(row?.name, '')], 0) <= 0);
+    if (missingRequired) {
+      setNotice('Please fill all required measurements before adding this design to cart.');
+      return;
+    }
+    const fabricMeters = Math.max(1, Number(selectedFabricMeters || 1));
+    const fabricUnitPrice = toNumber(fabric?.pricePerMeter, fabric?.finalPrice, fabric?.sellerPrice, 0);
+    const designBasePrice = toNumber(design?.basePrice, design?.finalPrice, 0);
     
     const cartItem = {
       designId: design.id,
       designName: design.name,
-      designImage: design.images[0],
+      designImage: firstImageUrl(design.images),
       fabricId: fabric.id,
       fabricName: fabric.name,
-      fabricImage: fabric.images[0],
-      fabricMeters: 3,
-      fabricPrice: fabric.pricePerMeter,
+      fabricImage: firstImageUrl(fabric.images),
+      fabricMeters,
+      fabricPrice: fabricUnitPrice,
       designerId: design.designer.id,
       designerName: design.designer.businessName,
       measurements,
-      basePrice: design.basePrice,
-      totalPrice: design.basePrice + (fabric.pricePerMeter * 3),
+      basePrice: designBasePrice,
+      totalPrice: designBasePrice + (fabricUnitPrice * fabricMeters),
       tryOnImage: null, // Would capture canvas
     };
 
     addItem(cartItem);
+    setNotice('Virtual Try-On complete. Added to cart.');
     navigate('/cart');
   };
 
@@ -236,7 +323,7 @@ export default function TryOn() {
 
   const getFabricColor = () => {
     if (!fabric) return '#e8d5c4';
-    const color = fabricColors[fabric.name];
+    const color = fabricColors[asText(fabric.name)];
     return color || '#e8d5c4';
   };
 
@@ -397,7 +484,10 @@ export default function TryOn() {
               
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="text-2xl font-bold text-amber-700">
-                  ${((design?.basePrice || 0) + (fabric?.pricePerMeter || 0) * 3).toFixed(2)}
+                  {formatFromUsd(
+                    toNumber(design?.basePrice, design?.finalPrice, 0) +
+                      toNumber(fabric?.pricePerMeter, fabric?.finalPrice, fabric?.sellerPrice, 0) * Math.max(1, selectedFabricMeters)
+                  )}
                 </span>
                 <span className="text-gray-500 text-sm">total</span>
               </div>
@@ -405,11 +495,13 @@ export default function TryOn() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Design:</span>
-                  <span className="font-medium">${design?.basePrice}</span>
+                  <span className="font-medium">{formatFromUsd(toNumber(design?.basePrice, design?.finalPrice, 0))}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Fabric ({fabric?.name}):</span>
-                  <span className="font-medium">${fabric?.pricePerMeter}/m × 3m</span>
+                  <span className="font-medium">
+                    {formatFromUsd(toNumber(fabric?.pricePerMeter, fabric?.finalPrice, fabric?.sellerPrice, 0))}/yd × {Math.max(1, selectedFabricMeters)}yd
+                  </span>
                 </div>
               </div>
             </div>
@@ -420,45 +512,65 @@ export default function TryOn() {
               {fabric && (
                 <div className="flex gap-3">
                   <img
-                    src={fabric.images[0]}
-                    alt={fabric.name}
+                    src={firstImageUrl(fabric.images)}
+                    alt={asText(fabric.name, 'Fabric')}
                     className="w-16 h-16 object-cover rounded-lg"
                   />
                   <div>
-                    <p className="font-medium text-gray-900">{fabric.name}</p>
-                    <p className="text-sm text-gray-500">{fabric.seller?.businessName}</p>
-                    <p className="text-sm text-amber-600">${fabric.pricePerMeter}/meter</p>
+                    <p className="font-medium text-gray-900">{asText(fabric.name, 'Fabric')}</p>
+                    <p className="text-sm text-gray-500">{asText(fabric.seller?.businessName, 'Seller')}</p>
+                    <p className="text-sm text-amber-600">
+                      {formatFromUsd(toNumber(fabric?.pricePerMeter, fabric?.finalPrice, fabric?.sellerPrice, 0))}/yard
+                    </p>
                   </div>
                 </div>
               )}
+              <div className="mt-3">
+                <label className="text-sm text-gray-600">Fabric quantity (yards)</label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={selectedFabricMeters}
+                  onChange={(event) => setSelectedFabricMeters(Math.max(1, Number(event.target.value || 1)))}
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                />
+              </div>
             </div>
 
             {/* Measurements */}
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <h3 className="font-semibold text-gray-900 mb-3">Your Measurements</h3>
-              <div className="space-y-3">
-                {design?.measurements?.map((m: any) => (
-                  <div key={m.name}>
-                    <label className="text-sm text-gray-600">{m.name}</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={measurements[m.name] || ''}
-                        onChange={(e) => setMeasurements(prev => ({
-                          ...prev,
-                          [m.name]: parseFloat(e.target.value)
-                        }))}
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                        placeholder={m.description}
-                      />
-                      <span className="px-3 py-2 bg-gray-100 rounded-lg text-sm text-gray-600">
-                        {m.unit}
-                      </span>
+              {Array.isArray(design?.measurements) && design.measurements.length > 0 ? (
+                <div className="space-y-3">
+                  {design?.measurements?.map((m: any) => (
+                    <div key={m.name}>
+                      <label className="text-sm text-gray-600">
+                        {m.name}
+                        {m?.isRequired !== false ? ' *' : ''}
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={measurements[m.name] || ''}
+                          onChange={(e) =>
+                            setMeasurements((prev) => ({
+                              ...prev,
+                              [m.name]: parseFloat(e.target.value),
+                            }))
+                          }
+                          className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                          placeholder={m.description}
+                        />
+                        <span className="px-3 py-2 bg-gray-100 rounded-lg text-sm text-gray-600">{m.unit}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No measurements configured for this design yet.</p>
+              )}
               <button 
                 onClick={() => setAvatarGenerated(false)}
                 className="w-full mt-4 text-sm text-amber-600 hover:text-amber-700 font-medium"
@@ -472,7 +584,7 @@ export default function TryOn() {
               <Button 
                 className="w-full"
                 onClick={handleAddToCart}
-                disabled={!avatarGenerated}
+                disabled={!avatarGenerated || !fabric}
               >
                 <ShoppingBag className="w-4 h-4 mr-2" />
                 Add to Cart
@@ -480,10 +592,11 @@ export default function TryOn() {
               <Button 
                 variant="outline" 
                 className="w-full"
-                onClick={() => navigate(`/designs/${id}`)}
+                onClick={() => navigate(`/custom/${id}`)}
               >
                 Change Selection
               </Button>
+              {notice ? <p className="text-xs text-amber-700">{notice}</p> : null}
             </div>
           </div>
         </div>

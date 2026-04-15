@@ -1,0 +1,308 @@
+name: AWS Deploy (Staging + Production)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-deploy-main
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  verify:
+    name: Verify Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            apps/api/package-lock.json
+            apps/web/package-lock.json
+
+      - name: Build API
+        run: |
+          npm ci --prefix apps/api
+          npm run build --prefix apps/api
+
+      - name: Build Web
+        env:
+          VITE_API_URL: ${{ vars.AWS_STAGING_WEB_API_URL }}
+        run: |
+          npm ci --prefix apps/web
+          npm run build --prefix apps/web
+
+  deploy_staging_api:
+    name: Deploy API (Staging)
+    runs-on: ubuntu-latest
+    needs: verify
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (Staging)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_STAGING }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Build and Push API Image (Staging)
+        id: staging_image
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          IMAGE_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY_API }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          REPOSITORY="${IMAGE_REPOSITORY:-african-fashion-api}"
+          aws ecr describe-repositories --repository-names "${REPOSITORY}" >/dev/null 2>&1 || aws ecr create-repository --repository-name "${REPOSITORY}" >/dev/null
+          aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+          IMAGE_URI="${ECR_REGISTRY}/${REPOSITORY}:${GITHUB_SHA}"
+          docker build -t "${IMAGE_URI}" ./apps/api
+          docker push "${IMAGE_URI}"
+          docker tag "${IMAGE_URI}" "${ECR_REGISTRY}/${REPOSITORY}:staging-latest"
+          docker push "${ECR_REGISTRY}/${REPOSITORY}:staging-latest"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+      - name: Run Prisma Migrations (Staging)
+        env:
+          STAGING_CLUSTER: ${{ vars.AWS_STAGING_ECS_CLUSTER }}
+          STAGING_TASK_DEFINITION: ${{ vars.AWS_STAGING_ECS_TASK_DEFINITION }}
+          STAGING_API_CONTAINER_NAME: ${{ vars.AWS_STAGING_API_CONTAINER_NAME }}
+          STAGING_PRIVATE_SUBNET_IDS: ${{ vars.AWS_STAGING_PRIVATE_SUBNET_IDS }}
+          STAGING_TASK_SECURITY_GROUPS: ${{ vars.AWS_STAGING_TASK_SECURITY_GROUPS }}
+        run: |
+          set -euo pipefail
+          SUBNETS_JSON="$(printf '%s' "${STAGING_PRIVATE_SUBNET_IDS}" | tr ',' '\n' | sed '/^\s*$/d' | jq -R . | jq -s .)"
+          SGS_JSON="$(printf '%s' "${STAGING_TASK_SECURITY_GROUPS}" | tr ',' '\n' | sed '/^\s*$/d' | jq -R . | jq -s .)"
+          NETWORK_JSON="$(jq -n --argjson subnets "${SUBNETS_JSON}" --argjson sgs "${SGS_JSON}" '{awsvpcConfiguration:{subnets:$subnets,securityGroups:$sgs,assignPublicIp:"DISABLED"}}')"
+          OVERRIDES_JSON="$(jq -n --arg cname "${STAGING_API_CONTAINER_NAME}" '{containerOverrides:[{name:$cname,command:["npx","prisma","migrate","deploy"]}] }')"
+          TASK_ARN="$(aws ecs run-task \
+            --cluster "${STAGING_CLUSTER}" \
+            --task-definition "${STAGING_TASK_DEFINITION}" \
+            --launch-type FARGATE \
+            --network-configuration "${NETWORK_JSON}" \
+            --overrides "${OVERRIDES_JSON}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+          if [ -z "${TASK_ARN}" ] || [ "${TASK_ARN}" = "None" ]; then
+            echo "Failed to start migration task." >&2
+            exit 1
+          fi
+          aws ecs wait tasks-stopped --cluster "${STAGING_CLUSTER}" --tasks "${TASK_ARN}"
+          EXIT_CODE="$(aws ecs describe-tasks \
+            --cluster "${STAGING_CLUSTER}" \
+            --tasks "${TASK_ARN}" \
+            --query "tasks[0].containers[?name=='${STAGING_API_CONTAINER_NAME}'].exitCode | [0]" \
+            --output text)"
+          if [ "${EXIT_CODE}" != "0" ]; then
+            echo "Migration task failed with exit code ${EXIT_CODE}" >&2
+            aws ecs describe-tasks --cluster "${STAGING_CLUSTER}" --tasks "${TASK_ARN}" --output json
+            exit 1
+          fi
+
+      - name: Update ECS Service (Staging API)
+        env:
+          STAGING_CLUSTER: ${{ vars.AWS_STAGING_ECS_CLUSTER }}
+          STAGING_SERVICE: ${{ vars.AWS_STAGING_ECS_SERVICE_API }}
+          STAGING_API_CONTAINER_NAME: ${{ vars.AWS_STAGING_API_CONTAINER_NAME }}
+          IMAGE_URI: ${{ steps.staging_image.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+          CURRENT_TASK_DEF="$(aws ecs describe-services --cluster "${STAGING_CLUSTER}" --services "${STAGING_SERVICE}" --query 'services[0].taskDefinition' --output text)"
+          TASK_DEF_JSON="$(aws ecs describe-task-definition --task-definition "${CURRENT_TASK_DEF}" --query 'taskDefinition' --output json)"
+          NEW_TASK_DEF_JSON="$(echo "${TASK_DEF_JSON}" | jq --arg cname "${STAGING_API_CONTAINER_NAME}" --arg image "${IMAGE_URI}" '
+            .containerDefinitions |= map(if .name == $cname then .image = $image else . end)
+            | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)
+          ')"
+          NEW_TASK_DEF_ARN="$(aws ecs register-task-definition --cli-input-json "${NEW_TASK_DEF_JSON}" --query 'taskDefinition.taskDefinitionArn' --output text)"
+          aws ecs update-service --cluster "${STAGING_CLUSTER}" --service "${STAGING_SERVICE}" --task-definition "${NEW_TASK_DEF_ARN}" >/dev/null
+          aws ecs wait services-stable --cluster "${STAGING_CLUSTER}" --services "${STAGING_SERVICE}"
+
+  deploy_staging_web:
+    name: Deploy Web (Staging)
+    runs-on: ubuntu-latest
+    needs: deploy_staging_api
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Configure AWS Credentials (Staging)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_STAGING }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Build Web (Staging)
+        env:
+          VITE_API_URL: ${{ vars.AWS_STAGING_WEB_API_URL }}
+        run: |
+          npm ci --prefix apps/web
+          npm run build --prefix apps/web
+
+      - name: Sync Web Build to S3 (Staging)
+        env:
+          STAGING_WEB_BUCKET: ${{ vars.AWS_STAGING_WEB_BUCKET }}
+        run: |
+          aws s3 sync apps/web/dist "s3://${STAGING_WEB_BUCKET}/" --delete
+
+      - name: Invalidate CloudFront (Staging)
+        env:
+          STAGING_DISTRIBUTION_ID: ${{ vars.AWS_STAGING_CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id "${STAGING_DISTRIBUTION_ID}" --paths "/*" >/dev/null
+
+  deploy_production_api:
+    name: Deploy API (Production)
+    runs-on: ubuntu-latest
+    needs: deploy_staging_web
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (Production)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_PRODUCTION }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Build and Push API Image (Production)
+        id: production_image
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          IMAGE_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY_API }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          REPOSITORY="${IMAGE_REPOSITORY:-african-fashion-api}"
+          aws ecr describe-repositories --repository-names "${REPOSITORY}" >/dev/null 2>&1 || aws ecr create-repository --repository-name "${REPOSITORY}" >/dev/null
+          aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+          IMAGE_URI="${ECR_REGISTRY}/${REPOSITORY}:${GITHUB_SHA}"
+          docker build -t "${IMAGE_URI}" ./apps/api
+          docker push "${IMAGE_URI}"
+          docker tag "${IMAGE_URI}" "${ECR_REGISTRY}/${REPOSITORY}:production-latest"
+          docker push "${ECR_REGISTRY}/${REPOSITORY}:production-latest"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+      - name: Run Prisma Migrations (Production)
+        env:
+          PRODUCTION_CLUSTER: ${{ vars.AWS_PRODUCTION_ECS_CLUSTER }}
+          PRODUCTION_TASK_DEFINITION: ${{ vars.AWS_PRODUCTION_ECS_TASK_DEFINITION }}
+          PRODUCTION_API_CONTAINER_NAME: ${{ vars.AWS_PRODUCTION_API_CONTAINER_NAME }}
+          PRODUCTION_PRIVATE_SUBNET_IDS: ${{ vars.AWS_PRODUCTION_PRIVATE_SUBNET_IDS }}
+          PRODUCTION_TASK_SECURITY_GROUPS: ${{ vars.AWS_PRODUCTION_TASK_SECURITY_GROUPS }}
+        run: |
+          set -euo pipefail
+          SUBNETS_JSON="$(printf '%s' "${PRODUCTION_PRIVATE_SUBNET_IDS}" | tr ',' '\n' | sed '/^\s*$/d' | jq -R . | jq -s .)"
+          SGS_JSON="$(printf '%s' "${PRODUCTION_TASK_SECURITY_GROUPS}" | tr ',' '\n' | sed '/^\s*$/d' | jq -R . | jq -s .)"
+          NETWORK_JSON="$(jq -n --argjson subnets "${SUBNETS_JSON}" --argjson sgs "${SGS_JSON}" '{awsvpcConfiguration:{subnets:$subnets,securityGroups:$sgs,assignPublicIp:"DISABLED"}}')"
+          OVERRIDES_JSON="$(jq -n --arg cname "${PRODUCTION_API_CONTAINER_NAME}" '{containerOverrides:[{name:$cname,command:["npx","prisma","migrate","deploy"]}] }')"
+          TASK_ARN="$(aws ecs run-task \
+            --cluster "${PRODUCTION_CLUSTER}" \
+            --task-definition "${PRODUCTION_TASK_DEFINITION}" \
+            --launch-type FARGATE \
+            --network-configuration "${NETWORK_JSON}" \
+            --overrides "${OVERRIDES_JSON}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+          if [ -z "${TASK_ARN}" ] || [ "${TASK_ARN}" = "None" ]; then
+            echo "Failed to start migration task." >&2
+            exit 1
+          fi
+          aws ecs wait tasks-stopped --cluster "${PRODUCTION_CLUSTER}" --tasks "${TASK_ARN}"
+          EXIT_CODE="$(aws ecs describe-tasks \
+            --cluster "${PRODUCTION_CLUSTER}" \
+            --tasks "${TASK_ARN}" \
+            --query "tasks[0].containers[?name=='${PRODUCTION_API_CONTAINER_NAME}'].exitCode | [0]" \
+            --output text)"
+          if [ "${EXIT_CODE}" != "0" ]; then
+            echo "Migration task failed with exit code ${EXIT_CODE}" >&2
+            aws ecs describe-tasks --cluster "${PRODUCTION_CLUSTER}" --tasks "${TASK_ARN}" --output json
+            exit 1
+          fi
+
+      - name: Update ECS Service (Production API)
+        env:
+          PRODUCTION_CLUSTER: ${{ vars.AWS_PRODUCTION_ECS_CLUSTER }}
+          PRODUCTION_SERVICE: ${{ vars.AWS_PRODUCTION_ECS_SERVICE_API }}
+          PRODUCTION_API_CONTAINER_NAME: ${{ vars.AWS_PRODUCTION_API_CONTAINER_NAME }}
+          IMAGE_URI: ${{ steps.production_image.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+          CURRENT_TASK_DEF="$(aws ecs describe-services --cluster "${PRODUCTION_CLUSTER}" --services "${PRODUCTION_SERVICE}" --query 'services[0].taskDefinition' --output text)"
+          TASK_DEF_JSON="$(aws ecs describe-task-definition --task-definition "${CURRENT_TASK_DEF}" --query 'taskDefinition' --output json)"
+          NEW_TASK_DEF_JSON="$(echo "${TASK_DEF_JSON}" | jq --arg cname "${PRODUCTION_API_CONTAINER_NAME}" --arg image "${IMAGE_URI}" '
+            .containerDefinitions |= map(if .name == $cname then .image = $image else . end)
+            | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)
+          ')"
+          NEW_TASK_DEF_ARN="$(aws ecs register-task-definition --cli-input-json "${NEW_TASK_DEF_JSON}" --query 'taskDefinition.taskDefinitionArn' --output text)"
+          aws ecs update-service --cluster "${PRODUCTION_CLUSTER}" --service "${PRODUCTION_SERVICE}" --task-definition "${NEW_TASK_DEF_ARN}" >/dev/null
+          aws ecs wait services-stable --cluster "${PRODUCTION_CLUSTER}" --services "${PRODUCTION_SERVICE}"
+
+  deploy_production_web:
+    name: Deploy Web (Production)
+    runs-on: ubuntu-latest
+    needs: deploy_production_api
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Configure AWS Credentials (Production)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_PRODUCTION }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Build Web (Production)
+        env:
+          VITE_API_URL: ${{ vars.AWS_PRODUCTION_WEB_API_URL }}
+        run: |
+          npm ci --prefix apps/web
+          npm run build --prefix apps/web
+
+      - name: Sync Web Build to S3 (Production)
+        env:
+          PRODUCTION_WEB_BUCKET: ${{ vars.AWS_PRODUCTION_WEB_BUCKET }}
+        run: |
+          aws s3 sync apps/web/dist "s3://${PRODUCTION_WEB_BUCKET}/" --delete
+
+      - name: Invalidate CloudFront (Production)
+        env:
+          PRODUCTION_DISTRIBUTION_ID: ${{ vars.AWS_PRODUCTION_CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id "${PRODUCTION_DISTRIBUTION_ID}" --paths "/*" >/dev/null
+

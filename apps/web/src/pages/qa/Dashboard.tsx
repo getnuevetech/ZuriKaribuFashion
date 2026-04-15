@@ -16,15 +16,18 @@ import {
   ArrowRight,
   Filter,
   Search,
-  Truck
+  Truck,
+  Sparkles
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { useSearchParams } from 'react-router-dom';
 import StatCard from '../../components/dashboard/StatCard';
 import ActivityFeed from '../../components/dashboard/ActivityFeed';
 import DataTable from '../../components/dashboard/DataTable';
 import { BarChart, PieChart } from '../../components/dashboard/SimpleChart';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import OrderSupportModal from '../../components/orders/OrderSupportModal';
 
 interface QAStats {
   pendingReviews: number;
@@ -81,23 +84,47 @@ export default function QADashboard() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [showShipModal, setShowShipModal] = useState(false);
+  const [tryOnInsights, setTryOnInsights] = useState<any>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
+  const [supportInitialTab, setSupportInitialTab] = useState<'details' | 'ticket'>('ticket');
+
+  const syncTabWithUrl = (tab: 'overview' | 'pending' | 'history') => {
+    setActiveTab(tab);
+    if (tab === 'overview') {
+      setSearchParams({});
+      return;
+    }
+    setSearchParams({ tab });
+  };
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'pending' || tabParam === 'history' || tabParam === 'overview') {
+      setActiveTab(tabParam);
+    } else {
+      setActiveTab('overview');
+    }
+  }, [searchParams]);
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes, pendingRes, historyRes] = await Promise.all([
+      const [statsRes, pendingRes, historyRes, tryOnRes] = await Promise.all([
         api.qa.getStats(),
         api.qa.getPendingItems(),
-        api.qa.getReviewHistory()
+        api.qa.getReviewHistory(),
+        api.qa.getTryOnInsights(),
       ]);
       
       if (statsRes.success) setStats(statsRes.data);
       if (pendingRes.success) setPendingItems(pendingRes.data);
       if (historyRes.success) setRecentReviews(historyRes.data);
+      if (tryOnRes.success) setTryOnInsights(tryOnRes.data || null);
       
       // Mock activities
       setActivities([
@@ -148,12 +175,12 @@ export default function QADashboard() {
       });
       
       setShowReviewModal(false);
-      setSelectedItem(null);
       setReviewNotes('');
       
       if (status === 'APPROVED') {
         setShowShipModal(true);
       } else {
+        setSelectedItem(null);
         fetchDashboardData();
       }
     } catch (error) {
@@ -250,7 +277,7 @@ export default function QADashboard() {
           {(['overview', 'pending', 'history'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => syncTabWithUrl(tab)}
               className={`pb-3 text-sm font-medium capitalize transition-colors relative ${
                 activeTab === tab ? 'text-amber-600' : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -287,13 +314,31 @@ export default function QADashboard() {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={() => setActiveTab('pending')}
+                  onClick={() => syncTabWithUrl('pending')}
                 >
                   Review Now
                 </Button>
               </div>
             </div>
           )}
+
+          <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+            <div className="flex items-start gap-3">
+              <Sparkles className="mt-0.5 h-5 w-5 text-purple-700" />
+              <div>
+                <p className="font-medium text-purple-900">3D TryON Body Insights</p>
+                <p className="text-sm text-purple-800">
+                  Total TryON runs: <span className="font-semibold">{Number(tryOnInsights?.totalTryOns || 0)}</span>
+                </p>
+                <p className="mt-1 text-xs text-purple-700">
+                  {Object.entries(tryOnInsights?.measurementAverages || {})
+                    .slice(0, 5)
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join(' • ') || 'No trend data available yet.'}
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -337,7 +382,7 @@ export default function QADashboard() {
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Pending Reviews</h3>
-                <Button variant="ghost" size="sm" onClick={() => setActiveTab('pending')}>
+                <Button variant="ghost" size="sm" onClick={() => syncTabWithUrl('pending')}>
                   View All
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -423,10 +468,23 @@ export default function QADashboard() {
           searchable
           searchKeys={['designName', 'designerName', 'customerName', 'orderNumber']}
           actions={(item) => (
-            <Button size="sm" onClick={() => openReviewModal(item)}>
-              <Eye className="w-4 h-4 mr-1" />
-              Review
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => openReviewModal(item)}>
+                <Eye className="w-4 h-4 mr-1" />
+                Review
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setSupportInitialTab('ticket');
+                  setSupportOrderId(item.id);
+                }}
+              >
+                <MessageSquare className="w-4 h-4 mr-1" />
+                Ticket
+              </Button>
+            </div>
           )}
         />
       )}
@@ -470,8 +528,8 @@ export default function QADashboard() {
 
       {/* Review Modal */}
       {showReviewModal && selectedItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-4xl rounded-2xl bg-white max-h-[92vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -556,8 +614,8 @@ export default function QADashboard() {
 
       {/* Ship Modal */}
       {showShipModal && selectedItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-lg rounded-xl bg-white p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-green-600" />
@@ -587,6 +645,7 @@ export default function QADashboard() {
                 className="flex-1"
                 onClick={() => {
                   setShowShipModal(false);
+                  setSelectedItem(null);
                   fetchDashboardData();
                 }}
               >
@@ -604,6 +663,12 @@ export default function QADashboard() {
           </div>
         </div>
       )}
+      <OrderSupportModal
+        isOpen={Boolean(supportOrderId)}
+        orderId={supportOrderId}
+        initialTab={supportInitialTab}
+        onClose={() => setSupportOrderId(null)}
+      />
     </div>
   );
 }

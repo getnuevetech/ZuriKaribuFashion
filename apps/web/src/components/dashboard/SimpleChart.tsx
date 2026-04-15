@@ -14,7 +14,7 @@ interface BarChartProps {
 }
 
 export function BarChart({ data, height = 200, showValues = true, maxValue }: BarChartProps) {
-  const computedMax = maxValue || Math.max(...data.map((d) => d.value)) * 1.1;
+  const computedMax = maxValue || Math.max(1, ...data.map((d) => d.value)) * 1.1;
   const colors = ['bg-amber-500', 'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 'bg-cyan-500'];
 
   return (
@@ -51,15 +51,16 @@ interface LineChartProps {
 
 export function LineChart({ data, height = 200, color = '#f59e0b', showArea = true }: LineChartProps) {
   const { path, areaPath, maxValue, labels } = useMemo(() => {
-    const max = Math.max(...data.map((d) => d.value)) * 1.1;
+    const safeData = data.length > 0 ? data : [{ label: 'N/A', value: 0 }];
+    const max = Math.max(1, ...safeData.map((d) => d.value)) * 1.1;
     const min = 0;
     const range = max - min;
     
     const width = 100;
     const chartHeight = 100;
     
-    const points = data.map((d, i) => ({
-      x: (i / (data.length - 1)) * width,
+    const points = safeData.map((d, i) => ({
+      x: safeData.length === 1 ? width / 2 : (i / (safeData.length - 1)) * width,
       y: chartHeight - ((d.value - min) / range) * chartHeight,
     }));
     
@@ -68,13 +69,15 @@ export function LineChart({ data, height = 200, color = '#f59e0b', showArea = tr
       return `${acc} L ${point.x} ${point.y}`;
     }, '');
     
-    const areaD = `${pathD} L ${points[points.length - 1].x} ${chartHeight} L ${points[0].x} ${chartHeight} Z`;
+    const lastPoint = points[points.length - 1];
+    const firstPoint = points[0];
+    const areaD = `${pathD} L ${lastPoint.x} ${chartHeight} L ${firstPoint.x} ${chartHeight} Z`;
     
     return {
       path: pathD,
       areaPath: areaD,
       maxValue: max,
-      labels: data.map((d) => d.label),
+      labels: safeData.map((d) => d.label),
     };
   }, [data]);
 
@@ -95,8 +98,8 @@ export function LineChart({ data, height = 200, color = '#f59e0b', showArea = tr
           strokeWidth="2"
           vectorEffect="non-scaling-stroke"
         />
-        {data.map((d, i) => {
-          const x = (i / (data.length - 1)) * 100;
+        {(data.length > 0 ? data : [{ label: 'N/A', value: 0 }]).map((d, i, arr) => {
+          const x = arr.length === 1 ? 50 : (i / (arr.length - 1)) * 100;
           const y = 100 - (d.value / maxValue) * 100;
           return (
             <circle

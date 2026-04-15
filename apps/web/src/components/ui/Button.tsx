@@ -3,7 +3,7 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  variant?: 'primary' | 'default' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   asChild?: boolean;
@@ -11,13 +11,14 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', isLoading, children, disabled, ...props }, ref) => {
-    const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+    const baseStyles = 'inline-flex items-center justify-center font-medium rounded-none transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
     
     const variants = {
-      primary: 'bg-coral-500 text-white hover:bg-coral-600 focus:ring-coral-500',
-      secondary: 'bg-navy-600 text-white hover:bg-navy-700 focus:ring-navy-500',
-      outline: 'border-2 border-coral-500 text-coral-500 hover:bg-coral-50 focus:ring-coral-500',
-      ghost: 'text-gray-700 hover:bg-gray-100 focus:ring-gray-500',
+      primary: 'border-0 bg-black text-white hover:bg-gray-800 focus:ring-black',
+      default: 'border-0 bg-black text-white hover:bg-gray-800 focus:ring-black',
+      secondary: 'border-0 bg-gray-800 text-white hover:bg-black focus:ring-gray-800',
+      outline: 'border border-black bg-white text-black hover:bg-gray-100 focus:ring-black',
+      ghost: 'border-0 text-black hover:bg-gray-100 focus:ring-black',
       danger: 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-500',
     };
     

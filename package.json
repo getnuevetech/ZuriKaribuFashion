@@ -5,10 +5,19 @@
   "private": true,
   "packageManager": "npm@10.2.4",
   "scripts": {
+    "setup:cloud": "bash ./scripts/cloud-agent-setup.sh",
     "dev": "cd apps/web && npm run dev",
-    "build": "cd apps/web && npm run build"
+    "build": "cd apps/web && npm run build",
+    "smoke:api:routes": "node ./scripts/smoke-api-routes.mjs",
+    "smoke:automation:routes": "node ./scripts/smoke-automation-routes.mjs",
+    "smoke:jenks:payload": "node ./scripts/smoke-kimi-homepage-payload.mjs",
+    "smoke:kimi:payload": "node ./scripts/smoke-kimi-homepage-payload.mjs",
+    "e2e:jenks:crawl": "playwright test ./scripts/e2e-jenks-crawl.spec.js --reporter=list"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "20.x"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }

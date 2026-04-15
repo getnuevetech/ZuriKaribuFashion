@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zuri Karibu</title>
+    <script>
+      (function () {
+        var rawPath = String(window.location.pathname || '');
+        if (rawPath !== '/kimi-v14-r20260320-35/index.html') return;
+        var target = '/main' + String(window.location.search || '') + String(window.location.hash || '');
+        // Keep the URL clean while preserving the current document instance.
+        window.history.replaceState({}, '', target);
+      })();
+    </script>
+    <script>
+      (function () {
+        var routeMap = {
+          '/': '/main',
+          '/home': '/main',
+          '/main': '/main',
+          '/jenks': '/main',
+          '/legacy': '/main',
+          '/home-kimi': '/main',
+          '/home-legacy': '/main',
+          '/home-live': '/main',
+          '/home-jenks': '/main',
+          '/jenks-dynamic': '/main',
+          '/shop': '/main',
+          '/ready-to-wear': '/ready-to-wear',
+          '/rtw': '/ready-to-wear',
+          '/fabrics': '/fabrics',
+          '/ftb': '/fabrics',
+          '/fabric-to-buy': '/fabrics',
+          '/custom': '/custom',
+          '/ctw': '/custom',
+          '/contact': '/contact',
+          '/contact-us': '/contact',
+          '/help-center': '/help-center',
+          '/support': '/help-center',
+          '/faq': '/help-center',
+          '/seller-designer-support': '/seller-designer-support',
+          '/terms': '/help-center',
+          '/privacy': '/help-center',
+          '/legal/terms': '/help-center',
+          '/legal/privacy': '/help-center',
+          '/login': '/auth/login',
+          '/signin': '/auth/login',
+          '/sign-in': '/auth/login',
+          '/auth/login': '/auth/login',
+          '/register': '/auth/register',
+          '/signup': '/auth/register',
+          '/sign-up': '/auth/register',
+          '/auth/register': '/auth/register',
+          '/forgot-password': '/auth/forgot-password',
+          '/auth/forgot-password': '/auth/forgot-password',
+          '/reset-password': '/auth/reset-password',
+          '/auth/reset-password': '/auth/reset-password'
+        };
+        var normalizeHashPath = function (value) {
+          var normalized = String(value || '').trim();
+          if (!normalized) return '';
+          if (normalized.indexOf('#') === 0) normalized = normalized.slice(1);
+          try {
+            normalized = decodeURIComponent(normalized);
+          } catch (_error) {}
+          normalized = normalized.replace(/^[\/#]+/, '/');
+          if (normalized.indexOf('/') !== 0) normalized = '/' + normalized;
+          normalized = normalized.replace(/\/{2,}/g, '/');
+          var queryIndex = normalized.indexOf('?');
+          var pathPart = queryIndex >= 0 ? normalized.slice(0, queryIndex) : normalized;
+          var queryPart = queryIndex >= 0 ? normalized.slice(queryIndex) : '';
+          pathPart = pathPart.replace(/\/+$/, '');
+          if (!pathPart) pathPart = '/';
+          return pathPart + queryPart;
+        };
+
+        var redirectFromHash = function () {
+          var rawHash = String(window.location.hash || '').trim();
+          if (!rawHash) return;
+          var value = normalizeHashPath(rawHash);
+          if (!value) return;
+          var queryIndex = value.indexOf('?');
+          var pathPart = (queryIndex >= 0 ? value.slice(0, queryIndex) : value).toLowerCase();
+          var queryPart = queryIndex >= 0 ? value.slice(queryIndex) : '';
+          var normalized = pathPart.replace(/[^a-z0-9/_-]/g, '');
+          if (normalized.indexOf('signin') !== -1 || normalized.indexOf('sign-in') !== -1 || normalized.indexOf('auth/login') !== -1) {
+            window.location.replace('/auth/login' + queryPart);
+            return;
+          }
+          if (
+            normalized.indexOf('register') !== -1 ||
+            normalized.indexOf('signup') !== -1 ||
+            normalized.indexOf('sign-up') !== -1 ||
+            normalized.indexOf('auth/register') !== -1
+          ) {
+            window.location.replace('/auth/register' + queryPart);
+            return;
+          }
+          if (normalized.indexOf('forgot') !== -1 || normalized.indexOf('auth/forgot-password') !== -1) {
+            window.location.replace('/auth/forgot-password' + queryPart);
+            return;
+          }
+          if (
+            normalized.indexOf('reset-password') !== -1 ||
+            normalized.indexOf('password-reset') !== -1 ||
+            normalized.indexOf('auth/reset-password') !== -1
+          ) {
+            window.location.replace('/auth/reset-password' + queryPart);
+            return;
+          }
+          var target = routeMap[pathPart];
+          if (!target) return;
+          window.location.replace(target + queryPart);
+        };
+        document.addEventListener(
+          'click',
+          function (event) {
+            var node = event.target;
+            while (node && node.tagName !== 'A') node = node.parentElement;
+            if (!node) return;
+            var href = String(node.getAttribute('href') || '').trim().toLowerCase();
+            if (
+              href === '#/#signin' ||
+              href === '#/signin' ||
+              href === '#signin' ||
+              href === '#/#sign-in' ||
+              href === '#/sign-in' ||
+              href === '#sign-in'
+            ) {
+              event.preventDefault();
+              window.location.replace('/auth/login');
+              return;
+            }
+            if (
+              href === '#/#shop' ||
+              href === '#/shop' ||
+              href === '#shop'
+            ) {
+              event.preventDefault();
+              window.location.replace('/main');
+              return;
+            }
+          },
+          true
+        );
+        window.addEventListener('hashchange', redirectFromHash);
+        redirectFromHash();
+      })();
+    </script>
+    <script src="/main/jenks-config-bridge.js?v=20260325i"></script>
+    <script type="module" crossorigin src="/kimi-v14-r20260320-35/assets/index-D3KtpC4K.js"></script>
+    <link rel="stylesheet" crossorigin href="/kimi-v14-r20260320-35/assets/index-BeQQTtR9.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

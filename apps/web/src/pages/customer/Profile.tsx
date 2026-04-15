@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { 
   User, 
   Mail, 
@@ -13,12 +14,26 @@ import { api } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { getCityOptionsByCountryCode, getCountryOptions, resolveCountryCode } from '../../data/locationOptions';
+import { normalizePhoneWithCountryPrefix } from '../../utils/phone';
 
 interface Address {
   id: string;
+  label: string;
+  fullName: string;
+  address: string;
+  city: string;
+  postalCode?: string;
+  country: string;
+  phone: string;
+  isDefault: boolean;
+}
+
+interface AddressForm {
+  label: string;
   fullName: string;
   addressLine1: string;
-  addressLine2?: string;
+  addressLine2: string;
   city: string;
   state: string;
   postalCode: string;
@@ -33,6 +48,16 @@ export default function CustomerProfile() {
   const [editing, setEditing] = useState(false);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [addressError, setAddressError] = useState('');
+  const [googleLinked, setGoogleLinked] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('');
+  const [googleLinkedAt, setGoogleLinkedAt] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState('');
+  const [googleSuccess, setGoogleSuccess] = useState('');
+  const googleClientId = String(
+    import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || ''
+  ).trim();
   
   const fullName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 
@@ -45,7 +70,17 @@ export default function CustomerProfile() {
     phone: user?.phone || '',
   });
 
-  const [newAddress, setNewAddress] = useState<Partial<Address>>({
+  useEffect(() => {
+    setProfile({
+      firstName: String(user?.firstName || ''),
+      lastName: String(user?.lastName || ''),
+      email: String(user?.email || ''),
+      phone: String(user?.phone || ''),
+    });
+  }, [user?.id, user?.firstName, user?.lastName, user?.email, user?.phone]);
+
+  const [newAddress, setNewAddress] = useState<AddressForm>({
+    label: 'Home',
     fullName: '',
     addressLine1: '',
     addressLine2: '',
@@ -54,29 +89,82 @@ export default function CustomerProfile() {
     postalCode: '',
     country: '',
     phone: '',
+    isDefault: false,
   });
+  const countryOptions = getCountryOptions();
+  const addressCountryCode = resolveCountryCode(newAddress.country);
+  const cityOptions = getCityOptionsByCountryCode(addressCountryCode);
+  const hasPredefinedCityOptions = cityOptions.length > 0;
 
   useEffect(() => {
+    if (!user?.id) return;
     fetchAddresses();
-  }, []);
+    fetchGoogleLinkStatus();
+    api.auth
+      .getMe()
+      .then((response) => {
+        if (!response.success || !response.data) return;
+        const nextUser = response.data?.user && typeof response.data.user === 'object' ? response.data.user : response.data;
+        updateUser(nextUser);
+      })
+      .catch(() => {
+        // ignore me-refresh failures and keep existing auth-store state
+      });
+  }, [user?.id]);
 
   const fetchAddresses = async () => {
+    if (!user?.id) return;
     try {
       const response = await api.customer.getAddresses();
       if (response.success) {
-        setAddresses(response.data);
+        const rows = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.addresses)
+            ? (response.data as any).addresses
+            : [];
+        setAddresses(rows);
       }
     } catch (error) {
       console.error('Failed to fetch addresses:', error);
     }
   };
 
+  const fetchGoogleLinkStatus = async () => {
+    try {
+      const response = await api.auth.getGoogleLinkStatus();
+      if (response.success) {
+        setGoogleLinked(Boolean(response.data?.linked));
+        setGoogleEmail(String(response.data?.email || ''));
+        setGoogleLinkedAt(String(response.data?.linkedAt || ''));
+      }
+    } catch (error) {
+      console.error('Failed to fetch Google link status:', error);
+    }
+  };
+
   const handleSaveProfile = async () => {
     try {
       setLoading(true);
-      const response = await api.auth.updateProfile(profile);
+      const response = await api.auth.updateProfile({
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        phone: profile.phone,
+      });
       if (response.success) {
-        updateUser(response.data);
+        const payload =
+          response.data?.user && typeof response.data.user === 'object'
+            ? response.data.user
+            : response.data && typeof response.data === 'object'
+              ? response.data
+              : {};
+        updateUser(payload);
+        setProfile((prev) => ({
+          ...prev,
+          firstName: String((payload as any).firstName ?? prev.firstName),
+          lastName: String((payload as any).lastName ?? prev.lastName),
+          phone: String((payload as any).phone ?? prev.phone),
+          email: String((payload as any).email ?? prev.email),
+        }));
         setEditing(false);
       }
     } catch (error) {
@@ -88,12 +176,27 @@ export default function CustomerProfile() {
 
   const handleAddAddress = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAddressError('');
     try {
-      const response = await api.customer.addAddress(newAddress);
+      const payload = {
+        label: newAddress.label.trim() || 'Home',
+        fullName: newAddress.fullName.trim(),
+        phone: normalizePhoneWithCountryPrefix(newAddress.phone.trim(), newAddress.country),
+        country: newAddress.country,
+        city: newAddress.city.trim(),
+        address: [newAddress.addressLine1, newAddress.addressLine2, newAddress.state]
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .join(', '),
+        postalCode: newAddress.postalCode.trim() || undefined,
+        isDefault: Boolean(newAddress.isDefault),
+      };
+      const response = await api.customer.addAddress(payload);
       if (response.success) {
-        setAddresses([...addresses, response.data]);
+        await fetchAddresses();
         setShowAddressForm(false);
         setNewAddress({
+          label: 'Home',
           fullName: '',
           addressLine1: '',
           addressLine2: '',
@@ -102,9 +205,11 @@ export default function CustomerProfile() {
           postalCode: '',
           country: '',
           phone: '',
+          isDefault: false,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      setAddressError(error?.response?.data?.message || 'Unable to save address. Please check your details.');
       console.error('Failed to add address:', error);
     }
   };
@@ -112,9 +217,50 @@ export default function CustomerProfile() {
   const handleDeleteAddress = async (id: string) => {
     try {
       await api.customer.deleteAddress(id);
-      setAddresses(addresses.filter(a => a.id !== id));
+      setAddresses((previous) => previous.filter((entry) => entry.id !== id));
     } catch (error) {
       console.error('Failed to delete address:', error);
+    }
+  };
+
+  const handleGoogleLinkSuccess = async (credentialResponse: CredentialResponse) => {
+    const credential = String(credentialResponse.credential || '').trim();
+    if (!credential) {
+      setGoogleError('Google authentication did not return a valid credential.');
+      return;
+    }
+    try {
+      setGoogleLoading(true);
+      setGoogleError('');
+      setGoogleSuccess('');
+      const response = await api.auth.linkGoogleAccount(credential);
+      if (response.success) {
+        setGoogleSuccess('Google account linked successfully.');
+        await fetchGoogleLinkStatus();
+      }
+    } catch (error: any) {
+      setGoogleError(error?.response?.data?.message || 'Failed to link Google account.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleUnlink = async () => {
+    try {
+      setGoogleLoading(true);
+      setGoogleError('');
+      setGoogleSuccess('');
+      const response = await api.auth.unlinkGoogleAccount();
+      if (response.success) {
+        setGoogleSuccess('Google account unlinked successfully.');
+        setGoogleLinked(false);
+        setGoogleEmail('');
+        setGoogleLinkedAt('');
+      }
+    } catch (error: any) {
+      setGoogleError(error?.response?.data?.message || 'Failed to unlink Google account.');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -236,6 +382,59 @@ export default function CustomerProfile() {
         )}
       </div>
 
+      {/* Google Account Link */}
+      {googleClientId ? (
+        <div className="bg-white rounded-xl p-6 shadow-sm border space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Google Account</h2>
+              <p className="text-sm text-gray-500">
+                Link Google so you can sign in with either password or Google.
+              </p>
+            </div>
+            {googleLinked ? (
+              <Badge variant="green">Linked</Badge>
+            ) : (
+              <Badge variant="secondary">Not Linked</Badge>
+            )}
+          </div>
+
+          {googleError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {googleError}
+            </div>
+          ) : null}
+          {googleSuccess ? (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              {googleSuccess}
+            </div>
+          ) : null}
+
+          {googleLinked ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-gray-600">
+                <p>
+                  Linked email: <span className="font-medium text-gray-900">{googleEmail || profile.email}</span>
+                </p>
+                {googleLinkedAt ? (
+                  <p>Linked on: {new Date(googleLinkedAt).toLocaleString()}</p>
+                ) : null}
+              </div>
+              <Button variant="outline" onClick={handleGoogleUnlink} disabled={googleLoading}>
+                {googleLoading ? 'Unlinking...' : 'Unlink Google'}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-start">
+              <GoogleLogin
+                onSuccess={handleGoogleLinkSuccess}
+                onError={() => setGoogleError('Google account linking was cancelled or failed.')}
+              />
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {/* Addresses */}
       <div className="bg-white rounded-xl p-6 shadow-sm border">
         <div className="flex items-center justify-between mb-4">
@@ -248,7 +447,31 @@ export default function CustomerProfile() {
         {showAddressForm && (
           <form onSubmit={handleAddAddress} className="mb-6 p-4 bg-gray-50 rounded-lg">
             <h3 className="font-medium mb-4">Add New Address</h3>
+            {addressError && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {addressError}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <input
+                  type="text"
+                  placeholder="Label (Home, Office)"
+                  value={newAddress.label}
+                  onChange={(e) => setNewAddress({ ...newAddress, label: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  required
+                />
+              </div>
+              <div className="flex items-center gap-2 px-2">
+                <input
+                  id="isDefaultAddress"
+                  type="checkbox"
+                  checked={newAddress.isDefault}
+                  onChange={(e) => setNewAddress({ ...newAddress, isDefault: e.target.checked })}
+                />
+                <label htmlFor="isDefaultAddress" className="text-sm text-gray-700">Set as default</label>
+              </div>
               <div className="md:col-span-2">
                 <input
                   type="text"
@@ -278,14 +501,32 @@ export default function CustomerProfile() {
                   className="w-full px-4 py-2 border rounded-lg"
                 />
               </div>
-              <input
-                type="text"
-                placeholder="City"
-                value={newAddress.city}
-                onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                className="px-4 py-2 border rounded-lg"
-                required
-              />
+              {hasPredefinedCityOptions ? (
+                <select
+                  value={newAddress.city}
+                  onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                  className="px-4 py-2 border rounded-lg"
+                  required
+                  disabled={!newAddress.country}
+                >
+                  <option value="">{newAddress.country ? 'Select city' : 'Select country first'}</option>
+                  {cityOptions.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder={newAddress.country ? 'Enter city' : 'Select country first'}
+                  value={newAddress.city}
+                  onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                  className="px-4 py-2 border rounded-lg"
+                  required
+                  disabled={!newAddress.country}
+                />
+              )}
               <input
                 type="text"
                 placeholder="State"
@@ -300,29 +541,38 @@ export default function CustomerProfile() {
                 value={newAddress.postalCode}
                 onChange={(e) => setNewAddress({ ...newAddress, postalCode: e.target.value })}
                 className="px-4 py-2 border rounded-lg"
-                required
               />
               <select
                 value={newAddress.country}
-                onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+                onChange={(e) =>
+                  setNewAddress({
+                    ...newAddress,
+                    country: e.target.value,
+                    city: '',
+                    phone: normalizePhoneWithCountryPrefix(newAddress.phone, e.target.value),
+                  })
+                }
                 className="px-4 py-2 border rounded-lg"
                 required
               >
                 <option value="">Select Country</option>
-                <option value="US">United States</option>
-                <option value="NG">Nigeria</option>
-                <option value="GH">Ghana</option>
-                <option value="KE">Kenya</option>
-                <option value="ZA">South Africa</option>
-                <option value="GB">United Kingdom</option>
-                <option value="CA">Canada</option>
+                {countryOptions.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.name}
+                  </option>
+                ))}
               </select>
               <div className="md:col-span-2">
                 <input
                   type="tel"
                   placeholder="Phone Number"
                   value={newAddress.phone}
-                  onChange={(e) => setNewAddress({ ...newAddress, phone: e.target.value })}
+                  onChange={(e) =>
+                    setNewAddress({
+                      ...newAddress,
+                      phone: normalizePhoneWithCountryPrefix(e.target.value, newAddress.country),
+                    })
+                  }
                   className="w-full px-4 py-2 border rounded-lg"
                   required
                 />
@@ -350,16 +600,14 @@ export default function CustomerProfile() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{address.fullName}</p>
+                    <Badge variant="secondary" className="text-xs">{address.label}</Badge>
                     {address.isDefault && (
                       <Badge variant="secondary" className="text-xs">Default</Badge>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600">{address.addressLine1}</p>
-                  {address.addressLine2 && (
-                    <p className="text-sm text-gray-600">{address.addressLine2}</p>
-                  )}
+                  <p className="text-sm text-gray-600">{address.address}</p>
                   <p className="text-sm text-gray-600">
-                    {address.city}, {address.state} {address.postalCode}
+                    {address.city}{address.postalCode ? `, ${address.postalCode}` : ''}
                   </p>
                   <p className="text-sm text-gray-600">{address.country}</p>
                   <p className="text-sm text-gray-500 mt-1">{address.phone}</p>

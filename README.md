@@ -30,6 +30,34 @@ A full-stack eCommerce platform connecting African fashion designers, fabric sel
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/your-template)
 
+### Option 3: Deploy to AWS
+
+AWS migration assets are available in:
+
+- `deploy/aws/README.md`
+- `apps/api/Dockerfile`
+- `apps/web/Dockerfile`
+- `.github/workflows/aws-deploy-main.yml` (auto deploy on merge to `main`)
+
+## 🤖 Cloud Agent Environment Setup
+
+To prepare cloud agents quickly (install dependencies in both apps and generate Prisma client), run:
+
+```bash
+npm run setup:cloud
+```
+
+Repository-level defaults are configured for cloud usage:
+- Node version via `.nvmrc` (20, satisfies Node 18+ requirement)
+- npm cache in workspace via `.npmrc` (`.npm-cache`)
+
+## 🔐 RBAC (Role-Based Access Control)
+
+Access control source of truth:
+- Backend permission matrix: `apps/api/src/rbac.ts`
+- Backend enforcement middleware: `apps/api/src/middleware/auth.ts` (`authorizePermissions`)
+- Frontend role routing helpers: `apps/web/src/auth/rbac.ts`
+
 ## 📁 Project Structure
 
 ```
@@ -81,7 +109,12 @@ After database seeding:
 ## 📖 Documentation
 
 - [Deployment Guide](DEPLOY.md) - Detailed deployment instructions
+- [AWS Migration Guide](deploy/aws/README.md) - AWS migration runbook
 - [API Documentation](apps/api/README.md) - Backend API docs
+- [Modularization Blueprint (Draft)](docs/architecture/modularization-blueprint.md) - Domain split and service extraction plan
+- [Hybrid Kimi Adoption Blueprint (Draft)](docs/architecture/hybrid-kimi-adoption-blueprint.md) - Brand + conversion-safe rollout plan for premium editorial design
+- [Kimi Handoff + Remediation Plan (Draft)](docs/architecture/kimi-design-handoff-and-remediation.md) - Actionable handoff checklist and critical/non-critical issue resolution plan
+- [Kimi Handoff v14 Package](docs/design/kimi/handoff-v14/README.md) - Active Kimi design contract pack for implementation
 
 ## 📝 License
 

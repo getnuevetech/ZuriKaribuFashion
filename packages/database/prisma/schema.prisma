@@ -2,7 +2,8 @@
 // Multi-role eCommerce with order splitting and virtual try-on
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -16,6 +17,7 @@ enum UserRole {
   CUSTOMER
   FABRIC_SELLER
   FASHION_DESIGNER
+  RESELLER_INFLUENCER
   QA_TEAM
   ADMINISTRATOR
 }

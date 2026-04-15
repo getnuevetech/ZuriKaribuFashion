@@ -1,19 +1,29 @@
 // User Types
-export type UserRole = 'CUSTOMER' | 'FABRIC_SELLER' | 'DESIGNER' | 'QA_TEAM' | 'ADMINISTRATOR';
+export type UserRole =
+  | 'CUSTOMER'
+  | 'FABRIC_SELLER'
+  | 'FASHION_DESIGNER'
+  | 'RESELLER_INFLUENCER'
+  | 'QA_TEAM'
+  | 'ADMINISTRATOR';
 export type UserStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED';
 
 export interface User {
   id: string;
   email: string;
-  fullName: string;
+  fullName?: string;
   firstName?: string;
   lastName?: string;
   phone?: string;
+  callerId?: string | null;
   avatar?: string;
   role: UserRole;
   status: UserStatus;
+  requirePasswordChange?: boolean;
   createdAt: string;
   bio?: string;
+  permissions?: string[];
+  isSuperAdmin?: boolean;
 }
 
 export interface AuthState {

@@ -1,15 +1,19 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safePersistStorage } from './persistence';
 
-interface CartItem {
+export interface CustomDesignCartItem {
+  kind: 'CUSTOM_DESIGN';
   designId: string;
   designName: string;
   designImage: string;
-  fabricId: string;
-  fabricName: string;
-  fabricImage: string;
-  fabricMeters: number;
-  fabricPrice: number;
+  fabricId?: string;
+  fabricName?: string;
+  fabricImage?: string;
+  fabricMeters?: number;
+  fabricPrice?: number;
+  fabricSelectionMode?: 'CUSTOMER_SELECTED' | 'DESIGNER_DECIDES';
+  fabricPreferenceNotes?: string;
   designerId: string;
   designerName: string;
   measurements: Record<string, number>;
@@ -18,9 +22,118 @@ interface CartItem {
   tryOnImage?: string | null;
 }
 
+export interface ReadyToWearCartItem {
+  kind: 'READY_TO_WEAR';
+  readyToWearId: string;
+  productName: string;
+  productImage: string;
+  selectedSize: string;
+  selectedColor?: string;
+  quantity: number;
+  unitPrice: number;
+  designerName: string;
+  categoryName?: string;
+  tryOnMeasurements?: Record<string, number>;
+}
+
+export interface FabricOnlyCartItem {
+  kind: 'FABRIC_ONLY';
+  fabricId: string;
+  fabricName: string;
+  fabricImage: string;
+  yards: number;
+  pricePerYard: number;
+  sellerName: string;
+}
+
+export type CartItem = CustomDesignCartItem | ReadyToWearCartItem | FabricOnlyCartItem;
+
+type LegacyCustomItem = Omit<CustomDesignCartItem, 'kind'>;
+
+function normalizeCartItem(item: CartItem | LegacyCustomItem | any): CartItem {
+  if (item?.kind === 'FABRIC_ONLY') {
+    return {
+      kind: 'FABRIC_ONLY',
+      fabricId: String(item.fabricId || ''),
+      fabricName: String(item.fabricName || ''),
+      fabricImage: String(item.fabricImage || ''),
+      yards: Math.max(1, Number(item.yards || 1)),
+      pricePerYard: Number(item.pricePerYard || 0),
+      sellerName: String(item.sellerName || 'Seller'),
+    };
+  }
+  if (item?.kind === 'READY_TO_WEAR') {
+    return {
+      kind: 'READY_TO_WEAR',
+      readyToWearId: String(item.readyToWearId || ''),
+      productName: String(item.productName || ''),
+      productImage: String(item.productImage || ''),
+      selectedSize: String(item.selectedSize || ''),
+      selectedColor: item.selectedColor ? String(item.selectedColor) : undefined,
+      quantity: Math.max(1, Number(item.quantity || 1)),
+      unitPrice: Number(item.unitPrice || 0),
+      designerName: String(item.designerName || 'Designer'),
+      categoryName: item.categoryName ? String(item.categoryName) : undefined,
+      tryOnMeasurements: item.tryOnMeasurements || {},
+    };
+  }
+  return {
+    kind: 'CUSTOM_DESIGN',
+    designId: String(item.designId || ''),
+    designName: String(item.designName || ''),
+    designImage: String(item.designImage || ''),
+    fabricId: item.fabricId ? String(item.fabricId || '') : undefined,
+    fabricName: item.fabricName ? String(item.fabricName || '') : undefined,
+    fabricImage: item.fabricImage ? String(item.fabricImage || '') : undefined,
+    fabricMeters: item.fabricMeters === undefined ? undefined : Math.max(1, Number(item.fabricMeters || 1)),
+    fabricPrice: item.fabricPrice === undefined ? undefined : Number(item.fabricPrice || 0),
+    fabricSelectionMode:
+      String(item.fabricSelectionMode || '').toUpperCase() === 'DESIGNER_DECIDES'
+        ? 'DESIGNER_DECIDES'
+        : 'CUSTOMER_SELECTED',
+    fabricPreferenceNotes: item.fabricPreferenceNotes ? String(item.fabricPreferenceNotes) : undefined,
+    designerId: String(item.designerId || ''),
+    designerName: String(item.designerName || 'Designer'),
+    measurements: item.measurements || {},
+    basePrice: Number(item.basePrice || 0),
+    totalPrice: Number(item.totalPrice || 0),
+    tryOnImage: item.tryOnImage ?? null,
+  };
+}
+
+function getItemTotal(item: CartItem): number {
+  if (item.kind === 'FABRIC_ONLY') {
+    return Number(item.pricePerYard || 0) * Math.max(1, Number(item.yards || 1));
+  }
+  if (item.kind === 'READY_TO_WEAR') {
+    return Number(item.unitPrice || 0) * Math.max(1, Number(item.quantity || 1));
+  }
+  if (item.fabricSelectionMode === 'DESIGNER_DECIDES' || !item.fabricId) {
+    return Number(item.basePrice || 0);
+  }
+  const meters = Math.max(1, Number(item.fabricMeters || 1));
+  const computed = Number(item.basePrice || 0) + Number(item.fabricPrice || 0) * meters;
+  return Number.isFinite(computed) && computed > 0 ? computed : Number(item.totalPrice || 0);
+}
+
+function computeCartTotal(items: CartItem[]): number {
+  return items.reduce((sum, item) => sum + getItemTotal(item), 0);
+}
+
+function computeCartItemCount(items: CartItem[]): number {
+  return items.reduce((count, item) => {
+    if (item.kind === 'READY_TO_WEAR') {
+      return count + Math.max(1, Number(item.quantity || 1));
+    }
+    return count + 1;
+  }, 0);
+}
+
 interface CartStore {
   items: CartItem[];
-  addItem: (item: CartItem) => void;
+  addItem: (item: CartItem | LegacyCustomItem) => void;
+  addReadyToWearItem: (item: Omit<ReadyToWearCartItem, 'kind'>) => void;
+  addFabricItem: (item: Omit<FabricOnlyCartItem, 'kind'>) => void;
   removeItem: (index: number) => void;
   updateItem: (index: number, updates: Partial<CartItem>) => void;
   clearCart: () => void;
@@ -33,52 +146,155 @@ export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
+      totalPrice: 0,
+      itemCount: 0,
       
       addItem: (item) => {
-        set((state) => ({
-          items: [...state.items, item],
-        }));
+        const normalized = normalizeCartItem(item);
+        set((state) => {
+          const nextItems = [...state.items, normalized];
+          return {
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
+          };
+        });
+      },
+
+      addReadyToWearItem: (item) => {
+        const normalized = normalizeCartItem({ ...item, kind: 'READY_TO_WEAR' as const });
+        set((state) => {
+          const existingIndex = state.items.findIndex(
+            (cartItem) =>
+              cartItem.kind === 'READY_TO_WEAR' &&
+              cartItem.readyToWearId === normalized.readyToWearId &&
+              cartItem.selectedSize === normalized.selectedSize &&
+              (cartItem.selectedColor || '') === (normalized.selectedColor || '')
+          );
+          if (existingIndex === -1) {
+            const nextItems = [...state.items, normalized];
+            return {
+              items: nextItems,
+              totalPrice: computeCartTotal(nextItems),
+              itemCount: computeCartItemCount(nextItems),
+            };
+          }
+          const existing = state.items[existingIndex] as ReadyToWearCartItem;
+          const merged: ReadyToWearCartItem = {
+            ...existing,
+            quantity: existing.quantity + normalized.quantity,
+            unitPrice: normalized.unitPrice || existing.unitPrice,
+            tryOnMeasurements: normalized.tryOnMeasurements || existing.tryOnMeasurements,
+          };
+          const nextItems = state.items.map((cartItem, index) => (index === existingIndex ? merged : cartItem));
+          return {
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
+          };
+        });
+      },
+
+      addFabricItem: (item) => {
+        const normalized = normalizeCartItem({ ...item, kind: 'FABRIC_ONLY' as const });
+        set((state) => {
+          const existingIndex = state.items.findIndex(
+            (cartItem) => cartItem.kind === 'FABRIC_ONLY' && cartItem.fabricId === normalized.fabricId
+          );
+          if (existingIndex === -1) {
+            const nextItems = [...state.items, normalized];
+            return {
+              items: nextItems,
+              totalPrice: computeCartTotal(nextItems),
+              itemCount: computeCartItemCount(nextItems),
+            };
+          }
+          const existing = state.items[existingIndex] as FabricOnlyCartItem;
+          const merged: FabricOnlyCartItem = {
+            ...existing,
+            yards: existing.yards + normalized.yards,
+            pricePerYard: normalized.pricePerYard || existing.pricePerYard,
+          };
+          const nextItems = state.items.map((cartItem, index) => (index === existingIndex ? merged : cartItem));
+          return {
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
+          };
+        });
       },
       
       removeItem: (index) => {
-        set((state) => ({
-          items: state.items.filter((_, i) => i !== index),
-        }));
+        set((state) => {
+          const nextItems = state.items.filter((_, i) => i !== index);
+          return {
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
+          };
+        });
       },
       
       updateItem: (index, updates) => {
-        set((state) => ({
-          items: state.items.map((item, i) => {
+        set((state) => {
+          const nextItems = state.items.map((item, i) => {
             if (i === index) {
-              const updatedItem = { ...item, ...updates };
-              // Recalculate total price if fabricMeters changed
-              if (updates.fabricMeters) {
-                updatedItem.totalPrice = updatedItem.basePrice + 
-                  (updatedItem.fabricPrice * updatedItem.fabricMeters);
+              if (item.kind === 'READY_TO_WEAR') {
+                const merged = {
+                  ...item,
+                  ...updates,
+                  quantity: Math.max(1, Number((updates as Partial<ReadyToWearCartItem>).quantity ?? item.quantity)),
+                } as ReadyToWearCartItem;
+                return merged;
               }
-              return updatedItem;
+              if (item.kind === 'FABRIC_ONLY') {
+                const merged = {
+                  ...item,
+                  ...updates,
+                  yards: Math.max(1, Number((updates as Partial<FabricOnlyCartItem>).yards ?? item.yards)),
+                } as FabricOnlyCartItem;
+                return merged;
+              }
+              const merged = { ...item, ...updates } as CustomDesignCartItem;
+              if (typeof merged.fabricMeters === 'number') {
+                merged.fabricMeters = Math.max(1, Number(merged.fabricMeters));
+              }
+              merged.totalPrice = getItemTotal(merged);
+              return merged;
             }
             return item;
-          }),
-        }));
+          });
+          return {
+            items: nextItems,
+            totalPrice: computeCartTotal(nextItems),
+            itemCount: computeCartItemCount(nextItems),
+          };
+        });
       },
       
       clearCart: () => {
-        set({ items: [] });
+        set({ items: [], totalPrice: 0, itemCount: 0 });
       },
       
-      get totalPrice() {
-        return get().items.reduce((sum, item) => sum + item.totalPrice, 0);
-      },
-      
-      get itemCount() {
-        return get().items.length;
-      },
-      
-      getItemCount: () => get().items.length,
+      getItemCount: () =>
+        computeCartItemCount(get().items),
     }),
     {
       name: 'cart-storage',
+      storage: safePersistStorage,
+      version: 3,
+      migrate: (persistedState: any) => {
+        if (!persistedState || !Array.isArray(persistedState.items)) {
+          return persistedState;
+        }
+        const items = persistedState.items.map((item: any) => normalizeCartItem(item));
+        return {
+          ...persistedState,
+          items,
+          totalPrice: computeCartTotal(items),
+          itemCount: computeCartItemCount(items),
+        };
+      },
     }
   )
 );

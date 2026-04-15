@@ -2,7 +2,10 @@
 // Multi-role eCommerce with order splitting and virtual try-on
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Railway/containers can run on musl + OpenSSL 3; include explicit engine target
+  // to avoid loading the legacy musl engine that expects libssl.so.1.1.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -16,6 +19,7 @@ enum UserRole {
   CUSTOMER
   FABRIC_SELLER
   FASHION_DESIGNER
+  RESELLER_INFLUENCER
   QA_TEAM
   ADMINISTRATOR
 }
@@ -238,9 +242,27 @@ model MaterialType {
   // Relations
   fabrics     Fabric[]
   designs     Design[] // Designs that use this material
+  readyToWear ReadyToWear[]
   
   isActive    Boolean @default(true)
   
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FabricCategory {
+  id          String @id @default(uuid())
+  name        String @unique
+  slug        String @unique
+  description String?
+
+  // Relations
+  fabrics     Fabric[]
+  readyToWear ReadyToWear[]
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -261,6 +283,8 @@ model Fabric {
   // Category & Material
   materialTypeId String
   materialType   MaterialType @relation(fields: [materialTypeId], references: [id])
+  fabricCategoryId String?
+  fabricCategory   FabricCategory? @relation(fields: [fabricCategoryId], references: [id])
   
   // Pricing (seller's price - admin adds markup)
   sellerPrice     Decimal @db.Decimal(10, 2)
@@ -289,6 +313,7 @@ model Fabric {
   
   @@index([sellerId])
   @@index([materialTypeId])
+  @@index([fabricCategoryId])
   @@index([status])
   @@index([isAvailable])
 }
@@ -325,6 +350,7 @@ model Design {
   // Material Type
   materialTypeId String?
   materialType   MaterialType? @relation(fields: [materialTypeId], references: [id])
+  hasAdditionalMaterialOrFabric Boolean @default(false)
   
   // Pricing
   basePrice   Decimal @db.Decimal(10, 2) // Designer's price
@@ -420,6 +446,13 @@ model ReadyToWear {
   // Category (Admin defined)
   categoryId  String
   category    ProductCategory @relation(fields: [categoryId], references: [id])
+
+  // Material metadata (required by business rules; DB remains nullable for backfill safety)
+  materialTypeId String?
+  materialType   MaterialType? @relation(fields: [materialTypeId], references: [id])
+  fabricCategoryId String?
+  fabricCategory   FabricCategory? @relation(fields: [fabricCategoryId], references: [id])
+  hasAdditionalMaterialOrFabric Boolean @default(false)
   
   // Base Price (before size variations)
   basePrice   Decimal @db.Decimal(10, 2)
@@ -445,6 +478,8 @@ model ReadyToWear {
   
   @@index([designerId])
   @@index([categoryId])
+  @@index([materialTypeId])
+  @@index([fabricCategoryId])
   @@index([status])
 }
 

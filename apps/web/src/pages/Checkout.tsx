@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   CardElement, 
   useStripe, 
@@ -16,6 +16,14 @@ import {
 } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
+import { useCurrencyStore } from '../store/currencyStore';
+import {
+  getCityOptionsByCountryAndState,
+  getCountryOptions,
+  getStateOptionsByCountryCode,
+  resolveCountryCode,
+} from '../data/locationOptions';
+import { normalizePhoneWithCountryPrefix } from '../utils/phone';
 import { api } from '../services/api';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -31,17 +39,327 @@ interface ShippingAddress {
   phone: string;
 }
 
+interface PaymentProviderOption {
+  providerKey: string;
+  displayName: string;
+  checkoutType: 'INLINE' | 'REDIRECT';
+  mode: 'TEST' | 'LIVE';
+  publicConfig?: Record<string, any>;
+}
+
+interface ShippingQuoteOption {
+  id: string;
+  source: 'GLOBAL' | 'LOCAL';
+  providerKey: string;
+  providerName: string;
+  serviceName: string;
+  etaMinDays: number;
+  etaMaxDays: number;
+  priceUsd: number;
+  countryCode?: string;
+  city?: string | null;
+}
+
+interface PromoPreviewResult {
+  code: string;
+  name: string;
+  discountType: 'PERCENTAGE' | 'FIXED';
+  discountValue: number;
+  discountUsd: number;
+  subtotalUsd: number;
+  eligibleSubtotalUsd: number;
+}
+
+interface CheckoutDeliveryStage {
+  id: string;
+  step: number;
+  stageKey: string;
+  stageLabel: string;
+  description: string | null;
+  isFinal: boolean;
+  sortOrder: number;
+}
+
+interface PaymentSessionDebugInfo {
+  routePath: string;
+  mode: 'PRIMARY' | 'COMPATIBILITY' | 'LEGACY_INTENT' | 'LEGACY_INTENT_FORCED';
+  amountMinor: number;
+  amountUsd: number;
+  providerKey: string;
+  timestamp: string;
+}
+
+interface CheckoutPricingAppliedRule {
+  ruleId: string;
+  ruleName: string;
+  adjustmentType: string;
+  value: number;
+  amountUsd: number;
+  occurrences: number;
+}
+
+interface CheckoutPricingPreviewResult {
+  label: string;
+  baseSubtotalUsd: number;
+  totalAdjustmentUsd: number;
+  finalSubtotalUsd: number;
+  appliedRules: CheckoutPricingAppliedRule[];
+}
+
+interface CompletedCheckoutSummary {
+  createdAt: string;
+  orderNumbers: string[];
+  items: any[];
+  shippingAddress: ShippingAddress;
+  shippingQuote: ShippingQuoteOption | null;
+  paymentMethod: string;
+  subtotalUsd: number;
+  promoCode?: string;
+  promoDiscountUsd: number;
+  checkoutPricingLabel: string;
+  checkoutPricingAdjustmentUsd: number;
+  checkoutPricingAppliedRules: CheckoutPricingAppliedRule[];
+  shippingUsd: number;
+  totalUsd: number;
+}
+interface PostCheckoutOffer {
+  code: string;
+  name: string;
+  description?: string;
+  discountType: 'PERCENTAGE' | 'FIXED';
+  discountValue: number;
+  maxDiscountUsd?: number | null;
+}
+
+const CHECKOUT_PROMO_STORAGE_KEY_PREFIX = 'af_checkout_promo_state_v1';
+const DEFAULT_CHECKOUT_DELIVERY_STAGES: CheckoutDeliveryStage[] = [
+  {
+    id: 'checkout-stage-order-received',
+    step: 1,
+    stageKey: 'ORDER_RECEIVED',
+    stageLabel: 'Order Received',
+    description: 'Order has been received and queued for processing.',
+    isFinal: false,
+    sortOrder: 0,
+  },
+  {
+    id: 'checkout-stage-production',
+    step: 2,
+    stageKey: 'PRODUCTION',
+    stageLabel: 'Production',
+    description: 'Your order goes through preparation and quality checks.',
+    isFinal: false,
+    sortOrder: 1,
+  },
+  {
+    id: 'checkout-stage-shipped',
+    step: 3,
+    stageKey: 'SHIPPED',
+    stageLabel: 'Shipped',
+    description: 'Shipment is dispatched with your selected carrier.',
+    isFinal: false,
+    sortOrder: 2,
+  },
+  {
+    id: 'checkout-stage-delivered',
+    step: 4,
+    stageKey: 'DELIVERED',
+    stageLabel: 'Delivered',
+    description: 'Order arrives at your delivery address.',
+    isFinal: true,
+    sortOrder: 3,
+  },
+];
+
+const toFiniteMoney = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return Number(fallback || 0);
+  return Number(parsed.toFixed(2));
+};
+
+const pickFirstFiniteNumber = (row: Record<string, unknown>, keys: string[], fallback = 0) => {
+  for (const key of keys) {
+    const value = Number(row[key]);
+    if (Number.isFinite(value)) return value;
+  }
+  return fallback;
+};
+
+const normalizePromoPreviewResponse = (
+  input: unknown,
+  fallbackCode: string,
+  fallbackSubtotalUsd: number
+): PromoPreviewResult => {
+  const row = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const code = String(row.code || row.promoCode || row.promo || fallbackCode || '')
+    .trim()
+    .toUpperCase();
+  const name = String(row.name || row.title || row.promoName || code || 'Promo').trim() || code || 'Promo';
+  const discountTypeRaw = String(row.discountType || row.type || row.discountMode || '')
+    .trim()
+    .toUpperCase();
+  const discountType =
+    discountTypeRaw === 'FIXED' || discountTypeRaw === 'AMOUNT' || discountTypeRaw === 'FLAT'
+      ? 'FIXED'
+      : 'PERCENTAGE';
+  const subtotalUsd = Math.max(
+    0,
+    toFiniteMoney(
+      pickFirstFiniteNumber(row, ['subtotalUsd', 'subtotal', 'cartSubtotalUsd', 'orderSubtotalUsd'], fallbackSubtotalUsd),
+      fallbackSubtotalUsd
+    )
+  );
+  const eligibleSubtotalUsd = Math.max(
+    0,
+    toFiniteMoney(
+      pickFirstFiniteNumber(row, ['eligibleSubtotalUsd', 'eligibleSubtotal', 'applicableSubtotalUsd'], subtotalUsd),
+      subtotalUsd
+    )
+  );
+  const discountValue = Math.max(
+    0,
+    toFiniteMoney(
+      pickFirstFiniteNumber(
+        row,
+        discountType === 'FIXED'
+          ? ['discountValue', 'fixedAmount', 'discountAmount', 'amountOff', 'value']
+          : ['discountValue', 'discountPercent', 'percentage', 'percentOff', 'value'],
+        0
+      ),
+      0
+    )
+  );
+  const computedDiscountUsd = pickFirstFiniteNumber(
+    row,
+    ['discountUsd', 'discount', 'discountAmountUsd', 'amountOffUsd', 'discountAmount', 'amountOff'],
+    0
+  );
+  const maxDiscountUsd = Number.isFinite(Number(row.maxDiscountUsd ?? row.maxDiscount ?? row.maxDiscountAmountUsd))
+    ? Number(row.maxDiscountUsd ?? row.maxDiscount ?? row.maxDiscountAmountUsd)
+    : null;
+  const computedFromValue =
+    discountType === 'FIXED' ? discountValue : Number((eligibleSubtotalUsd * discountValue) / 100);
+  const rawDiscountUsd = computedDiscountUsd > 0 ? computedDiscountUsd : computedFromValue;
+  const cappedDiscountUsd =
+    maxDiscountUsd !== null ? Math.min(Number(rawDiscountUsd || 0), Math.max(0, maxDiscountUsd)) : Number(rawDiscountUsd || 0);
+  const discountUsd = Math.max(0, Math.min(eligibleSubtotalUsd, toFiniteMoney(cappedDiscountUsd, 0)));
+  return {
+    code,
+    name,
+    discountType,
+    discountValue,
+    discountUsd,
+    subtotalUsd: Number(subtotalUsd.toFixed(2)),
+    eligibleSubtotalUsd: Number(eligibleSubtotalUsd.toFixed(2)),
+  };
+};
+
+const isStrictPromoPreviewMatch = (preview: PromoPreviewResult, expectedCode: string) => {
+  const normalizedExpectedCode = String(expectedCode || '').trim().toUpperCase();
+  if (!normalizedExpectedCode) return false;
+  if (String(preview.code || '').trim().toUpperCase() !== normalizedExpectedCode) return false;
+  if (!(preview.discountType === 'PERCENTAGE' || preview.discountType === 'FIXED')) return false;
+  if (!Number.isFinite(Number(preview.discountValue)) || Number(preview.discountValue) <= 0) return false;
+  if (!Number.isFinite(Number(preview.discountUsd)) || Number(preview.discountUsd) <= 0) return false;
+  if (!Number.isFinite(Number(preview.subtotalUsd)) || Number(preview.subtotalUsd) <= 0) return false;
+  if (!Number.isFinite(Number(preview.eligibleSubtotalUsd)) || Number(preview.eligibleSubtotalUsd) <= 0) return false;
+  return true;
+};
+
+interface SuggestedCheckoutProduct {
+  id: string;
+  name: string;
+  image: string;
+  subtitle: string;
+  href: string;
+}
+
+interface SavedCustomerAddress {
+  id: string;
+  label?: string;
+  fullName?: string;
+  address?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
+  phone?: string;
+  isDefault?: boolean;
+}
+
+const isUuid = (value: unknown) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+
+const parseAddressLines = (address: unknown) => {
+  const tokens = String(address || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) {
+    return { addressLine1: '', addressLine2: '', state: '' };
+  }
+  if (tokens.length === 1) {
+    return { addressLine1: tokens[0], addressLine2: '', state: '' };
+  }
+  if (tokens.length === 2) {
+    return { addressLine1: tokens[0], addressLine2: '', state: tokens[1] };
+  }
+  return {
+    addressLine1: tokens[0],
+    addressLine2: tokens.slice(1, -1).join(', '),
+    state: tokens[tokens.length - 1],
+  };
+};
+
+const mapSavedAddressToShipping = (address: SavedCustomerAddress): ShippingAddress => {
+  const parsed = parseAddressLines(address.address);
+  const countryCode = resolveCountryCode(address.country);
+  return {
+    fullName: String(address.fullName || ''),
+    addressLine1: parsed.addressLine1,
+    addressLine2: parsed.addressLine2,
+    city: String(address.city || ''),
+    state: parsed.state,
+    postalCode: String(address.postalCode || ''),
+    country: countryCode || String(address.country || ''),
+    phone: normalizePhoneWithCountryPrefix(String(address.phone || ''), countryCode || String(address.country || '')),
+  };
+};
+
 export default function Checkout() {
   const navigate = useNavigate();
   const stripe = useStripe();
   const elements = useElements();
   const { user } = useAuthStore();
   const { items, totalPrice, clearCart } = useCartStore();
+  const { formatFromUsd, selectedCurrency } = useCurrencyStore();
   
   const [step, setStep] = useState<'shipping' | 'payment' | 'review'>('shipping');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [orderNumbers, setOrderNumbers] = useState<string[]>([]);
+  const [suggestedProducts, setSuggestedProducts] = useState<SuggestedCheckoutProduct[]>([]);
+  const [paymentProviders, setPaymentProviders] = useState<PaymentProviderOption[]>([]);
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<string>('STRIPE');
+  const [savedAddresses, setSavedAddresses] = useState<SavedCustomerAddress[]>([]);
+  const [savedAddressesLoading, setSavedAddressesLoading] = useState(false);
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState('');
+  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteOption[]>([]);
+  const [selectedShippingQuoteId, setSelectedShippingQuoteId] = useState<string>('');
+  const [shippingQuotesLoading, setShippingQuotesLoading] = useState(false);
+  const [deliveryStages, setDeliveryStages] = useState<CheckoutDeliveryStage[]>(DEFAULT_CHECKOUT_DELIVERY_STAGES);
+  const [deliveryStagesProviderKey, setDeliveryStagesProviderKey] = useState('LOCAL_DEFAULT');
+  const [promoCode, setPromoCode] = useState('');
+  const [promoPreview, setPromoPreview] = useState<PromoPreviewResult | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [checkoutPricingPreview, setCheckoutPricingPreview] = useState<CheckoutPricingPreviewResult | null>(null);
+  const [cardPromoHint, setCardPromoHint] = useState('');
+  const [paymentDebugInfo, setPaymentDebugInfo] = useState<PaymentSessionDebugInfo | null>(null);
+  const [runtimeStripeReloading, setRuntimeStripeReloading] = useState(false);
+  const [validatedShippingAddressId, setValidatedShippingAddressId] = useState('');
+  const [completedCheckout, setCompletedCheckout] = useState<CompletedCheckoutSummary | null>(null);
+  const [postCheckoutOffers, setPostCheckoutOffers] = useState<PostCheckoutOffer[]>([]);
+  const checkoutPromoStorageKey = `${CHECKOUT_PROMO_STORAGE_KEY_PREFIX}:${String(user?.id || 'guest')}`;
   
   const fullName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}` 
@@ -57,9 +375,443 @@ export default function Checkout() {
     country: '',
     phone: '',
   });
+  const countryOptions = getCountryOptions();
+  const shippingCountryCode = resolveCountryCode(shippingAddress.country);
+  const stateOptions = getStateOptionsByCountryCode(shippingCountryCode);
+  const cityOptions = getCityOptionsByCountryAndState(shippingCountryCode, shippingAddress.state);
+  const selectableStateOptions = Array.from(
+    new Set([shippingAddress.state, ...stateOptions].map((value) => String(value || '').trim()).filter(Boolean))
+  );
+  const selectableCityOptions = Array.from(
+    new Set([shippingAddress.city, ...cityOptions].map((value) => String(value || '').trim()).filter(Boolean))
+  );
 
-  const shipping = totalPrice > 200 ? 0 : 25;
-  const finalTotal = totalPrice + shipping;
+  const fallbackShipping = totalPrice > 200 ? 0 : 25;
+  const selectedShippingQuote =
+    shippingQuotes.find((entry) => entry.id === selectedShippingQuoteId) || null;
+  const shipping = selectedShippingQuote ? Number(selectedShippingQuote.priceUsd || 0) : fallbackShipping;
+  const checkoutPricingAdjustment = Number(checkoutPricingPreview?.totalAdjustmentUsd || 0);
+  const promoDiscount = Number(promoPreview?.discountUsd || 0);
+  const finalTotal = Math.max(0, totalPrice + checkoutPricingAdjustment - promoDiscount + shipping);
+  const selectedProvider = paymentProviders.find((entry) => entry.providerKey === selectedPaymentProvider) || null;
+  const currentStepSummary =
+    step === 'shipping'
+      ? 'Step 1 of 3: Shipping details'
+      : step === 'payment'
+        ? 'Step 2 of 3: Secure payment'
+        : 'Step 3 of 3: Confirmation';
+  const summaryItems = step === 'review' && completedCheckout ? completedCheckout.items : items;
+  const summarySubtotal = step === 'review' && completedCheckout ? Number(completedCheckout.subtotalUsd || 0) : totalPrice;
+  const summaryPromoDiscount = step === 'review' && completedCheckout ? Number(completedCheckout.promoDiscountUsd || 0) : promoDiscount;
+  const summaryCheckoutPricingAdjustment =
+    step === 'review' && completedCheckout
+      ? Number(completedCheckout.checkoutPricingAdjustmentUsd || 0)
+      : checkoutPricingAdjustment;
+  const summaryCheckoutPricingLabel =
+    step === 'review' && completedCheckout
+      ? String(completedCheckout.checkoutPricingLabel || checkoutPricingPreview?.label || 'Checkout Pricing')
+      : String(checkoutPricingPreview?.label || 'Checkout Pricing');
+  const summaryCheckoutPricingRules =
+    step === 'review' && completedCheckout
+      ? completedCheckout.checkoutPricingAppliedRules || []
+      : checkoutPricingPreview?.appliedRules || [];
+  const summaryShipping = step === 'review' && completedCheckout ? Number(completedCheckout.shippingUsd || 0) : shipping;
+  const summaryTotal = step === 'review' && completedCheckout ? Number(completedCheckout.totalUsd || 0) : finalTotal;
+  const formatCheckoutPricingAdjustment = (amountUsd: number, adjustmentType?: string) => {
+    const normalizedType = String(adjustmentType || '').toUpperCase();
+    const isMarkdown = normalizedType.includes('DISCOUNT') || Number(amountUsd || 0) < 0;
+    return `${isMarkdown ? '-' : ''}${formatFromUsd(Math.abs(Number(amountUsd || 0)))}`;
+  };
+
+  useEffect(() => {
+    if (step !== 'review') return;
+    let cancelled = false;
+    api.promotions
+      .getPostCheckoutOffers()
+      .then((response) => {
+        if (cancelled || !response.success) return;
+        setPostCheckoutOffers(Array.isArray(response.data) ? (response.data as PostCheckoutOffer[]) : []);
+      })
+      .catch(() => {
+        if (!cancelled) setPostCheckoutOffers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
+
+  useEffect(() => {
+    if (!Array.isArray(items) || items.length === 0) {
+      setCheckoutPricingPreview(null);
+      return;
+    }
+    let cancelled = false;
+    const readySubtotal = items
+      .filter((item) => item.kind === 'READY_TO_WEAR')
+      .reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 1), 0);
+    const fabricSubtotal = items
+      .filter((item) => item.kind === 'FABRIC_ONLY')
+      .reduce((sum, item) => sum + Number(item.pricePerYard || 0) * Number(item.yards || 0), 0);
+    const designSubtotal = items
+      .filter((item) => item.kind === 'CUSTOM_DESIGN')
+      .reduce((sum, item) => sum + Number(item.totalPrice || 0), 0);
+    const segments: Array<{ productType: 'FABRIC' | 'DESIGN' | 'READY_TO_WEAR'; subtotalUsd: number }> = [];
+    if (readySubtotal > 0) segments.push({ productType: 'READY_TO_WEAR', subtotalUsd: Number(readySubtotal.toFixed(2)) });
+    if (fabricSubtotal > 0) segments.push({ productType: 'FABRIC', subtotalUsd: Number(fabricSubtotal.toFixed(2)) });
+    if (designSubtotal > 0) segments.push({ productType: 'DESIGN', subtotalUsd: Number(designSubtotal.toFixed(2)) });
+    if (segments.length === 0) {
+      setCheckoutPricingPreview(null);
+      return;
+    }
+    api.orders
+      .previewCheckoutPricing({
+        country: shippingAddress.country || undefined,
+        segments,
+      })
+      .then((response) => {
+        if (cancelled || !response.success || !response.data) return;
+        setCheckoutPricingPreview({
+          label: String(response.data.label || 'Checkout Pricing'),
+          baseSubtotalUsd: Number(response.data.baseSubtotalUsd || 0),
+          totalAdjustmentUsd: Number(response.data.totalAdjustmentUsd || 0),
+          finalSubtotalUsd: Number(response.data.finalSubtotalUsd || 0),
+          appliedRules: Array.isArray(response.data.appliedRules)
+            ? response.data.appliedRules.map((rule) => ({
+                ruleId: String(rule.ruleId || ''),
+                ruleName: String(rule.ruleName || response.data.label || 'Checkout Pricing'),
+                adjustmentType: String(rule.adjustmentType || ''),
+                value: Number(rule.value || 0),
+                amountUsd: Number(rule.amountUsd || 0),
+                occurrences: Number(rule.occurrences || 1),
+              }))
+            : [],
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setCheckoutPricingPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [items, shippingAddress.country]);
+
+  useEffect(() => {
+    api.payments
+      .getOptions()
+      .then((response) => {
+        if (response.success && Array.isArray(response.data?.providers) && response.data.providers.length > 0) {
+          const providers = response.data.providers.map((entry) => ({
+            providerKey: String(entry.providerKey || 'STRIPE').toUpperCase(),
+            displayName: String(entry.displayName || entry.providerKey || 'Payment Provider'),
+            checkoutType: entry.checkoutType === 'REDIRECT' ? 'REDIRECT' : 'INLINE',
+            mode: entry.mode === 'LIVE' ? 'LIVE' : 'TEST',
+            publicConfig: entry.publicConfig || {},
+          }));
+          setPaymentProviders(providers);
+          const stripeProvider = providers.find((entry) => entry.providerKey === 'STRIPE');
+          const runtimeStripeKey = String(stripeProvider?.publicConfig?.publishableKey || '').trim();
+          if (/^pk_(test|live)_/i.test(runtimeStripeKey) && typeof window !== 'undefined') {
+            const storedKey = String(window.localStorage.getItem('af_runtime_stripe_publishable_key') || '').trim();
+            if (storedKey !== runtimeStripeKey) {
+              window.localStorage.setItem('af_runtime_stripe_publishable_key', runtimeStripeKey);
+            }
+            const reloadKey = 'af_runtime_stripe_reloaded_once_v1';
+            if (storedKey !== runtimeStripeKey && !window.sessionStorage.getItem(reloadKey)) {
+              window.sessionStorage.setItem(reloadKey, '1');
+              setRuntimeStripeReloading(true);
+              window.location.reload();
+              return;
+            }
+          }
+          setSelectedPaymentProvider((current) => {
+            const preferred = providers.find((entry) => entry.providerKey === current);
+            return preferred ? preferred.providerKey : providers[0].providerKey;
+          });
+          return;
+        }
+        setPaymentProviders([
+          { providerKey: 'STRIPE', displayName: 'Stripe', checkoutType: 'INLINE', mode: 'TEST', publicConfig: {} },
+        ]);
+      })
+      .catch(() => {
+        setPaymentProviders([
+          { providerKey: 'STRIPE', displayName: 'Stripe', checkoutType: 'INLINE', mode: 'TEST', publicConfig: {} },
+        ]);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    setSavedAddressesLoading(true);
+    api.customer
+      .getAddresses()
+      .then((response) => {
+        if (cancelled || !response.success) return;
+        const rows = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.addresses)
+            ? (response.data as any).addresses
+            : [];
+        const normalized = rows.map((entry: any) => ({
+          id: String(entry?.id || ''),
+          label: String(entry?.label || ''),
+          fullName: String(entry?.fullName || ''),
+          address: String(entry?.address || ''),
+          city: String(entry?.city || ''),
+          postalCode: entry?.postalCode ? String(entry.postalCode) : '',
+          country: String(entry?.country || ''),
+          phone: String(entry?.phone || ''),
+          isDefault: Boolean(entry?.isDefault),
+        })) as SavedCustomerAddress[];
+        setSavedAddresses(normalized);
+
+        setShippingAddress((prev) => {
+          const hasManualAddress = Boolean(
+            String(prev.addressLine1 || '').trim() ||
+              String(prev.city || '').trim() ||
+              String(prev.country || '').trim()
+          );
+          if (hasManualAddress) return prev;
+          const preferred = normalized.find((entry) => entry.isDefault) || normalized[0];
+          if (!preferred?.id) return prev;
+          setSelectedSavedAddressId(preferred.id);
+          return { ...prev, ...mapSavedAddressToShipping(preferred) };
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSavedAddresses([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSavedAddressesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.sessionStorage.getItem(checkoutPromoStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed?.promoCode) {
+        setPromoCode(String(parsed.promoCode || '').trim().toUpperCase());
+      }
+      if (parsed?.promoPreview && typeof parsed.promoPreview === 'object') {
+        const subtotalFromItems = items.reduce((sum, item) => {
+          if (item.kind === 'READY_TO_WEAR') {
+            return sum + Number(item.unitPrice || 0) * Number(item.quantity || 1);
+          }
+          if (item.kind === 'FABRIC_ONLY') {
+            return sum + Number(item.pricePerYard || 0) * Number(item.yards || 1);
+          }
+          return sum + Number(item.totalPrice || 0);
+        }, 0);
+        setPromoPreview(
+          normalizePromoPreviewResponse(parsed.promoPreview, String(parsed.promoCode || ''), Number(subtotalFromItems || 0))
+        );
+      }
+    } catch {
+      // ignore malformed session promo cache
+    }
+  }, [checkoutPromoStorageKey, items]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (!promoPreview && !String(promoCode || '').trim()) {
+        window.sessionStorage.removeItem(checkoutPromoStorageKey);
+        return;
+      }
+      window.sessionStorage.setItem(
+        checkoutPromoStorageKey,
+        JSON.stringify({
+          promoCode: String(promoCode || '').trim().toUpperCase(),
+          promoPreview,
+          updatedAt: Date.now(),
+        })
+      );
+    } catch {
+      // ignore storage write failures
+    }
+  }, [checkoutPromoStorageKey, promoCode, promoPreview]);
+
+  useEffect(() => {
+    const countryCode = shippingCountryCode || shippingAddress.country;
+    const city = String(shippingAddress.city || '').trim();
+    if (!countryCode || !city) {
+      setShippingQuotes([]);
+      setSelectedShippingQuoteId('');
+      return;
+    }
+    let cancelled = false;
+    setShippingQuotesLoading(true);
+    api.shipping
+      .getOptions({
+        countryCode,
+        city,
+        subtotalUsd: Number(totalPrice || 0),
+      })
+      .then((response) => {
+        if (cancelled) return;
+        const quotes = Array.isArray(response.data?.quotes) ? response.data.quotes : [];
+        const normalizedQuotes: ShippingQuoteOption[] = quotes.map((entry: any) => ({
+          id: String(entry.id || ''),
+          source: entry.source === 'LOCAL' ? 'LOCAL' : 'GLOBAL',
+          providerKey: String(entry.providerKey || '').toUpperCase(),
+          providerName: String(entry.providerName || entry.providerKey || 'Shipping Provider'),
+          serviceName: String(entry.serviceName || 'Standard'),
+          etaMinDays: Number(entry.etaMinDays || 0),
+          etaMaxDays: Number(entry.etaMaxDays || 0),
+          priceUsd: Number(entry.priceUsd || 0),
+          countryCode: entry.countryCode ? String(entry.countryCode) : undefined,
+          city: entry.city ? String(entry.city) : null,
+        }));
+        setShippingQuotes(normalizedQuotes);
+        const recommended = String(response.data?.recommendedQuoteId || '');
+        setSelectedShippingQuoteId((current) => {
+          if (normalizedQuotes.find((entry) => entry.id === current)) return current;
+          if (recommended && normalizedQuotes.find((entry) => entry.id === recommended)) return recommended;
+          return normalizedQuotes[0]?.id || '';
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setShippingQuotes([]);
+        setSelectedShippingQuoteId('');
+      })
+      .finally(() => {
+        if (!cancelled) setShippingQuotesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shippingAddress.country, shippingAddress.city, shippingCountryCode, totalPrice]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.shipping
+      .getCheckoutDeliveryInfo({
+        providerKey: selectedShippingQuote?.providerKey || 'LOCAL_DEFAULT',
+      })
+      .then((response) => {
+        if (cancelled) return;
+        const providerKey = String(response.data?.providerKey || selectedShippingQuote?.providerKey || 'LOCAL_DEFAULT')
+          .trim()
+          .toUpperCase();
+        const rows = Array.isArray(response.data?.stages) ? response.data.stages : [];
+        const normalized: CheckoutDeliveryStage[] = rows
+          .map((entry: any, index: number) => ({
+            id: String(entry?.id || `${providerKey}-${index + 1}`),
+            step: Math.max(1, Number(entry?.step || index + 1)),
+            stageKey: String(entry?.stageKey || `STEP_${index + 1}`).trim().toUpperCase(),
+            stageLabel: String(entry?.stageLabel || entry?.stageKey || `Step ${index + 1}`).trim(),
+            description: entry?.description ? String(entry.description).trim() : null,
+            isFinal: Boolean(entry?.isFinal),
+            sortOrder: Number(entry?.sortOrder ?? index),
+          }))
+          .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
+          .map((entry, index) => ({
+            ...entry,
+            step: index + 1,
+          }));
+        setDeliveryStages(normalized.length > 0 ? normalized : DEFAULT_CHECKOUT_DELIVERY_STAGES);
+        setDeliveryStagesProviderKey(providerKey || 'LOCAL_DEFAULT');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDeliveryStages(DEFAULT_CHECKOUT_DELIVERY_STAGES);
+        setDeliveryStagesProviderKey('LOCAL_DEFAULT');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedShippingQuote?.providerKey]);
+
+  useEffect(() => {
+    const kindCount = items.reduce(
+      (acc, item) => {
+        acc[item.kind] = (acc[item.kind] || 0) + 1;
+        return acc;
+      },
+      { CUSTOM_DESIGN: 0, READY_TO_WEAR: 0, FABRIC_ONLY: 0 } as Record<string, number>
+    );
+    const dominantKind =
+      kindCount.FABRIC_ONLY >= kindCount.CUSTOM_DESIGN && kindCount.FABRIC_ONLY >= kindCount.READY_TO_WEAR
+        ? 'FABRIC_ONLY'
+        : kindCount.CUSTOM_DESIGN >= kindCount.READY_TO_WEAR
+          ? 'CUSTOM_DESIGN'
+          : 'READY_TO_WEAR';
+
+    const mapRows = (rows: any[], kind: 'FABRIC_ONLY' | 'CUSTOM_DESIGN' | 'READY_TO_WEAR'): SuggestedCheckoutProduct[] =>
+      rows.slice(0, 4).map((row: any) => {
+        if (kind === 'FABRIC_ONLY') {
+          return {
+            id: String(row.id || ''),
+            name: String(row.name || 'Fabric'),
+            image: String(row.images?.[0]?.url || '/images/placeholder.jpg'),
+            subtitle: String(row.materialType?.name || 'Fabric'),
+            href: `/fabrics/${row.id}`,
+          };
+        }
+        if (kind === 'CUSTOM_DESIGN') {
+          return {
+            id: String(row.id || ''),
+            name: String(row.name || 'Design'),
+            image: String(row.images?.[0]?.url || '/images/placeholder.jpg'),
+            subtitle: String(row.category?.name || 'Design'),
+            href: `/custom/${row.id}`,
+          };
+        }
+        return {
+          id: String(row.id || ''),
+          name: String(row.name || 'Ready To Wear'),
+          image: String(row.images?.[0]?.url || '/images/placeholder.jpg'),
+          subtitle: String(row.category?.name || 'Ready To Wear'),
+          href: `/ready-to-wear/${row.id}`,
+        };
+      });
+
+    if (dominantKind === 'FABRIC_ONLY') {
+      api.products
+        .getFabrics({ limit: 4 })
+        .then((response) => {
+          if (response.success) {
+            setSuggestedProducts(mapRows(Array.isArray(response.data?.fabrics) ? response.data.fabrics : [], 'FABRIC_ONLY'));
+          } else {
+            setSuggestedProducts([]);
+          }
+        })
+        .catch(() => setSuggestedProducts([]));
+      return;
+    }
+    if (dominantKind === 'CUSTOM_DESIGN') {
+      api.products
+        .getDesigns({ limit: 4 })
+        .then((response) => {
+          if (response.success) {
+            setSuggestedProducts(mapRows(Array.isArray(response.data?.designs) ? response.data.designs : [], 'CUSTOM_DESIGN'));
+          } else {
+            setSuggestedProducts([]);
+          }
+        })
+        .catch(() => setSuggestedProducts([]));
+      return;
+    }
+    api.products
+      .getReadyToWear({ limit: 4 })
+      .then((response) => {
+        if (response.success) {
+          setSuggestedProducts(mapRows(Array.isArray(response.data?.products) ? response.data.products : [], 'READY_TO_WEAR'));
+        } else {
+          setSuggestedProducts([]);
+        }
+      })
+      .catch(() => setSuggestedProducts([]));
+  }, [items]);
 
   const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,18 +819,251 @@ export default function Checkout() {
     setError(null);
 
     try {
-      // Create payment intent
-      const response = await api.payments.createPaymentIntent({
-        amount: Math.round(finalTotal * 100), // Convert to cents
-        currency: 'usd',
+      const requiresCustomDesignOrder = items.some((entry) => entry.kind === 'CUSTOM_DESIGN');
+      const requiresReadyToWearOrder = items.some((entry) => entry.kind === 'READY_TO_WEAR');
+      const requiresFabricOnlyOrder = items.some((entry) => entry.kind === 'FABRIC_ONLY');
+      const missingOrderRoutes: string[] = [];
+      if (requiresCustomDesignOrder) {
+        const customRoute = await api.orders.probeCustomDesignCreateRoute();
+        if (!customRoute.available) {
+          missingOrderRoutes.push('custom-design');
+        }
+      }
+      if (requiresReadyToWearOrder) {
+        const readyRoute = await api.orders.probeReadyToWearCreateRoute();
+        if (!readyRoute.available) {
+          missingOrderRoutes.push('ready-to-wear');
+        }
+      }
+      if (requiresFabricOnlyOrder) {
+        const fabricRoute = await api.orders.probeFabricOnlyCreateRoute();
+        if (!fabricRoute.available) {
+          missingOrderRoutes.push('fabric-only');
+        }
+      }
+      if (missingOrderRoutes.length > 0) {
+        throw new Error(
+          `Checkout is blocked because backend order route(s) are missing: ${missingOrderRoutes.join(
+            ', '
+          )}. Please deploy latest API routes before charging payment.`
+        );
+      }
+      const totalProductUnits = items.reduce((sum, entry: any) => {
+        if (!entry) return sum;
+        if (entry.kind === 'READY_TO_WEAR') {
+          return sum + Math.max(1, Number(entry.quantity || 1));
+        }
+        return sum + 1;
+      }, 0);
+      const limitsResponse = await api.orders.getOrderLimits().catch(() => null);
+      const maxReadyToWearUnitsPerOrder = Math.max(
+        1,
+        Number((limitsResponse as any)?.data?.maxReadyToWearUnitsPerOrder || 3)
+      );
+      const maxCustomToWearItemsPerCheckout = Math.max(
+        1,
+        Number((limitsResponse as any)?.data?.maxCustomToWearItemsPerCheckout || 3)
+      );
+      const minFabricYardsPerOrder = Math.max(
+        1,
+        Number((limitsResponse as any)?.data?.minFabricYardsPerOrder || 3)
+      );
+      const maxFabricYardsPerOrder = Math.max(
+        minFabricYardsPerOrder,
+        Number((limitsResponse as any)?.data?.maxFabricYardsPerOrder || 200)
+      );
+      const readyToWearUnits = items
+        .filter((entry: any) => entry?.kind === 'READY_TO_WEAR')
+        .reduce((sum, entry: any) => sum + Math.max(1, Number(entry.quantity || 1)), 0);
+      const customToWearCount = items.filter((entry: any) => entry?.kind === 'CUSTOM_DESIGN').length;
+      const totalFabricYards = items
+        .filter((entry: any) => entry?.kind === 'FABRIC_ONLY')
+        .reduce((sum, entry: any) => sum + Math.max(0, Number(entry.yards || 0)), 0);
+      if (readyToWearUnits > maxReadyToWearUnitsPerOrder) {
+        throw new Error(
+          `A maximum of ${maxReadyToWearUnitsPerOrder} Ready To Wear unit(s) is allowed per checkout. Please reduce quantity.`
+        );
+      }
+      if (customToWearCount > maxCustomToWearItemsPerCheckout) {
+        throw new Error(
+          `A maximum of ${maxCustomToWearItemsPerCheckout} Custom To Wear item(s) is allowed per checkout. Please remove some items.`
+        );
+      }
+      if (totalFabricYards > maxFabricYardsPerOrder) {
+        throw new Error(
+          `A maximum of ${maxFabricYardsPerOrder} Fabric To Buy yard(s) is allowed per checkout. Please reduce yards.`
+        );
+      }
+      if (requiresFabricOnlyOrder && totalFabricYards < minFabricYardsPerOrder) {
+        throw new Error(
+          `A minimum of ${minFabricYardsPerOrder} Fabric To Buy yard(s) is required per checkout.`
+        );
+      }
+      const fabricOnlyItems = items.filter((entry: any) => entry?.kind === 'FABRIC_ONLY');
+      if (fabricOnlyItems.length > 0) {
+        const uniqueFabricIds = Array.from(
+          new Set(
+            fabricOnlyItems
+              .map((entry: any) => String(entry?.fabricId || '').trim())
+              .filter(Boolean)
+          )
+        );
+        const fabricResponses = await Promise.all(
+          uniqueFabricIds.map(async (fabricId) => {
+            try {
+              const response = await api.products.getFabric(fabricId);
+              return { fabricId, response };
+            } catch {
+              return { fabricId, response: null };
+            }
+          })
+        );
+        const minYardsByFabricId = new Map<string, number>();
+        for (const row of fabricResponses) {
+          const minByProduct = Math.max(
+            1,
+            Number((row.response as any)?.data?.minOrderMeters || (row.response as any)?.data?.minYards || 0)
+          );
+          minYardsByFabricId.set(row.fabricId, Math.max(minFabricYardsPerOrder, minByProduct || minFabricYardsPerOrder));
+        }
+        for (const item of fabricOnlyItems) {
+          const fabricId = String((item as any)?.fabricId || '').trim();
+          const requestedYards = Math.max(0, Number((item as any)?.yards || 0));
+          const effectiveMinimum = Math.max(
+            minFabricYardsPerOrder,
+            Number(minYardsByFabricId.get(fabricId) || minFabricYardsPerOrder)
+          );
+          if (requestedYards < effectiveMinimum) {
+            const fabricName = String((item as any)?.fabricName || 'this fabric').trim() || 'this fabric';
+            throw new Error(
+              `${fabricName} has a strict minimum order of ${effectiveMinimum} yard(s). Increase quantity to continue checkout.`
+            );
+          }
+        }
+      }
+      const invalidReadyItem = items.find(
+        (entry: any) => entry?.kind === 'READY_TO_WEAR' && Number(entry?.quantity || 0) < 1
+      );
+      if (invalidReadyItem) {
+        throw new Error('Ready To Wear quantity must be at least 1 for every product.');
+      }
+      const invalidCustomFabricQuantity = items.find(
+        (entry: any) =>
+          entry?.kind === 'CUSTOM_DESIGN' &&
+          String(entry?.fabricSelectionMode || '').toUpperCase() !== 'DESIGNER_DECIDES' &&
+          Number(entry?.fabricMeters || 0) < 1
+      );
+      if (invalidCustomFabricQuantity) {
+        throw new Error('Custom To Wear selected fabric quantity must be at least 1 yard.');
+      }
+      if (totalProductUnits <= 0) {
+        throw new Error('No valid products were found in this checkout.');
+      }
+      if (shippingQuotes.length > 0 && !selectedShippingQuote) {
+        throw new Error('Please select a shipping option to continue.');
+      }
+      const normalizedTotalUsd = Number(Number(finalTotal || 0).toFixed(2));
+      if (!Number.isFinite(normalizedTotalUsd) || normalizedTotalUsd <= 0) {
+        throw new Error('Checkout total must be greater than 0 to initialize payment.');
+      }
+      const providerKey = selectedProvider?.providerKey || 'STRIPE';
+      const ensureServerShippingAddressId = async () => {
+        const candidateIds = [
+          selectedSavedAddressId,
+          validatedShippingAddressId,
+        ].map((entry) => String(entry || '').trim());
+        const usableExisting = candidateIds.find((id) => isUuid(id));
+        if (usableExisting) {
+          return usableExisting;
+        }
+        const addressPayload = {
+          label: 'Checkout Address',
+          fullName: shippingAddress.fullName,
+          phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country),
+          country: shippingAddress.country,
+          city: shippingAddress.city,
+          address: [shippingAddress.addressLine1, shippingAddress.addressLine2, shippingAddress.state].filter(Boolean).join(', '),
+          postalCode: shippingAddress.postalCode,
+          isDefault: false,
+        };
+        const addressResponse = await api.customer.addAddress(addressPayload);
+        const responseId = String(addressResponse?.data?.id || '').trim();
+        if (addressResponse?.success && isUuid(responseId)) {
+          return responseId;
+        }
+        const refreshed = await api.customer.getAddresses();
+        const rows = Array.isArray(refreshed?.data)
+          ? refreshed.data
+          : Array.isArray((refreshed?.data as any)?.addresses)
+            ? (refreshed?.data as any).addresses
+            : [];
+        const matched = rows.find((entry: any) => {
+          if (!isUuid(entry?.id)) return false;
+          const sameName = String(entry?.fullName || '').trim() === String(addressPayload.fullName || '').trim();
+          const sameCity = String(entry?.city || '').trim() === String(addressPayload.city || '').trim();
+          const sameCountry = String(entry?.country || '').trim() === String(addressPayload.country || '').trim();
+          return sameName && sameCity && sameCountry;
+        });
+        if (matched?.id && isUuid(matched.id)) {
+          return String(matched.id);
+        }
+        throw new Error('Unable to verify shipping address on server. Please save address in Profile and retry checkout.');
+      };
+      const serverShippingAddressId = await ensureServerShippingAddressId();
+      setValidatedShippingAddressId(serverShippingAddressId);
+      const response = await api.payments.createPaymentSession({
+        providerKey,
+        amount: Math.round(normalizedTotalUsd * 100), // Convert to cents
+        amountUsd: normalizedTotalUsd,
+        currency: 'USD',
+        returnUrl: `${window.location.origin}/checkout?payment_provider=${providerKey}`,
+        cancelUrl: `${window.location.origin}/checkout?payment_provider=${providerKey}&payment_cancelled=true`,
+        customer: {
+          email: user?.email || undefined,
+          name: shippingAddress.fullName || undefined,
+          phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country) || undefined,
+        },
       });
+      const debugInfo = api.payments.getLastCreateSessionDebugInfo();
+      if (debugInfo) {
+        setPaymentDebugInfo(debugInfo as PaymentSessionDebugInfo);
+      }
 
-      if (response.success) {
+      if (response.success && response.data?.flow === 'INLINE') {
         setClientSecret(response.data.clientSecret);
         setStep('payment');
+        return;
       }
+      if (response.success && response.data?.flow === 'REDIRECT' && response.data.checkoutUrl) {
+        sessionStorage.setItem(
+          'checkout_pending_payment',
+          JSON.stringify({
+            providerKey,
+            reference: response.data.reference,
+            shippingAddress,
+            selectedSavedAddressId,
+            validatedShippingAddressId: serverShippingAddressId,
+            shippingQuote: selectedShippingQuote,
+            promoPreview,
+            promoCode,
+            checkoutPricingPreview,
+            createdAt: Date.now(),
+          })
+        );
+        window.location.href = response.data.checkoutUrl;
+        return;
+      }
+      throw new Error('Payment provider could not initialize checkout.');
     } catch (err: any) {
-      setError(err.message || 'Failed to initialize payment');
+      const rawMessage = String(err?.response?.data?.message || err?.message || 'Failed to initialize payment');
+      const normalizedMessage = rawMessage.toLowerCase();
+      if (normalizedMessage.includes('amountusd') && normalizedMessage.includes('required')) {
+        setError(
+          'Payment session failed because this backend expects an old amountUsd format. Checkout automatically attempted a compatibility fallback. If this still appears, switch to Stripe or redeploy the latest API.'
+        );
+      } else {
+        setError(rawMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -88,6 +1073,9 @@ export default function Checkout() {
     e.preventDefault();
     
     if (!stripe || !elements) {
+      setError(
+        'Stripe inline checkout is not configured on this deployment. Choose another payment option or configure a valid Stripe publishable key.'
+      );
       return;
     }
 
@@ -109,7 +1097,7 @@ export default function Checkout() {
               postal_code: shippingAddress.postalCode,
               country: shippingAddress.country,
             },
-            phone: shippingAddress.phone,
+            phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country),
           },
         },
       }
@@ -124,30 +1112,480 @@ export default function Checkout() {
     if (paymentIntent.status === 'succeeded') {
       setStep('review');
       // Create orders
-      await createOrders(paymentIntent.id);
+      await createOrders(paymentIntent.id, selectedPaymentProvider);
     }
 
     setLoading(false);
   };
 
-  const createOrders = async (paymentIntentId: string) => {
+  const createOrders = async (
+    paymentIntentId: string,
+    paymentMethod: string,
+    shippingQuote: ShippingQuoteOption | null = selectedShippingQuote,
+    shippingAddressIdOverride?: string | null,
+    checkoutPricingPreviewOverride?: CheckoutPricingPreviewResult | null
+  ) => {
     try {
-      for (const item of items) {
-        await api.orders.createOrder({
-          designId: item.designId,
-          fabricId: item.fabricId,
-          fabricMeters: item.fabricMeters,
-          measurements: item.measurements,
-          shippingAddress,
-          paymentIntentId,
-          totalAmount: item.totalPrice,
+      const resolveServerShippingAddressId = async () => {
+        const candidateAddressId = String(
+          shippingAddressIdOverride || validatedShippingAddressId || selectedSavedAddressId || ''
+        ).trim();
+        if (isUuid(candidateAddressId)) {
+          return candidateAddressId;
+        }
+        const addressResponse = await api.customer.addAddress({
+          label: 'Checkout Address',
+          fullName: shippingAddress.fullName,
+          phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country),
+          country: shippingAddress.country,
+          city: shippingAddress.city,
+          address: [shippingAddress.addressLine1, shippingAddress.addressLine2, shippingAddress.state].filter(Boolean).join(', '),
+          postalCode: shippingAddress.postalCode,
+          isDefault: false,
         });
+        const responseId = String(addressResponse?.data?.id || '').trim();
+        if (addressResponse?.success && isUuid(responseId)) {
+          return responseId;
+        }
+        const refreshed = await api.customer.getAddresses();
+        const rows = Array.isArray(refreshed?.data)
+          ? refreshed.data
+          : Array.isArray((refreshed?.data as any)?.addresses)
+            ? (refreshed?.data as any).addresses
+            : [];
+        const firstServerAddress = rows.find((entry: any) => isUuid(entry?.id));
+        if (firstServerAddress?.id) {
+          return String(firstServerAddress.id);
+        }
+        throw new Error('Unable to verify shipping address on server.');
+      };
+      const candidateAddressId = await resolveServerShippingAddressId();
+      let shippingAddressId = '';
+      if (candidateAddressId && isUuid(candidateAddressId)) {
+        shippingAddressId = candidateAddressId;
+      } else {
+        const addressResponse = await api.customer.addAddress({
+          label: 'Checkout Address',
+          fullName: shippingAddress.fullName,
+          phone: normalizePhoneWithCountryPrefix(shippingAddress.phone, shippingAddress.country),
+          country: shippingAddress.country,
+          city: shippingAddress.city,
+          address: [shippingAddress.addressLine1, shippingAddress.addressLine2, shippingAddress.state].filter(Boolean).join(', '),
+          postalCode: shippingAddress.postalCode,
+          isDefault: false,
+        });
+
+        if (!addressResponse.success || !addressResponse.data?.id || !isUuid(addressResponse.data.id)) {
+          throw new Error('Failed to save shipping address');
+        }
+        shippingAddressId = String(addressResponse.data.id);
+      }
+      setValidatedShippingAddressId(shippingAddressId);
+
+      const createdOrderNumbers: string[] = [];
+      const createdOrderNumbersSet = new Set<string>();
+      const pushCreatedOrderNumber = (value: unknown) => {
+        const orderNumber = String(value || '').trim();
+        if (!orderNumber || createdOrderNumbersSet.has(orderNumber)) return;
+        createdOrderNumbersSet.add(orderNumber);
+        createdOrderNumbers.push(orderNumber);
+      };
+      const shippingPayload = {
+        shippingCostUsd: Number(shippingQuote?.priceUsd ?? shipping),
+        shippingQuoteId: shippingQuote?.id || undefined,
+        shippingProviderKey: shippingQuote?.providerKey || undefined,
+        shippingProviderName: shippingQuote?.providerName || undefined,
+        shippingServiceName: shippingQuote?.serviceName || undefined,
+        shippingEtaMinDays: Number(shippingQuote?.etaMinDays ?? 0),
+        shippingEtaMaxDays: Number(shippingQuote?.etaMaxDays ?? 0),
+      };
+
+      const customItems = items.filter((item) => item.kind === 'CUSTOM_DESIGN');
+      const readyToWearItems = items.filter((item) => item.kind === 'READY_TO_WEAR');
+      const fabricOnlyItems = items.filter((item) => item.kind === 'FABRIC_ONLY');
+      const activeCheckoutPricingPreview = checkoutPricingPreviewOverride || checkoutPricingPreview;
+      const groupedFabricItems = Array.from(
+        fabricOnlyItems.reduce((map, item) => {
+          const fabricId = String(item.fabricId || '').trim();
+          if (!fabricId) return map;
+          const existing = map.get(fabricId);
+          if (!existing) {
+            map.set(fabricId, {
+              key: fabricId,
+              fabricId,
+              yards: Number(item.yards || 0),
+              subtotal: Number(item.pricePerYard || 0) * Number(item.yards || 0),
+            });
+            return map;
+          }
+          existing.yards += Number(item.yards || 0);
+          existing.subtotal += Number(item.pricePerYard || 0) * Number(item.yards || 0);
+          return map;
+        }, new Map<string, { key: string; fabricId: string; yards: number; subtotal: number }>())
+      ).map(([, value], index) => ({
+        ...value,
+        key: `fabric-${index}`,
+      }));
+      const discountBudget = Math.max(0, Number(promoPreview?.discountUsd || 0));
+      const customSegments = customItems.map((item, index) => ({
+        key: `custom-${index}`,
+        subtotal: Number(item.totalPrice || 0),
+      }));
+      const readySegment = {
+        key: 'ready',
+        subtotal: readyToWearItems.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 1), 0),
+      };
+      const fabricSegments = groupedFabricItems.map((item) => ({
+        key: item.key,
+        subtotal: Number(item.subtotal || 0),
+      }));
+      const allSegments = [...customSegments, ...(readySegment.subtotal > 0 ? [readySegment] : []), ...fabricSegments];
+      const totalSegmentSubtotal = allSegments.reduce((sum, entry) => sum + Number(entry.subtotal || 0), 0);
+      const allocatedDiscount = new Map<string, number>();
+      const allocatedCheckoutPricing = new Map<string, number>();
+      let remaining = discountBudget;
+      allSegments.forEach((segment, index) => {
+        if (remaining <= 0 || totalSegmentSubtotal <= 0) {
+          allocatedDiscount.set(segment.key, 0);
+          return;
+        }
+        if (index === allSegments.length - 1) {
+          const finalAmount = Math.max(0, Math.min(segment.subtotal, remaining));
+          allocatedDiscount.set(segment.key, Number(finalAmount.toFixed(2)));
+          remaining = Number((remaining - finalAmount).toFixed(2));
+          return;
+        }
+        const share = (discountBudget * segment.subtotal) / totalSegmentSubtotal;
+        const amount = Math.max(0, Math.min(segment.subtotal, Number(share.toFixed(2)), remaining));
+        allocatedDiscount.set(segment.key, Number(amount.toFixed(2)));
+        remaining = Number((remaining - amount).toFixed(2));
+      });
+      const checkoutPricingBudget = Number(activeCheckoutPricingPreview?.totalAdjustmentUsd || 0);
+      let remainingCheckoutPricing = checkoutPricingBudget;
+      allSegments.forEach((segment, index) => {
+        if (totalSegmentSubtotal <= 0) {
+          allocatedCheckoutPricing.set(segment.key, 0);
+          return;
+        }
+        if (index === allSegments.length - 1) {
+          const finalAmount = Number(remainingCheckoutPricing.toFixed(2));
+          allocatedCheckoutPricing.set(segment.key, finalAmount);
+          remainingCheckoutPricing = Number((remainingCheckoutPricing - finalAmount).toFixed(2));
+          return;
+        }
+        const share = (checkoutPricingBudget * segment.subtotal) / totalSegmentSubtotal;
+        const amount = Number(share.toFixed(2));
+        allocatedCheckoutPricing.set(segment.key, amount);
+        remainingCheckoutPricing = Number((remainingCheckoutPricing - amount).toFixed(2));
+      });
+
+      if (readyToWearItems.length > 0) {
+        const readyOrderResponse = await api.orders.createReadyToWearOrder({
+          items: readyToWearItems.map((item) => ({
+            readyToWearId: item.readyToWearId,
+            size: item.selectedSize,
+            color: item.selectedColor || undefined,
+            quantity: item.quantity,
+          })),
+          shippingAddressId,
+          paymentMethod,
+          paymentIntentId,
+          promoCode: promoPreview?.code || undefined,
+          discountUsd: allocatedDiscount.get('ready') || 0,
+          checkoutPricingAdjustmentUsd: allocatedCheckoutPricing.get('ready') || 0,
+          ...shippingPayload,
+        });
+        if (readyOrderResponse.success && readyOrderResponse.data?.orderNumber) {
+          pushCreatedOrderNumber(readyOrderResponse.data.orderNumber);
+        }
+      }
+
+      for (const item of groupedFabricItems) {
+        if (!item.fabricId || Number(item.yards || 0) < 1) continue;
+        const fabricOrderResponse = await api.orders.createFabricOnlyOrder({
+          fabricId: item.fabricId,
+          yards: Number(item.yards || 1),
+          shippingAddressId,
+          paymentMethod,
+          paymentIntentId,
+          promoCode: promoPreview?.code || undefined,
+          discountUsd: allocatedDiscount.get(item.key) || 0,
+          checkoutPricingAdjustmentUsd: allocatedCheckoutPricing.get(item.key) || 0,
+          ...shippingPayload,
+        });
+        if (fabricOrderResponse.success && fabricOrderResponse.data?.orderNumber) {
+          pushCreatedOrderNumber(fabricOrderResponse.data.orderNumber);
+        }
+      }
+
+      for (let index = 0; index < customItems.length; index += 1) {
+        const item = customItems[index];
+        if (!item.designId) {
+          continue;
+        }
+        const isDesignerDecidesFabric = item.fabricSelectionMode === 'DESIGNER_DECIDES' || !item.fabricId;
+
+        const orderResponse = await api.orders.createCustomDesignOrder({
+          designId: item.designId,
+          fabricId: isDesignerDecidesFabric ? undefined : item.fabricId,
+          yards: isDesignerDecidesFabric ? undefined : Number(item.fabricMeters || 1),
+          fabricSelectionMode: isDesignerDecidesFabric ? 'DESIGNER_DECIDES' : 'CUSTOMER_SELECTED',
+          fabricPreferenceNotes: isDesignerDecidesFabric ? item.fabricPreferenceNotes || undefined : undefined,
+          measurements: item.measurements || {},
+          shippingAddressId,
+          paymentMethod,
+          paymentIntentId,
+          promoCode: promoPreview?.code || undefined,
+          discountUsd: allocatedDiscount.get(`custom-${index}`) || 0,
+          checkoutPricingAdjustmentUsd: allocatedCheckoutPricing.get(`custom-${index}`) || 0,
+          ...shippingPayload,
+        });
+        if (orderResponse.success && orderResponse.data?.orderNumber) {
+          pushCreatedOrderNumber(orderResponse.data.orderNumber);
+        }
+      }
+
+      setOrderNumbers(createdOrderNumbers);
+      setCompletedCheckout({
+        createdAt: new Date().toISOString(),
+        orderNumbers: createdOrderNumbers,
+        items: items.map((item) => ({ ...item })),
+        shippingAddress: { ...shippingAddress },
+        shippingQuote: shippingQuote
+          ? {
+              ...shippingQuote,
+            }
+          : null,
+        paymentMethod,
+        subtotalUsd: Number(totalPrice || 0),
+        promoCode: promoPreview?.code || undefined,
+        promoDiscountUsd: Number(promoPreview?.discountUsd || 0),
+        checkoutPricingLabel: String(activeCheckoutPricingPreview?.label || 'Checkout Pricing'),
+        checkoutPricingAdjustmentUsd: Number(activeCheckoutPricingPreview?.totalAdjustmentUsd || 0),
+        checkoutPricingAppliedRules: Array.isArray(activeCheckoutPricingPreview?.appliedRules)
+          ? activeCheckoutPricingPreview.appliedRules
+          : [],
+        shippingUsd: Number(shippingPayload.shippingCostUsd || 0),
+        totalUsd: Number(
+          Math.max(
+            0,
+            Number(totalPrice || 0) +
+              Number(activeCheckoutPricingPreview?.totalAdjustmentUsd || 0) -
+              Number(promoPreview?.discountUsd || 0) +
+              Number(shippingPayload.shippingCostUsd || 0)
+          )
+        ),
+      });
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(checkoutPromoStorageKey);
       }
       clearCart();
-      navigate('/orders?success=true');
+      setStep('review');
     } catch (err) {
       console.error('Failed to create orders:', err);
-      setError('Payment succeeded but order creation failed. Please contact support.');
+      const details = String((err as any)?.response?.data?.message || (err as any)?.message || '').trim();
+      if (details.toLowerCase().includes('route not found') || details.toLowerCase().includes('not found')) {
+        setError(
+          'Payment succeeded, but this backend deployment is missing one or more order creation routes. Please deploy latest API routes.'
+        );
+      } else {
+        setError(
+          details
+            ? `Payment succeeded but order creation failed: ${details}`
+            : 'Payment succeeded but order creation failed. Please contact support.'
+        );
+      }
+    }
+  };
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const providerKey = String(searchParams.get('payment_provider') || '').toUpperCase();
+    if (!providerKey) return;
+    const wasCancelled = searchParams.get('payment_cancelled') === 'true';
+    if (wasCancelled) {
+      setError('Payment was cancelled before completion. You can try again.');
+      sessionStorage.removeItem('checkout_pending_payment');
+      return;
+    }
+    const pendingRaw = sessionStorage.getItem('checkout_pending_payment');
+    if (!pendingRaw) return;
+    let pending: any = null;
+    try {
+      pending = JSON.parse(pendingRaw);
+    } catch {
+      sessionStorage.removeItem('checkout_pending_payment');
+      return;
+    }
+    if (!pending || String(pending.providerKey || '').toUpperCase() !== providerKey) return;
+    const reference =
+      providerKey === 'FLUTTERWAVE'
+        ? searchParams.get('tx_ref') || searchParams.get('transaction_id') || pending.reference
+        : searchParams.get('token') || pending.reference;
+    if (!reference) {
+      setError('Unable to verify payment reference from the provider callback.');
+      return;
+    }
+    if (pending.shippingAddress && typeof pending.shippingAddress === 'object') {
+      setShippingAddress((prev) => ({ ...prev, ...pending.shippingAddress }));
+    }
+    if (pending.selectedSavedAddressId) {
+      setSelectedSavedAddressId(String(pending.selectedSavedAddressId || ''));
+    }
+    if (pending.validatedShippingAddressId) {
+      setValidatedShippingAddressId(String(pending.validatedShippingAddressId || ''));
+    }
+    if (pending.promoPreview && typeof pending.promoPreview === 'object') {
+      setPromoPreview(pending.promoPreview as PromoPreviewResult);
+    }
+    if (pending.promoCode) {
+      setPromoCode(String(pending.promoCode || ''));
+    }
+    const pendingCheckoutPricingPreview =
+      pending.checkoutPricingPreview && typeof pending.checkoutPricingPreview === 'object'
+        ? ({
+            label: String((pending.checkoutPricingPreview as any).label || 'Checkout Pricing'),
+            baseSubtotalUsd: Number((pending.checkoutPricingPreview as any).baseSubtotalUsd || 0),
+            totalAdjustmentUsd: Number((pending.checkoutPricingPreview as any).totalAdjustmentUsd || 0),
+            finalSubtotalUsd: Number((pending.checkoutPricingPreview as any).finalSubtotalUsd || 0),
+            appliedRules: Array.isArray((pending.checkoutPricingPreview as any).appliedRules)
+              ? (pending.checkoutPricingPreview as any).appliedRules.map((rule: any) => ({
+                  ruleId: String(rule?.ruleId || ''),
+                  ruleName: String(rule?.ruleName || ''),
+                  adjustmentType: String(rule?.adjustmentType || ''),
+                  value: Number(rule?.value || 0),
+                  amountUsd: Number(rule?.amountUsd || 0),
+                  occurrences: Number(rule?.occurrences || 1),
+                }))
+              : [],
+          } as CheckoutPricingPreviewResult)
+        : null;
+    if (pendingCheckoutPricingPreview) {
+      setCheckoutPricingPreview(pendingCheckoutPricingPreview);
+    }
+    const pendingShippingQuote =
+      pending.shippingQuote && typeof pending.shippingQuote === 'object'
+        ? ({
+            id: String(pending.shippingQuote.id || ''),
+            source: pending.shippingQuote.source === 'LOCAL' ? 'LOCAL' : 'GLOBAL',
+            providerKey: String(pending.shippingQuote.providerKey || '').toUpperCase(),
+            providerName: String(pending.shippingQuote.providerName || pending.shippingQuote.providerKey || 'Shipping Provider'),
+            serviceName: String(pending.shippingQuote.serviceName || 'Standard'),
+            etaMinDays: Number(pending.shippingQuote.etaMinDays || 0),
+            etaMaxDays: Number(pending.shippingQuote.etaMaxDays || 0),
+            priceUsd: Number(pending.shippingQuote.priceUsd || 0),
+          } as ShippingQuoteOption)
+        : null;
+    if (pendingShippingQuote?.id) {
+      setShippingQuotes((prev) => {
+        if (prev.find((entry) => entry.id === pendingShippingQuote.id)) return prev;
+        return [...prev, pendingShippingQuote];
+      });
+      setSelectedShippingQuoteId(pendingShippingQuote.id);
+    }
+    setSelectedPaymentProvider(providerKey);
+    setLoading(true);
+    setError(null);
+    api.payments
+      .verifyPayment({
+        providerKey,
+        reference,
+        payerId: searchParams.get('PayerID') || undefined,
+      })
+      .then(async (verifyResponse) => {
+        if (!verifyResponse.success || !verifyResponse.data?.isPaid) {
+          throw new Error('Payment could not be verified as completed.');
+        }
+        setStep('review');
+        await createOrders(
+          String(verifyResponse.data.paymentReference || reference),
+          providerKey,
+          pendingShippingQuote,
+          pending?.validatedShippingAddressId
+            ? String(pending.validatedShippingAddressId)
+            : pending?.selectedSavedAddressId
+              ? String(pending.selectedSavedAddressId)
+              : undefined,
+          pendingCheckoutPricingPreview
+        );
+      })
+      .catch((err: any) => {
+        setError(err?.response?.data?.message || err.message || 'Unable to verify redirected payment.');
+      })
+      .finally(() => {
+        setLoading(false);
+        sessionStorage.removeItem('checkout_pending_payment');
+      });
+  }, []);
+
+  const handleApplyPromo = async () => {
+    const requestedCode = String(promoCode || '').trim().toUpperCase();
+    if (!requestedCode) {
+      setError('Enter a promo code to apply.');
+      return;
+    }
+    try {
+      setPromoLoading(true);
+      setError(null);
+      const payloadItems = items.map((item) => {
+        if (item.kind === 'READY_TO_WEAR') {
+          return {
+            productType: 'READY_TO_WEAR' as const,
+            productId: item.readyToWearId,
+            unitPrice: Number(item.unitPrice || 0),
+            quantity: Number(item.quantity || 1),
+          };
+        }
+        if (item.kind === 'FABRIC_ONLY') {
+          return {
+            productType: 'FABRIC' as const,
+            productId: item.fabricId,
+            unitPrice: Number(item.pricePerYard || 0),
+            quantity: Number(item.yards || 1),
+          };
+        }
+        return {
+          productType: 'DESIGN' as const,
+          productId: item.designId,
+          unitPrice: Number(item.totalPrice || 0),
+          quantity: 1,
+        };
+      });
+      const preview = await api.promotions.preview({
+        code: requestedCode,
+        items: payloadItems,
+        paymentProvider: selectedPaymentProvider || undefined,
+        shippingProvider: selectedShippingQuote?.providerKey || undefined,
+        shippingQuoteId: selectedShippingQuote?.id || undefined,
+        cardFingerprint: cardPromoHint || undefined,
+        country: shippingAddress.country || undefined,
+        city: shippingAddress.city || undefined,
+      });
+      if (!preview.success || !preview.data) {
+        throw new Error(preview.message || 'Promo code could not be applied.');
+      }
+      const subtotalFromItems = payloadItems.reduce(
+        (sum, entry) => sum + Number(entry.unitPrice || 0) * Number(entry.quantity || 0),
+        0
+      );
+      const normalizedPreview = normalizePromoPreviewResponse(preview.data, requestedCode, subtotalFromItems);
+      if (!isStrictPromoPreviewMatch(normalizedPreview, requestedCode)) {
+        throw new Error('Promo validation failed for this code. Please verify the code is configured and active.');
+      }
+      setPromoPreview(normalizedPreview);
+      setPromoCode(String(normalizedPreview.code || requestedCode).toUpperCase());
+    } catch (promoError: any) {
+      setPromoPreview(null);
+      const promoMessage = String(promoError?.response?.data?.message || promoError?.message || 'Failed to apply promo code.');
+      if (promoMessage.toLowerCase().includes('route not found')) {
+        setError(
+          'Promo validation is unavailable on this backend deployment right now (promo routes missing). Please continue checkout without promo or deploy the latest API.'
+        );
+      } else {
+        setError(promoMessage);
+      }
+    } finally {
+      setPromoLoading(false);
     }
   };
 
@@ -166,19 +1604,20 @@ export default function Checkout() {
     },
   };
 
-  if (items.length === 0) {
+  // Keep customers on invoice/review after successful payment even after cart is cleared.
+  if (items.length === 0 && !completedCheckout) {
     navigate('/cart');
     return null;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-24 md:pb-8">
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <button 
             onClick={() => navigate('/cart')}
-            className="flex items-center text-gray-600 hover:text-amber-600 transition-colors"
+            className="flex items-center text-gray-600 hover:text-[#e85a3c] transition-colors"
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
             Back to Cart
@@ -187,37 +1626,38 @@ export default function Checkout() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
+        <p className="mt-2 mb-6 text-sm text-gray-500">{currentStepSummary}</p>
 
         {/* Progress Steps */}
-        <div className="flex items-center justify-center mb-8">
-          <div className="flex items-center">
+        <div className="mb-8 overflow-x-auto">
+          <div className="mx-auto flex min-w-[520px] items-center justify-center">
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-              step === 'shipping' ? 'bg-amber-600 text-white' : 'bg-green-500 text-white'
+              step === 'shipping' ? 'bg-[#e85a3c] text-white' : 'bg-green-500 text-white'
             }`}>
               {step === 'shipping' ? '1' : <Check className="w-5 h-5" />}
             </div>
-            <span className={`ml-2 font-medium ${step === 'shipping' ? 'text-amber-600' : 'text-green-600'}`}>
+            <span className={`ml-2 text-sm font-medium ${step === 'shipping' ? 'text-[#e85a3c]' : 'text-green-600'}`}>
               Shipping
             </span>
-          </div>
-          <div className="w-16 h-0.5 bg-gray-200 mx-4" />
-          <div className={`flex items-center ${step === 'payment' ? 'text-amber-600' : step === 'review' ? 'text-green-600' : 'text-gray-400'}`}>
+            <div className="w-16 h-0.5 bg-gray-200 mx-4" />
+            <div className={`flex items-center ${step === 'payment' ? 'text-[#e85a3c]' : step === 'review' ? 'text-green-600' : 'text-gray-400'}`}>
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-              step === 'payment' ? 'bg-amber-600 text-white' : step === 'review' ? 'bg-green-500 text-white' : 'bg-gray-200'
+              step === 'payment' ? 'bg-[#e85a3c] text-white' : step === 'review' ? 'bg-green-500 text-white' : 'bg-gray-200'
             }`}>
               {step === 'review' ? <Check className="w-5 h-5" /> : '2'}
             </div>
-            <span className="ml-2 font-medium">Payment</span>
-          </div>
-          <div className="w-16 h-0.5 bg-gray-200 mx-4" />
-          <div className={`flex items-center ${step === 'review' ? 'text-amber-600' : 'text-gray-400'}`}>
+              <span className="ml-2 text-sm font-medium">Payment</span>
+            </div>
+            <div className="w-16 h-0.5 bg-gray-200 mx-4" />
+            <div className={`flex items-center ${step === 'review' ? 'text-[#e85a3c]' : 'text-gray-400'}`}>
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-              step === 'review' ? 'bg-amber-600 text-white' : 'bg-gray-200'
+              step === 'review' ? 'bg-[#e85a3c] text-white' : 'bg-gray-200'
             }`}>
               3
             </div>
-            <span className="ml-2 font-medium">Review</span>
+              <span className="ml-2 text-sm font-medium">Review</span>
+            </div>
           </div>
         </div>
 
@@ -230,12 +1670,63 @@ export default function Checkout() {
                 <p className="text-red-700">{error}</p>
               </div>
             )}
+            {runtimeStripeReloading ? (
+              <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                Applying Stripe publishable key from payment integrations. Reloading checkout...
+              </div>
+            ) : null}
+            {(import.meta.env.DEV || (typeof window !== 'undefined' && window.localStorage.getItem('af_debug_checkout') === '1')) &&
+            paymentDebugInfo ? (
+              <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+                <p className="font-semibold">Checkout debug</p>
+                <p>create-session route: {paymentDebugInfo.routePath}</p>
+                <p>mode: {paymentDebugInfo.mode}</p>
+                <p>
+                  amount: {paymentDebugInfo.amountMinor} ({Number(paymentDebugInfo.amountUsd || 0).toFixed(2)} USD)
+                </p>
+                <p>provider: {paymentDebugInfo.providerKey}</p>
+                <p>at: {paymentDebugInfo.timestamp ? new Date(paymentDebugInfo.timestamp).toLocaleString() : 'N/A'}</p>
+              </div>
+            ) : null}
 
             {step === 'shipping' && (
               <form onSubmit={handleShippingSubmit} className="bg-white rounded-xl p-6 shadow-sm border">
                 <div className="flex items-center gap-3 mb-6">
-                  <MapPin className="w-5 h-5 text-amber-600" />
+                  <MapPin className="w-5 h-5 text-[#e85a3d]" />
                   <h2 className="text-lg font-semibold">Shipping Address</h2>
+                </div>
+                <p className="mb-5 text-sm text-gray-500">
+                  Enter delivery details exactly as they appear on your local courier records.
+                </p>
+
+                <div className="mb-4">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Saved Address</label>
+                  <select
+                    value={selectedSavedAddressId}
+                    onChange={(event) => {
+                      const nextId = String(event.target.value || '');
+                      setSelectedSavedAddressId(nextId);
+                      if (!nextId) return;
+                      const selected = savedAddresses.find((entry) => entry.id === nextId);
+                      if (!selected) return;
+                      setShippingAddress((prev) => ({ ...prev, ...mapSavedAddressToShipping(selected) }));
+                    }}
+                    className="w-full rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-[#e85a3d]/25"
+                    disabled={savedAddressesLoading || savedAddresses.length === 0}
+                  >
+                    <option value="">
+                      {savedAddressesLoading
+                        ? 'Loading saved addresses...'
+                        : savedAddresses.length > 0
+                          ? 'Select saved address or continue manually'
+                          : 'No saved addresses found'}
+                    </option>
+                    {savedAddresses.map((address) => (
+                      <option key={address.id} value={address.id}>
+                        {[address.label || 'Address', address.city, address.country].filter(Boolean).join(' • ')}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -247,8 +1738,11 @@ export default function Checkout() {
                       type="text"
                       required
                       value={shippingAddress.fullName}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, fullName: e.target.value }))}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, fullName: e.target.value }));
+                      }}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     />
                   </div>
 
@@ -260,8 +1754,11 @@ export default function Checkout() {
                       type="text"
                       required
                       value={shippingAddress.addressLine1}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, addressLine1: e.target.value }))}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, addressLine1: e.target.value }));
+                      }}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     />
                   </div>
 
@@ -272,47 +1769,11 @@ export default function Checkout() {
                     <input
                       type="text"
                       value={shippingAddress.addressLine2}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, addressLine2: e.target.value }))}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      City *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={shippingAddress.city}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, city: e.target.value }))}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      State/Province *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={shippingAddress.state}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, state: e.target.value }))}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Postal Code *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={shippingAddress.postalCode}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, postalCode: e.target.value }))}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, addressLine2: e.target.value }));
+                      }}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     />
                   </div>
 
@@ -323,17 +1784,151 @@ export default function Checkout() {
                     <select
                       required
                       value={shippingAddress.country}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, country: e.target.value }))}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      onChange={(e) =>
+                        {
+                          setSelectedSavedAddressId('');
+                          setShippingAddress((prev) => ({
+                            ...prev,
+                            country: e.target.value,
+                            state: '',
+                            city: '',
+                            phone: normalizePhoneWithCountryPrefix(prev.phone, e.target.value),
+                          }));
+                        }
+                      }
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     >
                       <option value="">Select country</option>
-                      <option value="US">United States</option>
-                      <option value="NG">Nigeria</option>
-                      <option value="GH">Ghana</option>
-                      <option value="KE">Kenya</option>
-                      <option value="ZA">South Africa</option>
-                      <option value="GB">United Kingdom</option>
-                      <option value="CA">Canada</option>
+                      {countryOptions.map((country) => (
+                        <option key={country.code} value={country.code}>
+                          {country.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State/Province *
+                    </label>
+                    <select
+                      required
+                      value={shippingAddress.state}
+                      onChange={(e) =>
+                        {
+                          setSelectedSavedAddressId('');
+                          setShippingAddress((prev) => ({
+                            ...prev,
+                            state: e.target.value,
+                            city: '',
+                          }));
+                        }
+                      }
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
+                      disabled={!shippingAddress.country}
+                    >
+                      <option value="">{shippingAddress.country ? 'Select state/province' : 'Select country first'}</option>
+                      {selectableStateOptions.map((state) => (
+                        <option key={state} value={state}>
+                          {state}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Shipping Method {shippingQuotes.length > 0 ? '*' : ''}
+                    </label>
+                    {shippingQuotesLoading ? (
+                      <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                        Loading shipping options...
+                      </div>
+                    ) : shippingQuotes.length > 0 ? (
+                      <select
+                        required
+                        value={selectedShippingQuoteId}
+                        onChange={(e) => setSelectedShippingQuoteId(e.target.value)}
+                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
+                      >
+                        {shippingQuotes.map((quote) => (
+                          <option key={quote.id} value={quote.id}>
+                            {quote.providerName} - {quote.serviceName} ({quote.etaMinDays}-{quote.etaMaxDays} days) - {formatFromUsd(quote.priceUsd)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                        Default shipping will be applied ({fallbackShipping === 0 ? 'FREE' : formatFromUsd(fallbackShipping)}).
+                      </div>
+                    )}
+                    {selectedShippingQuote ? (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Selected: {selectedShippingQuote.providerName} / {selectedShippingQuote.serviceName}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      City *
+                    </label>
+                    <select
+                      required
+                      value={shippingAddress.city}
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, city: e.target.value }));
+                      }}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
+                      disabled={!shippingAddress.country || !shippingAddress.state}
+                    >
+                      <option value="">
+                        {!shippingAddress.country
+                          ? 'Select country first'
+                          : !shippingAddress.state
+                            ? 'Select state first'
+                            : 'Select city'}
+                      </option>
+                      {selectableCityOptions.map((city) => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Postal Code *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={shippingAddress.postalCode}
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress(prev => ({ ...prev, postalCode: e.target.value }));
+                      }}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Payment Provider *
+                    </label>
+                    <select
+                      required
+                      value={selectedPaymentProvider}
+                      onChange={(e) => setSelectedPaymentProvider(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
+                    >
+                      {paymentProviders.map((provider) => (
+                        <option key={provider.providerKey} value={provider.providerKey}>
+                          {provider.displayName} ({provider.mode})
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -345,18 +1940,28 @@ export default function Checkout() {
                       type="tel"
                       required
                       value={shippingAddress.phone}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, phone: e.target.value }))}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      onChange={(e) => {
+                        setSelectedSavedAddressId('');
+                        setShippingAddress((prev) => ({
+                          ...prev,
+                          phone: normalizePhoneWithCountryPrefix(e.target.value, prev.country),
+                        }));
+                      }}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#e85a3d]/25 focus:border-transparent"
                     />
                   </div>
                 </div>
 
                 <Button 
                   type="submit" 
-                  className="w-full mt-6"
+                  className="w-full mt-6 bg-[#e85a3d] text-white hover:bg-[#d14a2d]"
                   disabled={loading}
                 >
-                  {loading ? 'Processing...' : 'Continue to Payment'}
+                  {loading
+                    ? 'Processing...'
+                    : selectedProvider?.checkoutType === 'REDIRECT'
+                      ? `Pay with ${selectedProvider?.displayName || 'Provider'}`
+                      : 'Step 2: Continue to Payment'}
                 </Button>
               </form>
             )}
@@ -364,9 +1969,16 @@ export default function Checkout() {
             {step === 'payment' && (
               <form onSubmit={handlePaymentSubmit} className="bg-white rounded-xl p-6 shadow-sm border">
                 <div className="flex items-center gap-3 mb-6">
-                  <CreditCard className="w-5 h-5 text-amber-600" />
+                  <CreditCard className="w-5 h-5 text-[#e85a3d]" />
                   <h2 className="text-lg font-semibold">Payment Details</h2>
                 </div>
+                <p className="mb-4 text-sm text-gray-500">Payment method: Card ({selectedProvider?.displayName || 'Stripe'})</p>
+                {!stripe ? (
+                  <p className="mb-3 rounded-lg border border-[#f4b6aa] bg-[#fff3ef] px-3 py-2 text-xs text-[#9b3b28]">
+                    Stripe checkout key is not initialized in this browser yet. If this persists, refresh page once or configure
+                    Stripe publishable key in Admin &gt; Payments.
+                  </p>
+                ) : null}
 
                 <div className="p-4 bg-gray-50 rounded-lg mb-6">
                   <div className="flex items-center gap-2 mb-4">
@@ -386,26 +1998,179 @@ export default function Checkout() {
                   </Button>
                   <Button 
                     type="submit" 
-                    className="flex-1"
-                    disabled={!stripe || loading}
+                    className="flex-1 bg-[#e85a3d] text-white hover:bg-[#d14a2d]"
+                    disabled={!stripe || !clientSecret || loading}
                   >
-                    {loading ? 'Processing...' : `Pay $${finalTotal.toFixed(2)}`}
+                    {loading ? 'Processing...' : `Step 3: Pay ${formatFromUsd(finalTotal)}`}
                   </Button>
                 </div>
               </form>
             )}
 
             {step === 'review' && (
-              <div className="bg-white rounded-xl p-6 shadow-sm border text-center">
+              <div className="bg-white rounded-xl p-6 shadow-sm border">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Check className="w-8 h-8 text-green-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Order Confirmed!</h2>
-                <p className="text-gray-600 mb-4">
-                  Your payment was successful. We're processing your order.
+                <h2 className="text-xl font-semibold text-gray-900 mb-2 text-center">Order Confirmed!</h2>
+                <p className="text-gray-600 mb-4 text-center">
+                  Payment is complete. Review your invoice details below.
                 </p>
-                <div className="animate-pulse">
-                  <p className="text-sm text-gray-500">Redirecting to your orders...</p>
+                <div className="rounded-lg border bg-gray-50 p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p>
+                      <span className="text-gray-500">Invoice Date:</span>{' '}
+                      <span className="font-medium">
+                        {new Date(completedCheckout?.createdAt || Date.now()).toLocaleString()}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-gray-500">Order No:</span>{' '}
+                      <span className="font-semibold">{(completedCheckout?.orderNumbers || orderNumbers).join(', ') || 'N/A'}</span>
+                    </p>
+                  </div>
+                  <div className="mt-3 border-t pt-3">
+                    <p className="font-medium text-gray-900">Delivery to</p>
+                    <p className="text-gray-700">{completedCheckout?.shippingAddress.fullName || shippingAddress.fullName}</p>
+                    <p className="text-gray-600">
+                      {[completedCheckout?.shippingAddress.addressLine1, completedCheckout?.shippingAddress.addressLine2]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </p>
+                    <p className="text-gray-600">
+                      {[completedCheckout?.shippingAddress.city, completedCheckout?.shippingAddress.state, completedCheckout?.shippingAddress.postalCode]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </p>
+                    <p className="text-gray-600">{completedCheckout?.shippingAddress.country || shippingAddress.country}</p>
+                  </div>
+                  <div className="mt-3 border-t pt-3">
+                    <p className="font-medium text-gray-900 mb-2">Invoice Items</p>
+                    <div className="overflow-x-auto rounded border bg-white">
+                      <table className="min-w-full text-left text-xs">
+                        <thead className="bg-gray-50 text-gray-600">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold">Item</th>
+                            <th className="px-3 py-2 font-semibold">Details</th>
+                            <th className="px-3 py-2 font-semibold text-right">Qty</th>
+                            <th className="px-3 py-2 font-semibold text-right">Unit</th>
+                            <th className="px-3 py-2 font-semibold text-right">Line Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {summaryItems.map((item, index) => {
+                            if (item.kind === 'READY_TO_WEAR') {
+                              const qty = Number(item.quantity || 1);
+                              const unit = Number(item.unitPrice || 0);
+                              return (
+                                <tr key={`invoice-row-${index}`} className="border-t">
+                                  <td className="px-3 py-2 font-medium text-gray-900">{item.productName}</td>
+                                  <td className="px-3 py-2 text-gray-600">
+                                    {[item.selectedSize ? `Size ${item.selectedSize}` : '', item.selectedColor ? `Color ${item.selectedColor}` : '']
+                                      .filter(Boolean)
+                                      .join(' • ') || 'Ready To Wear'}
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{qty}</td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{formatFromUsd(unit)}</td>
+                                  <td className="px-3 py-2 text-right font-medium text-gray-900">{formatFromUsd(unit * qty)}</td>
+                                </tr>
+                              );
+                            }
+                            if (item.kind === 'FABRIC_ONLY') {
+                              const qty = Number(item.yards || 0);
+                              const unit = Number(item.pricePerYard || 0);
+                              return (
+                                <tr key={`invoice-row-${index}`} className="border-t">
+                                  <td className="px-3 py-2 font-medium text-gray-900">{item.fabricName}</td>
+                                  <td className="px-3 py-2 text-gray-600">{item.sellerName || 'Fabric To Buy'}</td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{qty} yd</td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{formatFromUsd(unit)}</td>
+                                  <td className="px-3 py-2 text-right font-medium text-gray-900">{formatFromUsd(unit * qty)}</td>
+                                </tr>
+                              );
+                            }
+                            const ctwTotal = Number(item.totalPrice || 0);
+                            const ctwUnit = ctwTotal;
+                            return (
+                              <tr key={`invoice-row-${index}`} className="border-t">
+                                <td className="px-3 py-2 font-medium text-gray-900">{item.designName}</td>
+                                <td className="px-3 py-2 text-gray-600">
+                                  {item.fabricSelectionMode === 'DESIGNER_DECIDES' || !item.fabricId
+                                    ? 'Designer-selected fabric'
+                                    : `${item.fabricName || 'Selected fabric'} • ${Number(item.fabricMeters || 0)} yd`}
+                                </td>
+                                <td className="px-3 py-2 text-right text-gray-700">1</td>
+                                <td className="px-3 py-2 text-right text-gray-700">{formatFromUsd(ctwUnit)}</td>
+                                <td className="px-3 py-2 text-right font-medium text-gray-900">{formatFromUsd(ctwTotal)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div className="mt-3 border-t pt-3">
+                    <p className="font-medium text-gray-900 mb-2">Payment & Totals</p>
+                    <div className="space-y-1 text-gray-700">
+                      <p>Payment Method: {completedCheckout?.paymentMethod || selectedPaymentProvider}</p>
+                      <p>Subtotal: {formatFromUsd(summarySubtotal)}</p>
+                      {Math.abs(summaryCheckoutPricingAdjustment) > 0 ? (
+                        <p>
+                          {summaryCheckoutPricingLabel}:{' '}
+                          <span className={summaryCheckoutPricingAdjustment >= 0 ? '' : 'text-green-700'}>
+                            {formatCheckoutPricingAdjustment(summaryCheckoutPricingAdjustment)}
+                          </span>
+                        </p>
+                      ) : null}
+                      {summaryPromoDiscount > 0 ? <p>Discount: -{formatFromUsd(summaryPromoDiscount)}</p> : null}
+                      <p>Shipping: {summaryShipping === 0 ? 'FREE' : formatFromUsd(summaryShipping)}</p>
+                      <p className="font-semibold text-gray-900">Grand Total: {formatFromUsd(summaryTotal)}</p>
+                    </div>
+                    {summaryCheckoutPricingRules.length > 0 ? (
+                      <div className="mt-2 rounded border bg-white p-2">
+                        <p className="text-xs font-semibold text-gray-700">{summaryCheckoutPricingLabel} Breakdown</p>
+                        <div className="mt-1 space-y-1">
+                          {summaryCheckoutPricingRules.map((rule) => (
+                            <p key={`checkout-pricing-rule-${rule.ruleId}`} className="text-xs text-gray-600">
+                              {rule.ruleName}: {formatCheckoutPricingAdjustment(rule.amountUsd, rule.adjustmentType)}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  {postCheckoutOffers.length > 0 ? (
+                    <div className="mt-3 border-t pt-3">
+                      <p className="font-medium text-gray-900 mb-2">Exclusive Next-Order Discounts</p>
+                      <div className="space-y-2">
+                        {postCheckoutOffers.map((offer) => (
+                          <div key={offer.code} className="rounded border bg-white px-3 py-2">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {offer.code} · {offer.name}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {offer.discountType === 'PERCENTAGE'
+                                ? `${Number(offer.discountValue || 0)}% off`
+                                : `$${Number(offer.discountValue || 0).toFixed(2)} off`}
+                              {offer.maxDiscountUsd ? ` (up to $${Number(offer.maxDiscountUsd).toFixed(2)})` : ''}
+                            </p>
+                            {offer.description ? <p className="text-xs text-gray-500">{offer.description}</p> : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <p className="mt-4 text-xs text-gray-500 text-center">
+                  A confirmation email with order details is sent when email delivery is enabled on the server.
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Button variant="outline" onClick={() => navigate('/orders')}>
+                    View Orders
+                  </Button>
+                  <Button onClick={() => navigate('/dashboard')}>
+                    Go to Dashboard
+                  </Button>
                 </div>
               </div>
             )}
@@ -417,19 +2182,66 @@ export default function Checkout() {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h2>
               
               <div className="space-y-4 mb-4">
-                {items.map((item, index) => (
+                {summaryItems.map((item, index) => (
                   <div key={index} className="flex gap-3">
                     <img
-                      src={item.designImage}
-                      alt={item.designName}
+                      src={
+                        item.kind === 'READY_TO_WEAR'
+                          ? item.productImage
+                          : item.kind === 'FABRIC_ONLY'
+                            ? item.fabricImage
+                            : item.designImage
+                      }
+                      alt={
+                        item.kind === 'READY_TO_WEAR'
+                          ? item.productName
+                          : item.kind === 'FABRIC_ONLY'
+                            ? item.fabricName
+                            : item.designName
+                      }
                       className="w-16 h-20 object-cover"
                     />
                     <div className="flex-1">
-                      <p className="font-medium text-sm text-gray-900">{item.designName}</p>
-                      <p className="text-xs text-gray-500">{item.fabricName}</p>
-                      <p className="text-xs text-gray-500">{item.fabricMeters}m fabric</p>
+                      {item.kind === 'READY_TO_WEAR' ? (
+                        <>
+                          <p className="font-medium text-sm text-gray-900">{item.productName}</p>
+                          <p className="text-xs text-gray-500">Size {item.selectedSize}</p>
+                          <p className="text-xs text-gray-500">Qty {item.quantity}</p>
+                        </>
+                      ) : item.kind === 'FABRIC_ONLY' ? (
+                        <>
+                          <p className="font-medium text-sm text-gray-900">{item.fabricName}</p>
+                          <p className="text-xs text-gray-500">{item.sellerName}</p>
+                          <p className="text-xs text-gray-500">{item.yards} yards</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-medium text-sm text-gray-900">{item.designName}</p>
+                          {item.fabricSelectionMode === 'DESIGNER_DECIDES' || !item.fabricId ? (
+                            <>
+                              <p className="text-xs text-gray-500">Designer will select fabric</p>
+                              {item.fabricPreferenceNotes ? (
+                                <p className="text-xs text-gray-500 line-clamp-2">{item.fabricPreferenceNotes}</p>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs text-gray-500">{item.fabricName}</p>
+                              <p className="text-xs text-gray-500">{item.fabricMeters} yards fabric</p>
+                            </>
+                          )}
+                        </>
+                      )}
                     </div>
-                    <p className="font-medium text-sm">${item.totalPrice.toFixed(2)}</p>
+                    <p className="font-medium text-sm">
+                      {formatFromUsd(
+                        item.kind === 'READY_TO_WEAR'
+                          ? item.unitPrice * item.quantity
+                          : item.kind === 'FABRIC_ONLY'
+                            ? item.pricePerYard * item.yards
+                          : item.totalPrice
+                      )}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -437,64 +2249,144 @@ export default function Checkout() {
               <div className="space-y-2 py-4 border-t">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">${totalPrice.toFixed(2)}</span>
+                  <span className="font-medium">{formatFromUsd(summarySubtotal)}</span>
                 </div>
+                {Math.abs(summaryCheckoutPricingAdjustment) > 0 ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">{summaryCheckoutPricingLabel}</span>
+                    <span className={summaryCheckoutPricingAdjustment >= 0 ? 'font-medium' : 'font-medium text-green-700'}>
+                      {formatCheckoutPricingAdjustment(summaryCheckoutPricingAdjustment)}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="rounded-lg border bg-gray-50 p-3">
+                  <p className="mb-2 text-xs font-medium text-gray-700">Promo Code</p>
+                  <div className="flex gap-2">
+                    <input
+                      value={promoCode}
+                      onChange={(event) => {
+                        const nextCode = String(event.target.value || '').toUpperCase();
+                        setPromoCode(nextCode);
+                        if (promoPreview && String(promoPreview.code || '').toUpperCase() !== nextCode.trim()) {
+                          setPromoPreview(null);
+                        }
+                      }}
+                      placeholder="Enter promo code"
+                      className="w-full rounded-lg border px-3 py-2 text-sm"
+                    />
+                    <Button type="button" variant="outline" onClick={handleApplyPromo} disabled={promoLoading}>
+                      {promoLoading ? 'Applying...' : 'Apply'}
+                    </Button>
+                  </div>
+                  <input
+                    value={cardPromoHint}
+                    onChange={(event) => setCardPromoHint(event.target.value)}
+                    placeholder="Optional card hint (BIN/last digits)"
+                    className="mt-2 w-full rounded-lg border px-3 py-2 text-xs"
+                  />
+                  {(step === 'review' ? completedCheckout?.promoCode : promoPreview?.code) ? (
+                    <p className="mt-2 text-xs text-emerald-700">
+                      Applied {step === 'review' ? completedCheckout?.promoCode : promoPreview?.code}:{' '}
+                      -{formatFromUsd(summaryPromoDiscount)}
+                    </p>
+                  ) : null}
+                </div>
+                {summaryPromoDiscount > 0 ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Promo Discount</span>
+                    <span className="font-medium text-emerald-700">-{formatFromUsd(summaryPromoDiscount)}</span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Shipping</span>
-                  <span className={shipping === 0 ? 'text-green-600' : ''}>
-                    {shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}
+                  <span className="text-gray-600">
+                    Shipping
+                    {selectedShippingQuote ? ` (${selectedShippingQuote.providerName})` : ''}
+                  </span>
+                  <span className={summaryShipping === 0 ? 'text-green-600' : ''}>
+                    {summaryShipping === 0 ? 'FREE' : formatFromUsd(summaryShipping)}
                   </span>
                 </div>
               </div>
 
               <div className="flex justify-between items-center pt-4 border-t">
                 <span className="text-lg font-semibold">Total</span>
-                <span className="text-2xl font-bold text-amber-700">
-                  ${finalTotal.toFixed(2)}
+                <span className="text-2xl font-bold text-[#e85a3d]">
+                  {formatFromUsd(summaryTotal)}
                 </span>
               </div>
+              {selectedCurrency !== 'USD' ? (
+                <p className="mt-2 text-xs text-gray-500">Payments are currently settled in USD at checkout.</p>
+              ) : null}
             </div>
 
             {/* Delivery Info */}
             <div className="bg-white rounded-xl p-6 shadow-sm border">
               <div className="flex items-center gap-3 mb-4">
-                <Truck className="w-5 h-5 text-amber-600" />
+                <Truck className="w-5 h-5 text-[#e85a3d]" />
                 <h3 className="font-semibold">Delivery Information</h3>
               </div>
               <div className="space-y-3 text-sm">
-                <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="mt-0.5">1</Badge>
-                  <div>
-                    <p className="font-medium">Design Phase</p>
-                    <p className="text-gray-500">3-5 business days</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="mt-0.5">2</Badge>
-                  <div>
-                    <p className="font-medium">Fabric Preparation</p>
-                    <p className="text-gray-500">1-2 business days</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="mt-0.5">3</Badge>
-                  <div>
-                    <p className="font-medium">Production & QA</p>
-                    <p className="text-gray-500">7-14 business days</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="mt-0.5">4</Badge>
-                  <div>
-                    <p className="font-medium">Shipping</p>
-                    <p className="text-gray-500">5-10 business days</p>
-                  </div>
-                </div>
+                {deliveryStages.map((stage) => {
+                  const normalizedKey = String(stage.stageKey || '').toUpperCase();
+                  const isShippingWindowStage =
+                    normalizedKey.includes('SHIP') ||
+                    normalizedKey.includes('DELIVER') ||
+                    normalizedKey.includes('TRANSIT');
+                  const stageDescription = stage.description
+                    ? stage.description
+                    : isShippingWindowStage
+                      ? selectedShippingQuote
+                        ? `${selectedShippingQuote.etaMinDays}-${selectedShippingQuote.etaMaxDays} business days`
+                        : 'Shipping ETA appears after selecting shipping method.'
+                      : 'Timeline configured by admin in Shipping settings.';
+                  return (
+                    <div key={stage.id} className="flex items-start gap-3">
+                      <Badge variant="outline" className="mt-0.5">
+                        {stage.step}
+                      </Badge>
+                      <div>
+                        <p className="font-medium">{stage.stageLabel}</p>
+                        <p className="text-gray-500">{stageDescription}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <p className="text-xs text-gray-500 mt-4">
-                Estimated delivery: {new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toLocaleDateString()} - {new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                Admin-managed delivery flow provider: {deliveryStagesProviderKey}.
+                {selectedShippingQuote
+                  ? ` Shipping window: ${selectedShippingQuote.etaMinDays}-${selectedShippingQuote.etaMaxDays} business days after production.`
+                  : ' Select a shipping method to view ETA window.'}
               </p>
             </div>
+
+            {suggestedProducts.length > 0 ? (
+              <div className="bg-white rounded-xl p-6 shadow-sm border">
+                <h3 className="font-semibold mb-3">You may also like</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Suggestions are optional and will not interrupt your current checkout.
+                </p>
+                <div className="space-y-3">
+                  {suggestedProducts.map((product) => (
+                    <Link
+                      key={product.id}
+                      to={product.href}
+                      className="flex items-center gap-3 rounded-lg border p-2 hover:bg-gray-50"
+                    >
+                      <img
+                        src={product.image || '/images/placeholder.jpg'}
+                        alt={product.name}
+                        className="h-14 w-12 object-cover rounded"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{product.subtitle}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

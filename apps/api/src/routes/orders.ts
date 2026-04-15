@@ -1,14 +1,2749 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
-import { prisma, UserRole, OrderType, OrderStatus } from '../db';
-import { authenticate } from '../middleware/auth';
+import { prisma, UserRole, OrderType, OrderStatus, PaymentStatus, ProductStatus } from '../db';
+import { authenticate, authorizePermissions } from '../middleware/auth';
+import { requireModuleAccess } from '../middleware/module-runtime';
+import { Permissions } from '../rbac';
+import nodemailer from 'nodemailer';
+import {
+  appendWorkflowMetadataToShippingAddress,
+  determinePostPaymentStatus,
+  readOrderWorkflowSettings,
+  redactShippingAddressForVendor,
+  shouldNotifyRoleForStatus,
+} from '../utils/order-workflow';
+import { emitPartnerOrderEvent } from '../utils/partner-api';
+import { syncFabricAvailabilityById, syncReadyToWearAvailabilityById } from '../utils/product-stock-monitor';
+import {
+  applyActivePricingRulesWithBreakdown,
+  readActivePricingRules,
+  type PricingProductType,
+} from '../utils/pricing-rules';
+import { readCheckoutPricingSettings } from '../utils/checkout-pricing-settings';
+import { recordReferralCommissionsForOrder } from '../utils/referral-program';
+import {
+  detectTicketingLanguage,
+  getTicketingSupportedLanguages,
+  normalizeTicketingLanguage,
+  translateTicketingText,
+} from '../utils/ticketing-translation';
 
 const router = Router();
+const requireOrderTicketingModule = requireModuleAccess('ticketing');
+
+const ORDER_TICKETING_SETTINGS_KEY = 'order_ticketing_settings_v1';
+const ORDER_TICKETING_TRANSLATION_SETTINGS_KEY = 'order_ticketing_translation_settings_v1';
+const ORDER_TICKET_STATUSES = ['OPEN', 'PENDING', 'RESOLVED', 'CLOSED'] as const;
+type OrderTicketStatus = (typeof ORDER_TICKET_STATUSES)[number];
+const ORDER_TICKETING_ROLES = [
+  UserRole.CUSTOMER,
+  UserRole.FABRIC_SELLER,
+  UserRole.FASHION_DESIGNER,
+  UserRole.QA_TEAM,
+  UserRole.ADMINISTRATOR,
+] as const;
+type OrderTicketingRole = (typeof ORDER_TICKETING_ROLES)[number];
+const ADMIN_ROLE_TOKEN_PREFIX = 'ADMIN_ROLE:';
+type TicketAssignmentRoleToken = string;
+const ORDER_TICKETING_ROLE_LABELS: Record<OrderTicketingRole, string> = {
+  [UserRole.CUSTOMER]: 'Customer',
+  [UserRole.FABRIC_SELLER]: 'Seller',
+  [UserRole.FASHION_DESIGNER]: 'Designer',
+  [UserRole.QA_TEAM]: 'QA',
+  [UserRole.ADMINISTRATOR]: 'Admin',
+};
+type OrderTicketingSettings = {
+  enabled: boolean;
+  defaultVisibleToCustomer: boolean;
+  allowVendorToVendorDirect: boolean;
+  allowVendorToCustomerDirect: boolean;
+  allowCustomerToVendorDirect: boolean;
+  allowQaToVendorMessaging: boolean;
+  allowQaToCustomerMessaging: boolean;
+  autoAssignEnabled: boolean;
+  autoAssignRole: TicketAssignmentRoleToken;
+  slaResponseHours: number;
+  escalationRole: TicketAssignmentRoleToken;
+  escalationNotifyRoles: OrderTicketingRole[];
+  recipientMatrix: Record<OrderTicketingRole, OrderTicketingRole[]>;
+};
+type OrderTicketingTranslationSettings = {
+  enabled: boolean;
+  defaultLanguage: string;
+};
+const DEFAULT_ORDER_TICKETING_SETTINGS: OrderTicketingSettings = {
+  enabled: true,
+  defaultVisibleToCustomer: false,
+  allowVendorToVendorDirect: false,
+  allowVendorToCustomerDirect: false,
+  allowCustomerToVendorDirect: false,
+  allowQaToVendorMessaging: true,
+  allowQaToCustomerMessaging: true,
+  autoAssignEnabled: true,
+  autoAssignRole: UserRole.QA_TEAM,
+  slaResponseHours: 24,
+  escalationRole: UserRole.ADMINISTRATOR,
+  escalationNotifyRoles: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
+  recipientMatrix: {
+    [UserRole.CUSTOMER]: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
+    [UserRole.FABRIC_SELLER]: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
+    [UserRole.FASHION_DESIGNER]: [UserRole.ADMINISTRATOR, UserRole.QA_TEAM],
+    [UserRole.QA_TEAM]: [
+      UserRole.ADMINISTRATOR,
+      UserRole.CUSTOMER,
+      UserRole.FABRIC_SELLER,
+      UserRole.FASHION_DESIGNER,
+      UserRole.QA_TEAM,
+    ],
+    [UserRole.ADMINISTRATOR]: [
+      UserRole.ADMINISTRATOR,
+      UserRole.QA_TEAM,
+      UserRole.CUSTOMER,
+      UserRole.FABRIC_SELLER,
+      UserRole.FASHION_DESIGNER,
+    ],
+  },
+};
+const DEFAULT_ORDER_TICKETING_TRANSLATION_SETTINGS: OrderTicketingTranslationSettings = {
+  enabled: true,
+  defaultLanguage: 'en',
+};
+
+const parseJsonObject = (value: unknown): Record<string, unknown> => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+};
+const asRoleToken = (value: unknown): OrderTicketingRole | null => {
+  const token = String(value || '').trim().toUpperCase();
+  return ORDER_TICKETING_ROLES.includes(token as OrderTicketingRole) ? (token as OrderTicketingRole) : null;
+};
+const normalizeAdminRoleAssignmentToken = (value: unknown): string | null => {
+  const raw = String(value || '').trim();
+  const match = /^ADMIN_ROLE:([0-9a-f-]{36})$/i.exec(raw);
+  if (!match) return null;
+  return `${ADMIN_ROLE_TOKEN_PREFIX}${String(match[1]).toLowerCase()}`;
+};
+const normalizeAssignmentRoleToken = (
+  value: unknown,
+  fallback: TicketAssignmentRoleToken
+): TicketAssignmentRoleToken => {
+  const standardRole = asRoleToken(value);
+  if (standardRole) return standardRole;
+  return normalizeAdminRoleAssignmentToken(value) || fallback;
+};
+const parseStoredAssignmentRoleToken = (value: unknown): TicketAssignmentRoleToken | null => {
+  const standardRole = asRoleToken(value);
+  if (standardRole) return standardRole;
+  return normalizeAdminRoleAssignmentToken(value);
+};
+const parseJsonArray = (value: unknown): unknown[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+type OrderCategoryBundleKey = 'READY_TO_WEAR' | 'CUSTOM_DESIGN' | 'FABRIC_ONLY';
+const readOrderCategoryBundleItems = (shippingAddress: unknown, categoryKey: OrderCategoryBundleKey) => {
+  const shipping = parseJsonObject(shippingAddress);
+  const workflow = parseJsonObject(shipping.workflow);
+  const categoryBundles = parseJsonObject(workflow.categoryBundles);
+  const categoryRow = parseJsonObject(categoryBundles[categoryKey]);
+  return parseJsonArray(categoryRow.items).map((entry) => parseJsonObject(entry));
+};
+const readOrderCategoryBundleCount = (
+  shippingAddress: unknown,
+  categoryKey: OrderCategoryBundleKey,
+  fallbackCount = 1
+) => {
+  const items = readOrderCategoryBundleItems(shippingAddress, categoryKey);
+  if (items.length > 0) return items.length;
+  return Math.max(1, Number(fallbackCount || 1));
+};
+const withOrderCategoryBundleItems = (
+  shippingAddress: unknown,
+  categoryKey: OrderCategoryBundleKey,
+  items: Array<Record<string, unknown>>
+) => {
+  const shipping = parseJsonObject(shippingAddress);
+  const workflow = parseJsonObject(shipping.workflow);
+  const categoryBundles = parseJsonObject(workflow.categoryBundles);
+  const normalizedItems = items
+    .map((entry) => parseJsonObject(entry))
+    .filter((entry) => Object.keys(entry).length > 0);
+  return {
+    ...shipping,
+    workflow: {
+      ...workflow,
+      categoryBundles: {
+        ...categoryBundles,
+        [categoryKey]: {
+          count: normalizedItems.length,
+          items: normalizedItems,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    },
+  };
+};
+const appendOrderCategoryBundleItem = (
+  shippingAddress: unknown,
+  categoryKey: OrderCategoryBundleKey,
+  item: Record<string, unknown>
+) => {
+  const existingItems = readOrderCategoryBundleItems(shippingAddress, categoryKey);
+  return withOrderCategoryBundleItems(shippingAddress, categoryKey, [...existingItems, item]);
+};
+const toMoney = (value: unknown) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Number(parsed.toFixed(2));
+};
+const readOrderPricingBreakdown = (shippingAddress: unknown, fallbackLabel = 'Checkout Pricing') => {
+  const shipping = parseJsonObject(shippingAddress);
+  const workflow = parseJsonObject(shipping.workflow);
+  const pricing = parseJsonObject(workflow.pricing);
+  const categoryBundles = parseJsonObject(workflow.categoryBundles);
+  let bundleCheckoutPricingAdjustmentUsd = 0;
+  let bundleDiscountUsd = 0;
+  (['READY_TO_WEAR', 'CUSTOM_DESIGN', 'FABRIC_ONLY'] as OrderCategoryBundleKey[]).forEach((key) => {
+    const bundleRow = parseJsonObject(categoryBundles[key]);
+    const bundleItems = parseJsonArray(bundleRow.items);
+    bundleItems.forEach((entry) => {
+      const item = parseJsonObject(entry);
+      bundleCheckoutPricingAdjustmentUsd = toMoney(
+        bundleCheckoutPricingAdjustmentUsd + Number(item.checkoutPricingAdjustmentUsd || 0)
+      );
+      bundleDiscountUsd = toMoney(bundleDiscountUsd + Number(item.discountUsd || 0));
+    });
+  });
+  const hasExplicitCheckoutPricing = Number.isFinite(Number(pricing.checkoutPricingAdjustmentUsd));
+  const hasExplicitDiscount = Number.isFinite(Number(pricing.discountUsd));
+  return {
+    checkoutPricingLabel:
+      String(pricing.checkoutPricingLabel || pricing.label || fallbackLabel)
+        .trim()
+        .slice(0, 80) || fallbackLabel,
+    checkoutPricingAdjustmentUsd: hasExplicitCheckoutPricing
+      ? toMoney(pricing.checkoutPricingAdjustmentUsd)
+      : Math.abs(bundleCheckoutPricingAdjustmentUsd) > 0
+        ? toMoney(bundleCheckoutPricingAdjustmentUsd)
+        : toMoney(shipping.checkoutPricingAdjustmentUsd),
+    discountUsd: hasExplicitDiscount ? toMoney(pricing.discountUsd) : toMoney(bundleDiscountUsd),
+    promoCode: String(pricing.promoCode || '').trim(),
+  };
+};
+const withOrderPricingBreakdown = (
+  shippingAddress: unknown,
+  pricingInput: {
+    checkoutPricingLabel?: unknown;
+    checkoutPricingAdjustmentUsd?: unknown;
+    discountUsd?: unknown;
+    promoCode?: unknown;
+  }
+) => {
+  const shipping = parseJsonObject(shippingAddress);
+  const workflow = parseJsonObject(shipping.workflow);
+  const existingPricing = parseJsonObject(workflow.pricing);
+  const nextLabel =
+    String(pricingInput.checkoutPricingLabel || existingPricing.checkoutPricingLabel || existingPricing.label || 'Checkout Pricing')
+      .trim()
+      .slice(0, 80) || 'Checkout Pricing';
+  return {
+    ...shipping,
+    workflow: {
+      ...workflow,
+      pricing: {
+        ...existingPricing,
+        checkoutPricingLabel: nextLabel,
+        checkoutPricingAdjustmentUsd: toMoney(
+          pricingInput.checkoutPricingAdjustmentUsd ?? existingPricing.checkoutPricingAdjustmentUsd ?? 0
+        ),
+        discountUsd: toMoney(pricingInput.discountUsd ?? existingPricing.discountUsd ?? 0),
+        promoCode: String(pricingInput.promoCode ?? existingPricing.promoCode ?? '').trim(),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  };
+};
+const parseRoleArray = (value: unknown): unknown[] => {
+  const parsed = parseJsonArray(value);
+  if (parsed.length > 0) return parsed;
+  if (value && typeof value === 'object') {
+    const objectValue = value as Record<string, unknown>;
+    if (Array.isArray(objectValue.roles)) return objectValue.roles;
+  }
+  return [];
+};
+const dedupeRoleTokens = (input: unknown): OrderTicketingRole[] => {
+  const rows = parseRoleArray(input);
+  return Array.from(new Set(rows.map((entry) => asRoleToken(entry)).filter((entry): entry is OrderTicketingRole => Boolean(entry))));
+};
+const normalizeOrderTicketingSettings = (value: unknown): OrderTicketingSettings => {
+  const source = parseJsonObject(value);
+  const matrixSource = parseJsonObject(source.recipientMatrix);
+  const normalized: OrderTicketingSettings = {
+    enabled: source.enabled !== false,
+    defaultVisibleToCustomer: Boolean(source.defaultVisibleToCustomer),
+    allowVendorToVendorDirect: Boolean(source.allowVendorToVendorDirect),
+    allowVendorToCustomerDirect: Boolean(source.allowVendorToCustomerDirect),
+    allowCustomerToVendorDirect: Boolean(source.allowCustomerToVendorDirect),
+    allowQaToVendorMessaging: source.allowQaToVendorMessaging !== false,
+    allowQaToCustomerMessaging: source.allowQaToCustomerMessaging !== false,
+    autoAssignEnabled: source.autoAssignEnabled !== false,
+    autoAssignRole: normalizeAssignmentRoleToken(
+      source.autoAssignRole,
+      DEFAULT_ORDER_TICKETING_SETTINGS.autoAssignRole
+    ),
+    slaResponseHours: Math.max(1, Math.min(24 * 30, Number(source.slaResponseHours || DEFAULT_ORDER_TICKETING_SETTINGS.slaResponseHours))),
+    escalationRole: normalizeAssignmentRoleToken(
+      source.escalationRole,
+      DEFAULT_ORDER_TICKETING_SETTINGS.escalationRole
+    ),
+    escalationNotifyRoles:
+      dedupeRoleTokens(source.escalationNotifyRoles).length > 0
+        ? dedupeRoleTokens(source.escalationNotifyRoles)
+        : DEFAULT_ORDER_TICKETING_SETTINGS.escalationNotifyRoles,
+    recipientMatrix: {
+      [UserRole.CUSTOMER]:
+        dedupeRoleTokens(matrixSource[UserRole.CUSTOMER]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.CUSTOMER])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.CUSTOMER],
+      [UserRole.FABRIC_SELLER]:
+        dedupeRoleTokens(matrixSource[UserRole.FABRIC_SELLER]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.FABRIC_SELLER])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.FABRIC_SELLER],
+      [UserRole.FASHION_DESIGNER]:
+        dedupeRoleTokens(matrixSource[UserRole.FASHION_DESIGNER]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.FASHION_DESIGNER])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.FASHION_DESIGNER],
+      [UserRole.QA_TEAM]:
+        dedupeRoleTokens(matrixSource[UserRole.QA_TEAM]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.QA_TEAM])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.QA_TEAM],
+      [UserRole.ADMINISTRATOR]:
+        dedupeRoleTokens(matrixSource[UserRole.ADMINISTRATOR]).length > 0
+          ? dedupeRoleTokens(matrixSource[UserRole.ADMINISTRATOR])
+          : DEFAULT_ORDER_TICKETING_SETTINGS.recipientMatrix[UserRole.ADMINISTRATOR],
+    },
+  };
+
+  if (!normalized.allowVendorToVendorDirect) {
+    normalized.recipientMatrix[UserRole.FABRIC_SELLER] = normalized.recipientMatrix[UserRole.FABRIC_SELLER].filter(
+      (role) => role !== UserRole.FASHION_DESIGNER
+    );
+    normalized.recipientMatrix[UserRole.FASHION_DESIGNER] = normalized.recipientMatrix[UserRole.FASHION_DESIGNER].filter(
+      (role) => role !== UserRole.FABRIC_SELLER
+    );
+  } else {
+    if (!normalized.recipientMatrix[UserRole.FABRIC_SELLER].includes(UserRole.FASHION_DESIGNER)) {
+      normalized.recipientMatrix[UserRole.FABRIC_SELLER].push(UserRole.FASHION_DESIGNER);
+    }
+    if (!normalized.recipientMatrix[UserRole.FASHION_DESIGNER].includes(UserRole.FABRIC_SELLER)) {
+      normalized.recipientMatrix[UserRole.FASHION_DESIGNER].push(UserRole.FABRIC_SELLER);
+    }
+  }
+  if (!normalized.allowVendorToCustomerDirect) {
+    normalized.recipientMatrix[UserRole.FABRIC_SELLER] = normalized.recipientMatrix[UserRole.FABRIC_SELLER].filter(
+      (role) => role !== UserRole.CUSTOMER
+    );
+    normalized.recipientMatrix[UserRole.FASHION_DESIGNER] = normalized.recipientMatrix[UserRole.FASHION_DESIGNER].filter(
+      (role) => role !== UserRole.CUSTOMER
+    );
+  } else {
+    if (!normalized.recipientMatrix[UserRole.FABRIC_SELLER].includes(UserRole.CUSTOMER)) {
+      normalized.recipientMatrix[UserRole.FABRIC_SELLER].push(UserRole.CUSTOMER);
+    }
+    if (!normalized.recipientMatrix[UserRole.FASHION_DESIGNER].includes(UserRole.CUSTOMER)) {
+      normalized.recipientMatrix[UserRole.FASHION_DESIGNER].push(UserRole.CUSTOMER);
+    }
+  }
+  if (!normalized.allowCustomerToVendorDirect) {
+    normalized.recipientMatrix[UserRole.CUSTOMER] = normalized.recipientMatrix[UserRole.CUSTOMER].filter(
+      (role) => role !== UserRole.FABRIC_SELLER && role !== UserRole.FASHION_DESIGNER
+    );
+  } else {
+    if (!normalized.recipientMatrix[UserRole.CUSTOMER].includes(UserRole.FABRIC_SELLER)) {
+      normalized.recipientMatrix[UserRole.CUSTOMER].push(UserRole.FABRIC_SELLER);
+    }
+    if (!normalized.recipientMatrix[UserRole.CUSTOMER].includes(UserRole.FASHION_DESIGNER)) {
+      normalized.recipientMatrix[UserRole.CUSTOMER].push(UserRole.FASHION_DESIGNER);
+    }
+  }
+  if (!normalized.allowQaToVendorMessaging) {
+    normalized.recipientMatrix[UserRole.QA_TEAM] = normalized.recipientMatrix[UserRole.QA_TEAM].filter(
+      (role) => role !== UserRole.FABRIC_SELLER && role !== UserRole.FASHION_DESIGNER
+    );
+  }
+  if (!normalized.allowQaToCustomerMessaging) {
+    normalized.recipientMatrix[UserRole.QA_TEAM] = normalized.recipientMatrix[UserRole.QA_TEAM].filter(
+      (role) => role !== UserRole.CUSTOMER
+    );
+  }
+  return normalized;
+};
+const normalizeOrderTicketingTranslationSettings = (value: unknown): OrderTicketingTranslationSettings => {
+  const source = parseJsonObject(value);
+  return {
+    enabled: source.enabled !== false,
+    defaultLanguage: normalizeTicketingLanguage(
+      source.defaultLanguage,
+      DEFAULT_ORDER_TICKETING_TRANSLATION_SETTINGS.defaultLanguage
+    ),
+  };
+};
+async function ensureOrderTicketingSchema() {
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "HomepageSectionSetting" (
+      "id" TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "HomepageSectionSetting_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "HomepageSectionSetting_key_key" ON "HomepageSectionSetting"("key")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "OrderTicket" (
+      "id" TEXT NOT NULL,
+      "orderId" TEXT NOT NULL,
+      "subject" TEXT,
+      "status" TEXT NOT NULL DEFAULT 'OPEN',
+      "createdById" TEXT NOT NULL,
+      "isLocked" BOOLEAN NOT NULL DEFAULT false,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "OrderTicket_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicket_orderId_idx" ON "OrderTicket"("orderId","updatedAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "subject" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "isLocked" BOOLEAN NOT NULL DEFAULT false`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "assignedToUserId" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "assignedToRole" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "dueAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "lastMessageAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "escalatedAt" TIMESTAMP(3)`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicket" ADD COLUMN IF NOT EXISTS "escalationStatus" TEXT NOT NULL DEFAULT 'NONE'`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicket_status_idx" ON "OrderTicket"("status","updatedAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicket_dueAt_idx" ON "OrderTicket"("dueAt","escalatedAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "OrderTicketMessage" (
+      "id" TEXT NOT NULL,
+      "ticketId" TEXT NOT NULL,
+      "orderId" TEXT NOT NULL,
+      "senderUserId" TEXT NOT NULL,
+      "senderRole" TEXT NOT NULL,
+      "body" TEXT NOT NULL,
+      "recipientRoles" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "visibleToCustomer" BOOLEAN NOT NULL DEFAULT false,
+      "isInternal" BOOLEAN NOT NULL DEFAULT true,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "OrderTicketMessage_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "attachments" JSONB NOT NULL DEFAULT '[]'::jsonb`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "senderDisplayName" TEXT`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "OrderTicketMessage" ADD COLUMN IF NOT EXISTS "sourceLanguage" TEXT NOT NULL DEFAULT 'en'`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicketMessage_ticketId_idx" ON "OrderTicketMessage"("ticketId","createdAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicketMessage_orderId_idx" ON "OrderTicketMessage"("orderId","createdAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "UserTicketLanguagePreference" (
+      "userId" TEXT NOT NULL,
+      "preferredLanguage" TEXT NOT NULL DEFAULT 'en',
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "UserTicketLanguagePreference_pkey" PRIMARY KEY ("userId")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE "UserTicketLanguagePreference" ADD COLUMN IF NOT EXISTS "preferredLanguage" TEXT NOT NULL DEFAULT 'en'`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "OrderTicketMessageTranslation" (
+      "id" TEXT NOT NULL,
+      "messageId" TEXT NOT NULL,
+      "sourceLanguage" TEXT NOT NULL DEFAULT 'auto',
+      "targetLanguage" TEXT NOT NULL,
+      "translatedBody" TEXT NOT NULL,
+      "provider" TEXT,
+      "status" TEXT NOT NULL DEFAULT 'SUCCESS',
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "OrderTicketMessageTranslation_pkey" PRIMARY KEY ("id")
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "OrderTicketMessageTranslation_messageId_targetLanguage_key"
+     ON "OrderTicketMessageTranslation"("messageId","targetLanguage")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "OrderTicketMessageTranslation_targetLanguage_updatedAt_idx"
+     ON "OrderTicketMessageTranslation"("targetLanguage","updatedAt")`
+  );
+}
+async function readOrderTicketingSettings(): Promise<OrderTicketingSettings> {
+  await ensureOrderTicketingSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ value: unknown }>>(
+    `SELECT "value" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+    ORDER_TICKETING_SETTINGS_KEY
+  );
+  return rows[0] ? normalizeOrderTicketingSettings(rows[0].value) : DEFAULT_ORDER_TICKETING_SETTINGS;
+}
+async function writeOrderTicketingSettings(payload: Partial<OrderTicketingSettings>, merge = true) {
+  await ensureOrderTicketingSchema();
+  const current = await readOrderTicketingSettings();
+  const normalized = normalizeOrderTicketingSettings(merge ? { ...current, ...(payload || {}) } : payload || {});
+  const existingRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT "id" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+    ORDER_TICKETING_SETTINGS_KEY
+  );
+  if (existingRows[0]?.id) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting" SET "value" = $1::jsonb, "updatedAt" = NOW() WHERE "id" = $2`,
+      JSON.stringify(normalized),
+      String(existingRows[0].id)
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "HomepageSectionSetting" ("id","key","value","createdAt","updatedAt")
+       VALUES ($1,$2,$3::jsonb,NOW(),NOW())`,
+      randomUUID(),
+      ORDER_TICKETING_SETTINGS_KEY,
+      JSON.stringify(normalized)
+    );
+  }
+  return normalized;
+}
+async function readOrderTicketingTranslationSettings(): Promise<OrderTicketingTranslationSettings> {
+  await ensureOrderTicketingSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ value: unknown }>>(
+    `SELECT "value" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+    ORDER_TICKETING_TRANSLATION_SETTINGS_KEY
+  );
+  return rows[0]
+    ? normalizeOrderTicketingTranslationSettings(rows[0].value)
+    : DEFAULT_ORDER_TICKETING_TRANSLATION_SETTINGS;
+}
+async function writeOrderTicketingTranslationSettings(
+  payload: Partial<OrderTicketingTranslationSettings>,
+  merge = true
+): Promise<OrderTicketingTranslationSettings> {
+  await ensureOrderTicketingSchema();
+  const current = await readOrderTicketingTranslationSettings();
+  const normalized = normalizeOrderTicketingTranslationSettings(merge ? { ...current, ...(payload || {}) } : payload || {});
+  const existingRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT "id" FROM "HomepageSectionSetting" WHERE "key" = $1 LIMIT 1`,
+    ORDER_TICKETING_TRANSLATION_SETTINGS_KEY
+  );
+  if (existingRows[0]?.id) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "HomepageSectionSetting" SET "value" = $1::jsonb, "updatedAt" = NOW() WHERE "id" = $2`,
+      JSON.stringify(normalized),
+      String(existingRows[0].id)
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "HomepageSectionSetting" ("id","key","value","createdAt","updatedAt")
+       VALUES ($1,$2,$3::jsonb,NOW(),NOW())`,
+      randomUUID(),
+      ORDER_TICKETING_TRANSLATION_SETTINGS_KEY,
+      JSON.stringify(normalized)
+    );
+  }
+  return normalized;
+}
+async function readUserTicketingLanguagePreference(userId: string, fallbackLanguage = 'en') {
+  await ensureOrderTicketingSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<{ preferredLanguage: string | null }>>(
+    `SELECT "preferredLanguage"
+     FROM "UserTicketLanguagePreference"
+     WHERE "userId" = $1
+     LIMIT 1`,
+    String(userId || '')
+  );
+  return normalizeTicketingLanguage(rows[0]?.preferredLanguage || fallbackLanguage, fallbackLanguage);
+}
+async function writeUserTicketingLanguagePreference(userId: string, language: string) {
+  await ensureOrderTicketingSchema();
+  const normalizedLanguage = normalizeTicketingLanguage(language);
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "UserTicketLanguagePreference" ("userId","preferredLanguage","createdAt","updatedAt")
+     VALUES ($1,$2,NOW(),NOW())
+     ON CONFLICT ("userId")
+     DO UPDATE SET "preferredLanguage" = EXCLUDED."preferredLanguage", "updatedAt" = NOW()`,
+    String(userId || ''),
+    normalizedLanguage
+  );
+  return normalizedLanguage;
+}
+
+const resolveUsersForTicketRole = (
+  role: OrderTicketingRole,
+  participants: Record<OrderTicketingRole, Array<{ id: string; name: string }>>
+) => participants[role] || [];
+
+const pickDefaultAssignee = (
+  role: OrderTicketingRole,
+  participants: Record<OrderTicketingRole, Array<{ id: string; name: string }>>
+) => {
+  const pool = resolveUsersForTicketRole(role, participants);
+  return pool.length > 0 ? pool[0] : null;
+};
+const resolveUsersForAssignmentRoleToken = (
+  roleToken: TicketAssignmentRoleToken,
+  context: Pick<OrderAccessContext, 'participantUsersByRole' | 'adminUsersByAdminRoleToken'>
+) => {
+  const standardRole = asRoleToken(roleToken);
+  if (standardRole) {
+    return resolveUsersForTicketRole(standardRole, context.participantUsersByRole);
+  }
+  const adminRoleToken = normalizeAdminRoleAssignmentToken(roleToken);
+  if (!adminRoleToken) return [];
+  const scopedAdmins = context.adminUsersByAdminRoleToken.get(adminRoleToken) || [];
+  if (scopedAdmins.length > 0) return scopedAdmins;
+  return context.participantUsersByRole[UserRole.ADMINISTRATOR] || [];
+};
+const pickDefaultAssigneeForRoleToken = (
+  roleToken: TicketAssignmentRoleToken,
+  context: Pick<OrderAccessContext, 'participantUsersByRole' | 'adminUsersByAdminRoleToken'>
+) => {
+  const users = resolveUsersForAssignmentRoleToken(roleToken, context);
+  return users.length > 0 ? users[0] : null;
+};
+
+const roleLabelForToken = (
+  roleToken: TicketAssignmentRoleToken,
+  adminRoleNameByToken?: Map<string, string>
+) => {
+  const standardRole = asRoleToken(roleToken);
+  if (standardRole) return ORDER_TICKETING_ROLE_LABELS[standardRole];
+  const normalizedAdminRoleToken = normalizeAdminRoleAssignmentToken(roleToken);
+  if (normalizedAdminRoleToken) {
+    const adminRoleName = adminRoleNameByToken?.get(normalizedAdminRoleToken);
+    return adminRoleName ? `Admin Role (${adminRoleName})` : 'Admin Role';
+  }
+  return 'Assigned Role';
+};
+
+const isTicketStatusActive = (status: unknown) => {
+  const token = String(status || '').trim().toUpperCase();
+  return token === 'OPEN' || token === 'PENDING';
+};
+
+const normalizeAttachmentUrls = (input: unknown) => {
+  const rows = Array.isArray(input) ? input : [];
+  return rows
+    .map((entry) => String(entry || '').trim())
+    .filter((entry) => Boolean(entry))
+    .slice(0, 12);
+};
+type OrderAccessContext = {
+  orderId: string;
+  orderNumber: string;
+  customerUser: { id: string; firstName: string; lastName: string; email: string } | null;
+  sellerUsers: Array<{ id: string; name: string }>;
+  designerUsers: Array<{ id: string; name: string }>;
+  qaUsers: Array<{ id: string; name: string }>;
+  adminUsers: Array<{ id: string; name: string }>;
+  adminUsersByAdminRoleToken: Map<string, Array<{ id: string; name: string }>>;
+  adminRoleNameByToken: Map<string, string>;
+  participantUsersByRole: Record<OrderTicketingRole, Array<{ id: string; name: string }>>;
+};
+const fullName = (first?: unknown, last?: unknown) => [String(first || '').trim(), String(last || '').trim()].filter(Boolean).join(' ').trim();
+async function resolveOrderAccessContext(orderId: string, user: { id: string; role: UserRole }): Promise<OrderAccessContext> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      customer: { select: { id: true, firstName: true, lastName: true, email: true } },
+      fabricOrder: {
+        include: {
+          seller: {
+            select: {
+              id: true,
+              userId: true,
+              businessName: true,
+              user: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+      },
+      designOrder: {
+        include: {
+          designer: {
+            select: {
+              id: true,
+              userId: true,
+              businessName: true,
+              user: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+      },
+      readyToWearItems: {
+        include: {
+          readyToWear: {
+            include: {
+              designer: {
+                select: {
+                  id: true,
+                  userId: true,
+                  businessName: true,
+                  user: { select: { id: true, firstName: true, lastName: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+      qa: {
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+  if (!order) {
+    throw Object.assign(new Error('Order not found.'), { status: 404 });
+  }
+  const sellerUsers = order.fabricOrder?.seller?.user
+    ? [
+        {
+          id: String(order.fabricOrder.seller.user.id),
+          name:
+            String(order.fabricOrder.seller.businessName || '').trim() ||
+            fullName(order.fabricOrder.seller.user.firstName, order.fabricOrder.seller.user.lastName) ||
+            'Seller',
+        },
+      ]
+    : [];
+  const designersMap = new Map<string, { id: string; name: string }>();
+  if (order.designOrder?.designer?.user) {
+    designersMap.set(String(order.designOrder.designer.user.id), {
+      id: String(order.designOrder.designer.user.id),
+      name:
+        String(order.designOrder.designer.businessName || '').trim() ||
+        fullName(order.designOrder.designer.user.firstName, order.designOrder.designer.user.lastName) ||
+        'Designer',
+    });
+  }
+  for (const item of order.readyToWearItems || []) {
+    const readyDesigner = item.readyToWear?.designer;
+    if (!readyDesigner?.user?.id) continue;
+    const readyDesignerId = String(readyDesigner.user.id);
+    if (!designersMap.has(readyDesignerId)) {
+      designersMap.set(readyDesignerId, {
+        id: readyDesignerId,
+        name:
+          String(readyDesigner.businessName || '').trim() ||
+          fullName(readyDesigner.user.firstName, readyDesigner.user.lastName) ||
+          'Designer',
+      });
+    }
+  }
+  const designerUsers = Array.from(designersMap.values());
+  const qaAssigned = order.qa?.user
+    ? [{ id: String(order.qa.user.id), name: fullName(order.qa.user.firstName, order.qa.user.lastName) || 'QA' }]
+    : [];
+  const qaUsersRaw = await prisma.user.findMany({
+    where: { role: UserRole.QA_TEAM, status: 'ACTIVE' },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  let adminUsersDetailed: Array<{
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    adminRoleId: string | null;
+    adminRoleName: string | null;
+  }> = [];
+  try {
+    adminUsersDetailed = await prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        firstName: string | null;
+        lastName: string | null;
+        adminRoleId: string | null;
+        adminRoleName: string | null;
+      }>
+    >(
+      `SELECT u."id",
+              u."firstName",
+              u."lastName",
+              ap."adminRoleId",
+              ar."name" AS "adminRoleName"
+       FROM "User" u
+       LEFT JOIN "AdminProfile" ap ON ap."userId" = u."id"
+       LEFT JOIN "AdminRole" ar ON ar."id" = ap."adminRoleId"
+       WHERE u."role" = $1
+         AND u."status" = $2`,
+      UserRole.ADMINISTRATOR,
+      'ACTIVE'
+    );
+  } catch {
+    const fallbackAdmins = await prisma.user.findMany({
+      where: { role: UserRole.ADMINISTRATOR, status: 'ACTIVE' },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    adminUsersDetailed = fallbackAdmins.map((row) => ({
+      id: String(row.id),
+      firstName: row.firstName ?? null,
+      lastName: row.lastName ?? null,
+      adminRoleId: null,
+      adminRoleName: null,
+    }));
+  }
+  const adminUsers = adminUsersDetailed.map((row) => ({
+    id: String(row.id),
+    name: fullName(row.firstName, row.lastName) || 'Admin',
+  }));
+  const adminUsersByAdminRoleToken = new Map<string, Array<{ id: string; name: string }>>();
+  const adminRoleNameByToken = new Map<string, string>();
+  for (const row of adminUsersDetailed) {
+    const token = normalizeAdminRoleAssignmentToken(
+      row.adminRoleId ? `${ADMIN_ROLE_TOKEN_PREFIX}${row.adminRoleId}` : null
+    );
+    if (!token) continue;
+    const bucket = adminUsersByAdminRoleToken.get(token) || [];
+    bucket.push({
+      id: String(row.id),
+      name: fullName(row.firstName, row.lastName) || 'Admin',
+    });
+    adminUsersByAdminRoleToken.set(token, bucket);
+    if (row.adminRoleName) {
+      adminRoleNameByToken.set(token, String(row.adminRoleName));
+    }
+  }
+  const qaUsers = qaAssigned.length > 0
+    ? qaAssigned
+    : qaUsersRaw.map((row) => ({ id: String(row.id), name: fullName(row.firstName, row.lastName) || 'QA' }));
+
+  const hasAccess =
+    user.role === UserRole.ADMINISTRATOR ||
+    (user.role === UserRole.CUSTOMER && String(order.customerId || '') === String(user.id)) ||
+    (user.role === UserRole.FABRIC_SELLER && sellerUsers.some((entry) => entry.id === String(user.id))) ||
+    (user.role === UserRole.FASHION_DESIGNER && designerUsers.some((entry) => entry.id === String(user.id))) ||
+    (user.role === UserRole.QA_TEAM && qaUsers.some((entry) => entry.id === String(user.id)));
+  if (!hasAccess) {
+    throw Object.assign(new Error('You do not have permission to access this order ticket.'), { status: 403 });
+  }
+
+  const customerUser = order.customer
+    ? {
+        id: String(order.customer.id),
+        firstName: String(order.customer.firstName || '').trim(),
+        lastName: String(order.customer.lastName || '').trim(),
+        email: String(order.customer.email || '').trim(),
+      }
+    : null;
+  return {
+    orderId: String(order.id),
+    orderNumber: String(order.orderNumber || ''),
+    customerUser,
+    sellerUsers,
+    designerUsers,
+    qaUsers,
+    adminUsers,
+    adminUsersByAdminRoleToken,
+    adminRoleNameByToken,
+    participantUsersByRole: {
+      [UserRole.CUSTOMER]:
+        customerUser
+          ? [{ id: customerUser.id, name: fullName(customerUser.firstName, customerUser.lastName) || 'Customer' }]
+          : [],
+      [UserRole.FABRIC_SELLER]: sellerUsers,
+      [UserRole.FASHION_DESIGNER]: designerUsers,
+      [UserRole.QA_TEAM]: qaUsers,
+      [UserRole.ADMINISTRATOR]: adminUsers,
+    },
+  };
+}
+const resolveAllowedRecipientRoles = (
+  senderRole: OrderTicketingRole,
+  settings: OrderTicketingSettings,
+  participants: Record<OrderTicketingRole, Array<{ id: string; name: string }>>
+) => {
+  const base = Array.from(new Set(settings.recipientMatrix[senderRole] || []));
+  const filtered = base.filter((role) => (participants[role] || []).length > 0);
+  if (!settings.allowVendorToVendorDirect && senderRole === UserRole.FABRIC_SELLER) {
+    return filtered.filter((role) => role !== UserRole.FASHION_DESIGNER);
+  }
+  if (!settings.allowVendorToVendorDirect && senderRole === UserRole.FASHION_DESIGNER) {
+    return filtered.filter((role) => role !== UserRole.FABRIC_SELLER);
+  }
+  if (!settings.allowVendorToCustomerDirect && (senderRole === UserRole.FABRIC_SELLER || senderRole === UserRole.FASHION_DESIGNER)) {
+    return filtered.filter((role) => role !== UserRole.CUSTOMER);
+  }
+  if (!settings.allowCustomerToVendorDirect && senderRole === UserRole.CUSTOMER) {
+    return filtered.filter((role) => role !== UserRole.FABRIC_SELLER && role !== UserRole.FASHION_DESIGNER);
+  }
+  if (!settings.allowQaToVendorMessaging && senderRole === UserRole.QA_TEAM) {
+    return filtered.filter((role) => role !== UserRole.FABRIC_SELLER && role !== UserRole.FASHION_DESIGNER);
+  }
+  if (!settings.allowQaToCustomerMessaging && senderRole === UserRole.QA_TEAM) {
+    return filtered.filter((role) => role !== UserRole.CUSTOMER);
+  }
+  return filtered;
+};
+const defaultRecipientRolesForSender = (senderRole: OrderTicketingRole, allowed: OrderTicketingRole[]) => {
+  const preferred: OrderTicketingRole[] =
+    senderRole === UserRole.CUSTOMER
+      ? [UserRole.ADMINISTRATOR, UserRole.QA_TEAM]
+      : senderRole === UserRole.FABRIC_SELLER || senderRole === UserRole.FASHION_DESIGNER
+        ? [UserRole.ADMINISTRATOR, UserRole.QA_TEAM]
+        : [UserRole.ADMINISTRATOR, UserRole.QA_TEAM];
+  const selected = preferred.filter((role) => allowed.includes(role));
+  return selected.length > 0 ? selected : allowed.slice(0, 1);
+};
+const canViewerSeeTicketMessage = (
+  message: {
+    senderUserId: string;
+    recipientRoles: OrderTicketingRole[];
+    visibleToCustomer: boolean;
+  },
+  viewerRole: OrderTicketingRole,
+  viewerUserId: string
+) => {
+  if (viewerRole === UserRole.ADMINISTRATOR || viewerRole === UserRole.QA_TEAM) return true;
+  if (String(message.senderUserId) === String(viewerUserId)) return true;
+  if (viewerRole === UserRole.CUSTOMER) return message.visibleToCustomer;
+  return message.recipientRoles.includes(viewerRole);
+};
+
+// Compatibility aliases for legacy order-create route variants.
+router.use((req, _res, next) => {
+  if (req.path === '/custom' || req.path === '/design' || req.path === '/custom-order') {
+    req.url = req.url.replace(req.path, '/custom-design');
+  } else if (req.path === '/ready' || req.path === '/readytowear' || req.path === '/ready-to-buy') {
+    req.url = req.url.replace(req.path, '/ready-to-wear');
+  } else if (req.path === '/fabric' || req.path === '/fabric-order' || req.path === '/fabric-only-order') {
+    req.url = req.url.replace(req.path, '/fabric-only');
+  }
+  next();
+});
+
+const READY_TO_WEAR_VARIANT_SEPARATOR = '::';
+const DEFAULT_READY_TO_WEAR_COLOR = 'DEFAULT';
+const LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS = [' / ', '/', '|'] as const;
+const normalizeReadyToWearSize = (value: unknown) => String(value || '').trim().toUpperCase();
+const normalizeReadyToWearColor = (value: unknown) =>
+  String(value || DEFAULT_READY_TO_WEAR_COLOR)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ') || DEFAULT_READY_TO_WEAR_COLOR;
+const encodeReadyToWearVariantKey = (size: unknown, color?: unknown) =>
+  `${normalizeReadyToWearSize(size)}${READY_TO_WEAR_VARIANT_SEPARATOR}${normalizeReadyToWearColor(color)}`;
+const decodeReadyToWearVariantKey = (variantKey: unknown) => {
+  const raw = String(variantKey || '').trim().toUpperCase();
+  if (raw.includes(READY_TO_WEAR_VARIANT_SEPARATOR)) {
+    const [sizePart, colorPart] = raw.split(READY_TO_WEAR_VARIANT_SEPARATOR);
+    const normalizedSize = normalizeReadyToWearSize(sizePart);
+    const normalizedColor = normalizeReadyToWearColor(colorPart);
+    return {
+      size: normalizedSize,
+      color: normalizedColor,
+      variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
+    };
+  }
+  for (const separator of LEGACY_READY_TO_WEAR_VARIANT_SEPARATORS) {
+    if (!raw.includes(separator)) continue;
+    const [sizePart, colorPart] = raw.split(separator);
+    const normalizedSize = normalizeReadyToWearSize(sizePart);
+    const normalizedColor = normalizeReadyToWearColor(colorPart);
+    return {
+      size: normalizedSize,
+      color: normalizedColor,
+      variantKey: encodeReadyToWearVariantKey(normalizedSize, normalizedColor),
+    };
+  }
+  const normalizedSize = normalizeReadyToWearSize(raw);
+  return {
+    size: normalizedSize,
+    color: DEFAULT_READY_TO_WEAR_COLOR,
+    variantKey: encodeReadyToWearVariantKey(normalizedSize, DEFAULT_READY_TO_WEAR_COLOR),
+  };
+};
+
+const ORDER_NUMBER_BASE_REGEX = /^(?:[A-Z0-9]+-)?([A-Z0-9]+)(?:-(\d+))?$/;
+const sanitizeOrderPrefix = (value: unknown, fallback: string) => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '');
+  if (!normalized) return fallback;
+  return normalized.slice(0, 8);
+};
+const extractOrderBaseToken = (orderNumber: string | null | undefined) => {
+  const normalized = String(orderNumber || '')
+    .trim()
+    .toUpperCase();
+  if (!normalized) return '';
+  const matched = normalized.match(ORDER_NUMBER_BASE_REGEX);
+  return matched?.[1] || '';
+};
+const generateRandomOrderBaseToken = (length = 8) => {
+  const tokenLength = Math.max(6, Math.min(16, Number(length || 8)));
+  const randomToken = Math.random().toString(36).replace(/[^a-z0-9]+/gi, '').toUpperCase();
+  const timestampToken = Date.now().toString(36).toUpperCase();
+  return `${timestampToken}${randomToken}`.replace(/[^A-Z0-9]+/g, '').slice(0, tokenLength) || timestampToken.slice(0, tokenLength);
+};
+const resolveOrderTypePrefix = (
+  orderType: OrderType,
+  workflowSettings: Awaited<ReturnType<typeof readOrderWorkflowSettings>>
+) => {
+  const prefixes = workflowSettings.orderNumbering?.categoryPrefixes || {
+    READY_TO_WEAR: 'RTW',
+    CUSTOM_DESIGN: 'CTW',
+    FABRIC_ONLY: 'FTB',
+  };
+  if (orderType === OrderType.READY_TO_WEAR) {
+    return sanitizeOrderPrefix(prefixes.READY_TO_WEAR, 'RTW');
+  }
+  if (orderType === OrderType.FABRIC_ONLY) {
+    return sanitizeOrderPrefix(prefixes.FABRIC_ONLY, 'FTB');
+  }
+  return sanitizeOrderPrefix(prefixes.CUSTOM_DESIGN, 'CTW');
+};
+async function generateManagedOrderNumber(params: {
+  orderType: OrderType;
+  customerId: string;
+  paymentIntentId?: string | null;
+  workflowSettings: Awaited<ReturnType<typeof readOrderWorkflowSettings>>;
+}) {
+  const prefix = resolveOrderTypePrefix(params.orderType, params.workflowSettings);
+  const tokenLength = Math.max(6, Math.min(16, Number(params.workflowSettings.orderNumbering?.baseTokenLength || 8)));
+  const paymentIntentId = String(params.paymentIntentId || '').trim();
+  if (!paymentIntentId) {
+    return `${prefix}-${generateRandomOrderBaseToken(tokenLength)}`;
+  }
+  const existingOrders = await prisma.order.findMany({
+    where: {
+      customerId: params.customerId,
+      paymentIntentId,
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { orderNumber: true },
+  });
+  const existingBaseToken =
+    existingOrders.length > 0
+      ? extractOrderBaseToken(String(existingOrders[0]?.orderNumber || ''))
+      : '';
+  const baseToken = existingBaseToken || generateRandomOrderBaseToken(tokenLength);
+  const variant = existingOrders.length + 1;
+  const shouldUseVariantSuffix = params.workflowSettings.orderNumbering?.useVariantSuffix !== false || variant > 1;
+  if (shouldUseVariantSuffix) {
+    return `${prefix}-${baseToken}-${variant}`;
+  }
+  return `${prefix}-${baseToken}`;
+}
 
 router.use(authenticate);
 
+router.get('/limits', async (_req, res, next) => {
+  try {
+    const workflowSettings = await readOrderWorkflowSettings();
+    res.json({
+      success: true,
+      data: {
+        ...(workflowSettings.orderLimits || {}),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/checkout-pricing/preview', async (req, res, next) => {
+  try {
+    const schema = z.object({
+      country: z.string().trim().optional(),
+      segments: z
+        .array(
+          z.object({
+            productType: z.enum(['FABRIC', 'DESIGN', 'READY_TO_WEAR']),
+            subtotalUsd: z.number().min(0),
+          })
+        )
+        .default([]),
+    });
+    const payload = schema.parse(req.body || {});
+    const checkoutRules = await readActivePricingRules(new Date(), 'CHECKOUT');
+    const checkoutPricingSettings = await readCheckoutPricingSettings();
+    const normalizedSegments = (Array.isArray(payload.segments) ? payload.segments : [])
+      .map((entry) => ({
+        productType: entry.productType as PricingProductType,
+        subtotalUsd: Number(entry.subtotalUsd || 0),
+      }))
+      .filter((entry) => Number.isFinite(entry.subtotalUsd) && entry.subtotalUsd > 0);
+    const baseSubtotalUsd = normalizedSegments.reduce((sum, entry) => sum + Number(entry.subtotalUsd || 0), 0);
+    const aggregatedRules = new Map<
+      string,
+      {
+        ruleId: string;
+        ruleName: string;
+        adjustmentType: string;
+        value: number;
+        amountUsd: number;
+        occurrences: number;
+      }
+    >();
+    let finalSubtotalUsd = 0;
+    for (const segment of normalizedSegments) {
+      const applied = applyActivePricingRulesWithBreakdown(
+        Number(segment.subtotalUsd || 0),
+        { productType: segment.productType, country: payload.country || undefined },
+        checkoutRules
+      );
+      finalSubtotalUsd += Number(applied.finalPriceUsd || 0);
+      for (const row of applied.appliedRules) {
+        const key = String(row.ruleId || row.ruleName || '').trim();
+        if (!key) continue;
+        const current = aggregatedRules.get(key);
+        if (!current) {
+          aggregatedRules.set(key, {
+            ruleId: row.ruleId,
+            ruleName: row.ruleName,
+            adjustmentType: row.adjustmentType,
+            value: Number(row.value || 0),
+            amountUsd: Number(row.amountUsd || 0),
+            occurrences: 1,
+          });
+          continue;
+        }
+        current.amountUsd = Number((Number(current.amountUsd || 0) + Number(row.amountUsd || 0)).toFixed(2));
+        current.occurrences += 1;
+      }
+    }
+    finalSubtotalUsd = Number(finalSubtotalUsd.toFixed(2));
+    const totalAdjustmentUsd = Number((finalSubtotalUsd - Number(baseSubtotalUsd || 0)).toFixed(2));
+    res.json({
+      success: true,
+      data: {
+        label: checkoutPricingSettings.settings.label,
+        baseSubtotalUsd: Number(baseSubtotalUsd.toFixed(2)),
+        totalAdjustmentUsd,
+        finalSubtotalUsd,
+        appliedRules: Array.from(aggregatedRules.values()).sort(
+          (a, b) => Math.abs(Number(b.amountUsd || 0)) - Math.abs(Number(a.amountUsd || 0))
+        ),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+let cachedTransporter: nodemailer.Transporter | null | undefined;
+
+function getOrderMailer(): nodemailer.Transporter | null {
+  if (cachedTransporter !== undefined) {
+    return cachedTransporter;
+  }
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) {
+    cachedTransporter = null;
+    return null;
+  }
+  cachedTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    auth: { user, pass },
+  });
+  return cachedTransporter;
+}
+
+async function getPostCheckoutOfferLines(limit = 3) {
+  try {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{
+        code: string;
+        name: string;
+        discountType: string;
+        discountValue: number;
+        maxDiscountUsd: number | null;
+      }>
+    >(
+      `SELECT "code","name","discountType","discountValue","maxDiscountUsd"
+       FROM "PromotionCode"
+       WHERE "isActive" = true
+         AND ("startsAt" IS NULL OR "startsAt" <= NOW())
+         AND ("endsAt" IS NULL OR "endsAt" >= NOW())
+       ORDER BY "updatedAt" DESC, "createdAt" DESC
+       LIMIT ${Math.max(1, Math.min(5, Number(limit || 3)))}`
+    );
+    return rows.map((row) => {
+      const discountText =
+        String(row.discountType || '').toUpperCase() === 'FIXED'
+          ? `$${Number(row.discountValue || 0).toFixed(2)} off`
+          : `${Number(row.discountValue || 0)}% off`;
+      const capText = row.maxDiscountUsd != null ? ` (up to $${Number(row.maxDiscountUsd).toFixed(2)})` : '';
+      return `${String(row.code || '').toUpperCase()} — ${String(row.name || '').trim() || 'Special Offer'}: ${discountText}${capText}`;
+    });
+  } catch {
+    return [] as string[];
+  }
+}
+
+async function sendOrderConfirmationEmail(params: {
+  to: string;
+  orderNumber: string;
+  orderType: string;
+  total: number;
+  itemCount: number;
+  subtotalUsd?: number | null;
+  taxUsd?: number | null;
+  paymentMethod?: string | null;
+  shippingAddress?: string | null;
+  promoCode?: string | null;
+  discountUsd?: number | null;
+  shippingCostUsd?: number | null;
+  checkoutPricingLabel?: string | null;
+  checkoutPricingAdjustmentUsd?: number | null;
+  itemLines?: string[];
+  itemRows?: Array<{
+    label: string;
+    meta?: string | null;
+    quantity: number;
+    unitPriceUsd?: number | null;
+    lineTotalUsd?: number | null;
+  }>;
+}) {
+  const transporter = getOrderMailer();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!transporter || !from || !params.to) {
+    return;
+  }
+  const totalText = Number(params.total || 0).toFixed(2);
+  const subtotalText = Number(params.subtotalUsd || 0).toFixed(2);
+  const taxText = Number(params.taxUsd || 0).toFixed(2);
+  const postCheckoutOfferLines = await getPostCheckoutOfferLines(3);
+  const escapeHtml = (value: unknown) =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  const safeItemLines = Array.isArray(params.itemLines)
+    ? params.itemLines
+        .map((line) => String(line || '').trim())
+        .filter(Boolean)
+        .slice(0, 12)
+    : [];
+  const safeItemRows = Array.isArray(params.itemRows)
+    ? params.itemRows
+        .map((row) => ({
+          label: String(row?.label || '').trim(),
+          meta: String(row?.meta || '').trim(),
+          quantity: Math.max(1, Number(row?.quantity || 1)),
+          unitPriceUsd: Number(row?.unitPriceUsd || 0),
+          lineTotalUsd: Number(
+            row?.lineTotalUsd != null ? row.lineTotalUsd : Number(row?.unitPriceUsd || 0) * Math.max(1, Number(row?.quantity || 1))
+          ),
+        }))
+        .filter((row) => row.label.length > 0)
+        .slice(0, 20)
+    : [];
+  const invoiceDateText = new Date().toLocaleString();
+  const discountText =
+    Number(params.discountUsd || 0) > 0
+      ? `\nPromo Discount: -$${Number(params.discountUsd || 0).toFixed(2)}${
+          params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''
+        }`
+      : '';
+  const checkoutPricingLabel =
+    String(params.checkoutPricingLabel || '')
+      .trim()
+      .slice(0, 80) || 'Checkout Pricing';
+  const checkoutPricingSignedText = `${Number(params.checkoutPricingAdjustmentUsd || 0) < 0 ? '-' : ''}$${Math.abs(
+    Number(params.checkoutPricingAdjustmentUsd || 0)
+  ).toFixed(2)}`;
+  const checkoutPricingText =
+    Math.abs(Number(params.checkoutPricingAdjustmentUsd || 0)) > 0
+      ? `\n${checkoutPricingLabel}: ${checkoutPricingSignedText}`
+      : '';
+  const paymentMethodText = params.paymentMethod ? `\nPayment Method: ${String(params.paymentMethod)}` : '';
+  const shippingAddressText = params.shippingAddress ? `\nShipping Address: ${String(params.shippingAddress)}` : '';
+  const itemListText =
+    safeItemRows.length > 0
+      ? `\nItems:\n- ${safeItemRows
+          .map(
+            (row) =>
+              `${row.label}${row.meta ? ` (${row.meta})` : ''} • Qty ${row.quantity} • Unit $${Number(row.unitPriceUsd || 0).toFixed(2)} • Line $${Number(
+                row.lineTotalUsd || 0
+              ).toFixed(2)}`
+          )
+          .join('\n- ')}`
+      : safeItemLines.length > 0
+        ? `\nItems:\n- ${safeItemLines.join('\n- ')}`
+        : '';
+  const offerListText =
+    postCheckoutOfferLines.length > 0 ? `\n\nNext-order offers:\n- ${postCheckoutOfferLines.join('\n- ')}` : '';
+  const htmlItemTable =
+    safeItemRows.length > 0
+      ? `
+      <p><strong>Invoice Items:</strong></p>
+      <table cellpadding="6" cellspacing="0" border="1" style="border-collapse:collapse;width:100%;font-size:12px">
+        <thead>
+          <tr>
+            <th align="left">Item</th>
+            <th align="left">Details</th>
+            <th align="right">Qty</th>
+            <th align="right">Unit</th>
+            <th align="right">Line Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${safeItemRows
+            .map(
+              (row) => `<tr>
+            <td>${escapeHtml(row.label)}</td>
+            <td>${escapeHtml(row.meta || '-')}</td>
+            <td align="right">${row.quantity}</td>
+            <td align="right">$${Number(row.unitPriceUsd || 0).toFixed(2)}</td>
+            <td align="right">$${Number(row.lineTotalUsd || 0).toFixed(2)}</td>
+          </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>`
+      : safeItemLines.length > 0
+        ? `<p><strong>Items:</strong></p><ul>${safeItemLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+        : '';
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: `Order Confirmation: ${params.orderNumber}`,
+    text: `Thank you for your order!\n\nOrder Number: ${params.orderNumber}\nOrder Type: ${params.orderType}\nInvoice Date: ${invoiceDateText}\nItems: ${params.itemCount}\nSubtotal: $${subtotalText}${checkoutPricingText}${discountText}\nShipping: ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}\nTax: $${taxText}\nGrand Total: $${totalText}${paymentMethodText}${shippingAddressText}${itemListText}${offerListText}\n\nYour order has been received and is now being processed.`,
+    html: `
+      <p>Thank you for your order.</p>
+      <p><strong>Order Number:</strong> ${params.orderNumber}</p>
+      <p><strong>Order Type:</strong> ${params.orderType}</p>
+      <p><strong>Invoice Date:</strong> ${invoiceDateText}</p>
+      <p><strong>Items:</strong> ${params.itemCount}</p>
+      <p><strong>Subtotal:</strong> $${subtotalText}</p>
+      ${Math.abs(Number(params.checkoutPricingAdjustmentUsd || 0)) > 0 ? `<p><strong>${escapeHtml(checkoutPricingLabel)}:</strong> ${checkoutPricingSignedText}</p>` : ''}
+      ${Number(params.discountUsd || 0) > 0 ? `<p><strong>Promo Discount:</strong> -$${Number(params.discountUsd || 0).toFixed(2)}${params.promoCode ? ` (${String(params.promoCode).toUpperCase()})` : ''}</p>` : ''}
+      ${Number(params.shippingCostUsd || 0) > 0 || Number(params.shippingCostUsd || 0) === 0 ? `<p><strong>Shipping:</strong> ${Number(params.shippingCostUsd || 0) === 0 ? 'FREE' : `$${Number(params.shippingCostUsd || 0).toFixed(2)}`}</p>` : '<p><strong>Shipping:</strong> N/A</p>'}
+      <p><strong>Tax:</strong> $${taxText}</p>
+      <p><strong>Grand Total:</strong> $${totalText}</p>
+      ${params.paymentMethod ? `<p><strong>Payment Method:</strong> ${String(params.paymentMethod)}</p>` : ''}
+      ${params.shippingAddress ? `<p><strong>Shipping Address:</strong> ${String(params.shippingAddress)}</p>` : ''}
+      ${htmlItemTable}
+      ${postCheckoutOfferLines.length > 0 ? `<p><strong>Next-order offers:</strong></p><ul>${postCheckoutOfferLines.map((line) => `<li>${line}</li>`).join('')}</ul>` : ''}
+      <p>Your order has been received and is now being processed.</p>
+    `,
+  });
+}
+
+function toStatusLabel(status: OrderStatus) {
+  return String(status || '')
+    .toLowerCase()
+    .split('_')
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(' ');
+}
+
+async function sendLifecycleEmail(params: {
+  to: string;
+  subject: string;
+  title: string;
+  body: string;
+}) {
+  const transporter = getOrderMailer();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!transporter || !from || !params.to) return;
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: params.subject,
+    text: `${params.title}\n\n${params.body}`,
+    html: `<p><strong>${params.title}</strong></p><p>${params.body}</p>`,
+  });
+}
+
+async function notifyOrderLifecycle(params: {
+  orderId: string;
+  status: OrderStatus;
+  notes?: string;
+  actorRole: UserRole;
+}) {
+  try {
+    const [settings, order, adminUsers] = await Promise.all([
+      readOrderWorkflowSettings(),
+      prisma.order.findUnique({
+        where: { id: params.orderId },
+        include: {
+          customer: { select: { id: true, email: true, firstName: true, lastName: true } },
+          fabricOrder: {
+            include: {
+              seller: {
+                include: {
+                  user: { select: { id: true, email: true, firstName: true, lastName: true } },
+                },
+              },
+            },
+          },
+          designOrder: {
+            include: {
+              designer: {
+                include: {
+                  user: { select: { id: true, email: true, firstName: true, lastName: true } },
+                },
+              },
+            },
+          },
+          readyToWearItems: {
+            include: {
+              readyToWear: {
+                include: {
+                  designer: {
+                    include: {
+                      user: { select: { id: true, email: true, firstName: true, lastName: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          qa: {
+            include: {
+              user: { select: { id: true, email: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+      }),
+      prisma.user.findMany({
+        where: {
+          role: UserRole.ADMINISTRATOR,
+          status: 'ACTIVE',
+        },
+        select: { id: true, email: true, firstName: true, lastName: true },
+      }),
+    ]);
+    if (!order) return;
+
+    const statusLabel = toStatusLabel(params.status);
+    const notificationTitle = `Order ${order.orderNumber} updated`;
+    const roleBlurb = (() => {
+      if (params.actorRole === UserRole.ADMINISTRATOR) return 'by Admin';
+      if (params.actorRole === UserRole.QA_TEAM) return 'by QA';
+      if (params.actorRole === UserRole.FABRIC_SELLER) return 'by Seller';
+      if (params.actorRole === UserRole.FASHION_DESIGNER) return 'by Designer';
+      return 'by Customer';
+    })();
+    const notificationBody = `Status is now "${statusLabel}" ${roleBlurb}.${params.notes ? ` Notes: ${params.notes}` : ''}`;
+
+    const recipients: Array<{ role: 'CUSTOMER' | 'SELLER' | 'DESIGNER' | 'QA' | 'ADMIN'; userId: string; email: string }> = [];
+    if (order.customer?.id && order.customer?.email) {
+      recipients.push({ role: 'CUSTOMER', userId: order.customer.id, email: order.customer.email });
+    }
+    const sellerUser = order.fabricOrder?.seller?.user;
+    if (sellerUser?.id && sellerUser?.email) {
+      recipients.push({ role: 'SELLER', userId: sellerUser.id, email: sellerUser.email });
+    }
+    const designerUsers = new Map<string, { id: string; email: string }>();
+    const designOwner = order.designOrder?.designer?.user;
+    if (designOwner?.id && designOwner?.email) {
+      designerUsers.set(designOwner.id, { id: designOwner.id, email: designOwner.email });
+    }
+    for (const item of order.readyToWearItems || []) {
+      const readyDesigner = item.readyToWear?.designer?.user;
+      if (readyDesigner?.id && readyDesigner?.email) {
+        designerUsers.set(readyDesigner.id, { id: readyDesigner.id, email: readyDesigner.email });
+      }
+    }
+    designerUsers.forEach((value) => {
+      recipients.push({ role: 'DESIGNER', userId: value.id, email: value.email });
+    });
+    const qaUser = order.qa?.user;
+    if (qaUser?.id && qaUser?.email) {
+      recipients.push({ role: 'QA', userId: qaUser.id, email: qaUser.email });
+    }
+    for (const admin of adminUsers) {
+      if (admin?.id && admin?.email) {
+        recipients.push({ role: 'ADMIN', userId: admin.id, email: admin.email });
+      }
+    }
+
+    const deduped = new Map<string, { role: 'CUSTOMER' | 'SELLER' | 'DESIGNER' | 'QA' | 'ADMIN'; userId: string; email: string }>();
+    for (const recipient of recipients) {
+      const key = `${recipient.role}:${recipient.userId}`;
+      if (!deduped.has(key)) deduped.set(key, recipient);
+    }
+
+    const notifyTargets = Array.from(deduped.values()).filter((recipient) =>
+      shouldNotifyRoleForStatus(settings, recipient.role, params.status)
+    );
+
+    await Promise.all(
+      notifyTargets.map(async (recipient) => {
+        await prisma.notification
+          .create({
+            data: {
+              userId: recipient.userId,
+              type: 'ORDER_UPDATE' as any,
+              title: notificationTitle,
+              message: notificationBody,
+              relatedId: order.id,
+              relatedType: 'ORDER',
+            },
+          })
+          .catch(() => undefined);
+      })
+    );
+
+    await Promise.all(
+      notifyTargets.map((recipient) =>
+        sendLifecycleEmail({
+          to: recipient.email,
+          subject: `${notificationTitle} · ${statusLabel}`,
+          title: notificationTitle,
+          body: notificationBody,
+        }).catch(() => undefined)
+      )
+    );
+    await emitPartnerOrderEvent('order.status.changed', {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      type: order.type,
+      status: params.status,
+      actorRole: params.actorRole,
+      notes: params.notes || null,
+      updatedAt: new Date().toISOString(),
+      source: 'platform',
+    }).catch(() => undefined);
+  } catch (error) {
+    console.error('Failed to send lifecycle notifications:', error);
+  }
+}
+
+function canAutoProcessOrder(params: {
+  processingMode: 'MANUAL' | 'AUTO';
+  criteria: {
+    requirePaid: boolean;
+    requireShippingProvider: boolean;
+    requireCustomerAddress: boolean;
+    requireItems: boolean;
+  };
+  isPaymentConfirmed: boolean;
+  hasShippingProvider: boolean;
+  hasShippingAddress: boolean;
+  hasItems: boolean;
+}) {
+  if (params.processingMode !== 'AUTO') return false;
+  if (params.criteria.requirePaid && !params.isPaymentConfirmed) return false;
+  if (params.criteria.requireShippingProvider && !params.hasShippingProvider) return false;
+  if (params.criteria.requireCustomerAddress && !params.hasShippingAddress) return false;
+  if (params.criteria.requireItems && !params.hasItems) return false;
+  return true;
+}
+
+const orderTicketingSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    defaultVisibleToCustomer: z.boolean().optional(),
+    allowVendorToVendorDirect: z.boolean().optional(),
+    allowVendorToCustomerDirect: z.boolean().optional(),
+    allowCustomerToVendorDirect: z.boolean().optional(),
+    allowQaToVendorMessaging: z.boolean().optional(),
+    allowQaToCustomerMessaging: z.boolean().optional(),
+    autoAssignEnabled: z.boolean().optional(),
+    autoAssignRole: z.string().trim().optional(),
+    slaResponseHours: z.number().int().min(1).max(24 * 30).optional(),
+    escalationRole: z.string().trim().optional(),
+    escalationNotifyRoles: z.array(z.string()).optional(),
+    recipientMatrix: z.record(z.array(z.string())).optional(),
+  })
+  .strict();
+const orderTicketingTranslationSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    defaultLanguage: z.string().trim().min(2).max(24).optional(),
+  })
+  .strict();
+
+const orderTicketMessageSchema = z
+  .object({
+    body: z.string().trim().min(1).max(4000),
+    recipientRoles: z.array(z.string()).max(8).optional(),
+    attachments: z.array(z.string().trim().max(4096)).max(12).optional(),
+    visibleToCustomer: z.boolean().optional(),
+    subject: z.string().trim().max(240).optional(),
+    sourceLanguage: z.string().trim().min(2).max(24).optional(),
+  })
+  .strict();
+const ticketingLanguagePreferenceSchema = z
+  .object({
+    language: z.string().trim().min(2).max(24),
+  })
+  .strict();
+
+const ticketStatusUpdateSchema = z
+  .object({
+    status: z.enum(ORDER_TICKET_STATUSES),
+  })
+  .strict();
+
+async function getLatestOrderTicket(orderId: string) {
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      id: string;
+      orderId: string;
+      subject: string | null;
+      status: string;
+      createdById: string;
+      isLocked: boolean;
+      assignedToUserId: string | null;
+      assignedToRole: string | null;
+      dueAt: Date | null;
+      escalatedAt: Date | null;
+      escalationStatus: string | null;
+      lastMessageAt: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>
+  >(
+    `SELECT "id","orderId","subject","status","createdById","isLocked","assignedToUserId","assignedToRole","dueAt","escalatedAt","escalationStatus","lastMessageAt","createdAt","updatedAt"
+     FROM "OrderTicket"
+     WHERE "orderId" = $1
+     ORDER BY "updatedAt" DESC, "createdAt" DESC
+     LIMIT 1`,
+    orderId
+  );
+  if (!rows[0]) return null;
+  return {
+    id: String(rows[0].id),
+    orderId: String(rows[0].orderId),
+    subject: rows[0].subject ? String(rows[0].subject) : null,
+    status: ORDER_TICKET_STATUSES.includes(String(rows[0].status || '').toUpperCase() as OrderTicketStatus)
+      ? (String(rows[0].status || '').toUpperCase() as OrderTicketStatus)
+      : 'OPEN',
+    createdById: String(rows[0].createdById),
+    isLocked: Boolean(rows[0].isLocked),
+    assignedToUserId: rows[0].assignedToUserId ? String(rows[0].assignedToUserId) : null,
+    assignedToRole: parseStoredAssignmentRoleToken(rows[0].assignedToRole),
+    dueAt: rows[0].dueAt ? new Date(rows[0].dueAt).toISOString() : null,
+    escalatedAt: rows[0].escalatedAt ? new Date(rows[0].escalatedAt).toISOString() : null,
+    escalationStatus: String(rows[0].escalationStatus || 'NONE').toUpperCase(),
+    lastMessageAt: rows[0].lastMessageAt ? new Date(rows[0].lastMessageAt).toISOString() : null,
+    createdAt: new Date(rows[0].createdAt || Date.now()).toISOString(),
+    updatedAt: new Date(rows[0].updatedAt || Date.now()).toISOString(),
+  };
+}
+
+async function createOrderTicket(params: {
+  orderId: string;
+  createdById: string;
+  subject?: string;
+  settings: OrderTicketingSettings;
+  orderContext: OrderAccessContext;
+}) {
+  const autoAssignRole = params.settings.autoAssignEnabled ? params.settings.autoAssignRole : null;
+  const assignee = autoAssignRole
+    ? pickDefaultAssigneeForRoleToken(autoAssignRole, {
+        participantUsersByRole: params.orderContext.participantUsersByRole,
+        adminUsersByAdminRoleToken: params.orderContext.adminUsersByAdminRoleToken,
+      })
+    : null;
+  const dueAtIso = new Date(Date.now() + Number(params.settings.slaResponseHours || 24) * 60 * 60 * 1000).toISOString();
+  const id = randomUUID();
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "OrderTicket" ("id","orderId","subject","status","createdById","isLocked","assignedToUserId","assignedToRole","dueAt","lastMessageAt","createdAt","updatedAt")
+     VALUES ($1,$2,$3,'OPEN',$4,false,$5,$6,$7::timestamp,NOW(),NOW(),NOW())`,
+    id,
+    params.orderId,
+    params.subject ? String(params.subject).slice(0, 240) : null,
+    params.createdById,
+    assignee?.id ? String(assignee.id) : null,
+    autoAssignRole,
+    dueAtIso
+  );
+  return getLatestOrderTicket(params.orderId);
+}
+
+async function runTicketEscalationIfDue(params: {
+  ticket: any;
+  settings: OrderTicketingSettings;
+  orderContext: OrderAccessContext;
+}) {
+  const ticket = params.ticket;
+  if (!ticket || !isTicketStatusActive(ticket.status)) return ticket;
+  const dueAtMs = ticket.dueAt ? Number(new Date(ticket.dueAt)) : Number.NaN;
+  if (!Number.isFinite(dueAtMs)) {
+    const nextDueAtIso = new Date(Date.now() + Number(params.settings.slaResponseHours || 24) * 60 * 60 * 1000).toISOString();
+    await prisma.$executeRawUnsafe(
+      `UPDATE "OrderTicket" SET "dueAt" = $2::timestamp, "updatedAt" = NOW() WHERE "id" = $1`,
+      ticket.id,
+      nextDueAtIso
+    );
+    return getLatestOrderTicket(ticket.orderId);
+  }
+  if (ticket.escalatedAt || Date.now() <= dueAtMs) return ticket;
+
+  const escalationRole = params.settings.escalationRole || UserRole.ADMINISTRATOR;
+  const assignee = pickDefaultAssigneeForRoleToken(escalationRole, {
+    participantUsersByRole: params.orderContext.participantUsersByRole,
+    adminUsersByAdminRoleToken: params.orderContext.adminUsersByAdminRoleToken,
+  });
+  await prisma.$executeRawUnsafe(
+    `UPDATE "OrderTicket"
+     SET "escalatedAt" = NOW(),
+         "escalationStatus" = 'ESCALATED',
+         "assignedToRole" = COALESCE("assignedToRole", $2),
+         "assignedToUserId" = COALESCE("assignedToUserId", $3),
+         "updatedAt" = NOW()
+     WHERE "id" = $1`,
+    ticket.id,
+    escalationRole,
+    assignee?.id ? String(assignee.id) : null
+  );
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "OrderTicketMessage"
+      ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","attachments","createdAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,false,true,'[]'::jsonb,NOW())`,
+    randomUUID(),
+    ticket.id,
+    params.orderContext.orderId,
+    assignee?.id || params.orderContext.adminUsers[0]?.id || params.orderContext.qaUsers[0]?.id || ticket.createdById,
+    UserRole.ADMINISTRATOR,
+    `Ticket escalated after SLA deadline. Routed to ${roleLabelForToken(
+      escalationRole,
+      params.orderContext.adminRoleNameByToken
+    )}.`,
+    JSON.stringify([UserRole.ADMINISTRATOR, UserRole.QA_TEAM])
+  );
+
+  const notifyRoles = params.settings.escalationNotifyRoles || [UserRole.ADMINISTRATOR, UserRole.QA_TEAM];
+  const notifyUserIds = Array.from(
+    new Set(
+      notifyRoles
+        .flatMap((role) => resolveUsersForTicketRole(role as OrderTicketingRole, params.orderContext.participantUsersByRole))
+        .map((entry) => String(entry.id || ''))
+        .filter(Boolean)
+    )
+  );
+  await Promise.all(
+    notifyUserIds.map((userId) =>
+      prisma.notification
+        .create({
+          data: {
+            userId,
+            type: 'SYSTEM' as any,
+            title: `Ticket escalation • ${params.orderContext.orderNumber}`,
+            message: `Order ticket exceeded ${Number(params.settings.slaResponseHours || 24)}h SLA and has been escalated.`,
+            relatedId: params.orderContext.orderId,
+            relatedType: 'ORDER',
+          },
+        })
+        .catch(() => undefined)
+    )
+  );
+  return getLatestOrderTicket(ticket.orderId);
+}
+
+async function readOrderTicketThread(params: {
+  orderId: string;
+  viewerId: string;
+  viewerRole: OrderTicketingRole;
+  createIfMissing?: boolean;
+  ticketSubject?: string;
+  orderContext: OrderAccessContext;
+  settings: OrderTicketingSettings;
+  translationSettings: OrderTicketingTranslationSettings;
+  viewerLanguage: string;
+}) {
+  await ensureOrderTicketingSchema();
+  let ticket = await getLatestOrderTicket(params.orderId);
+  if (!ticket && params.createIfMissing) {
+    ticket = await createOrderTicket({
+      orderId: params.orderId,
+      createdById: params.viewerId,
+      subject: params.ticketSubject,
+      settings: params.settings,
+      orderContext: params.orderContext,
+    });
+  }
+  if (!ticket) {
+    return {
+      ticket: null,
+      messages: [] as any[],
+      viewerLanguage: normalizeTicketingLanguage(
+        params.viewerLanguage,
+        params.translationSettings.defaultLanguage
+      ),
+    };
+  }
+  ticket = await runTicketEscalationIfDue({
+    ticket,
+    settings: params.settings,
+    orderContext: params.orderContext,
+  });
+  if (!ticket) {
+    return {
+      ticket: null,
+      messages: [] as any[],
+      viewerLanguage: normalizeTicketingLanguage(
+        params.viewerLanguage,
+        params.translationSettings.defaultLanguage
+      ),
+    };
+  }
+
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      id: string;
+      ticketId: string;
+      orderId: string;
+      senderUserId: string;
+      senderRole: string;
+      body: string;
+      recipientRoles: unknown;
+      attachments: unknown;
+      sourceLanguage: string | null;
+      visibleToCustomer: boolean;
+      isInternal: boolean;
+      createdAt: Date;
+    }>
+  >(
+    `SELECT "id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","attachments","sourceLanguage","visibleToCustomer","isInternal","createdAt"
+     FROM "OrderTicketMessage"
+     WHERE "ticketId" = $1
+     ORDER BY "createdAt" ASC`,
+    ticket.id
+  );
+  const senderIds = Array.from(new Set(rows.map((entry) => String(entry.senderUserId || '')).filter(Boolean)));
+  const senderUsers = senderIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: senderIds } },
+        select: { id: true, firstName: true, lastName: true, role: true },
+      })
+    : [];
+  const senderMap = new Map(
+    senderUsers.map((row) => [
+      String(row.id),
+      {
+        role: asRoleToken(row.role) || UserRole.ADMINISTRATOR,
+        displayName: fullName(row.firstName, row.lastName) || ORDER_TICKETING_ROLE_LABELS[(asRoleToken(row.role) || UserRole.ADMINISTRATOR) as OrderTicketingRole],
+      },
+    ])
+  );
+  const customerDisplayName =
+    params.orderContext.customerUser
+      ? fullName(params.orderContext.customerUser.firstName, params.orderContext.customerUser.lastName) || 'Customer'
+      : 'Customer';
+  const mappedMessages = rows
+    .map((entry) => {
+      const senderRole = asRoleToken(entry.senderRole) || UserRole.ADMINISTRATOR;
+      const recipientRoles = dedupeRoleTokens(entry.recipientRoles);
+      const sender = senderMap.get(String(entry.senderUserId || ''));
+      const displayName =
+        senderRole === UserRole.CUSTOMER
+          ? customerDisplayName
+          : sender?.displayName || ORDER_TICKETING_ROLE_LABELS[senderRole];
+      return {
+        id: String(entry.id),
+        ticketId: String(entry.ticketId),
+        orderId: String(entry.orderId),
+        senderUserId: String(entry.senderUserId),
+        senderRole,
+        senderDisplayName: displayName,
+        body: String(entry.body || ''),
+        sourceLanguage: normalizeTicketingLanguage(
+          entry.sourceLanguage || params.translationSettings.defaultLanguage,
+          params.translationSettings.defaultLanguage
+        ),
+        recipientRoles,
+        attachments: normalizeAttachmentUrls(parseJsonArray(entry.attachments)),
+        visibleToCustomer: Boolean(entry.visibleToCustomer),
+        isInternal: Boolean(entry.isInternal),
+        createdAt: new Date(entry.createdAt || Date.now()).toISOString(),
+      };
+    })
+    .filter((entry) =>
+      canViewerSeeTicketMessage(
+        {
+          senderUserId: entry.senderUserId,
+          recipientRoles: entry.recipientRoles,
+          visibleToCustomer: entry.visibleToCustomer,
+        },
+        params.viewerRole,
+        params.viewerId
+      )
+    );
+  const viewerLanguage = normalizeTicketingLanguage(
+    params.viewerLanguage,
+    params.translationSettings.defaultLanguage
+  );
+  const translationCandidates = mappedMessages.filter(
+    (entry) =>
+      params.translationSettings.enabled &&
+      Boolean(String(entry.body || '').trim()) &&
+      viewerLanguage !== normalizeTicketingLanguage(entry.sourceLanguage, params.translationSettings.defaultLanguage)
+  );
+  const translationIds = translationCandidates.map((entry) => String(entry.id));
+  const cachedTranslations = translationIds.length
+    ? await prisma.$queryRawUnsafe<
+        Array<{
+          messageId: string;
+          translatedBody: string;
+          sourceLanguage: string | null;
+          targetLanguage: string;
+          status: string;
+        }>
+      >(
+        `SELECT "messageId","translatedBody","sourceLanguage","targetLanguage","status"
+         FROM "OrderTicketMessageTranslation"
+         WHERE "messageId" = ANY($1::text[])
+           AND "targetLanguage" = $2`,
+        translationIds,
+        viewerLanguage
+      )
+    : [];
+  const translationByMessageId = new Map(
+    cachedTranslations.map((row) => [
+      String(row.messageId || ''),
+      {
+        translatedBody: String(row.translatedBody || ''),
+        status: String(row.status || 'SUCCESS').toUpperCase(),
+        sourceLanguage: normalizeTicketingLanguage(
+          row.sourceLanguage || params.translationSettings.defaultLanguage,
+          params.translationSettings.defaultLanguage
+        ),
+      },
+    ])
+  );
+  for (const message of translationCandidates) {
+    if (translationByMessageId.has(String(message.id))) continue;
+    const messageSourceLanguage = normalizeTicketingLanguage(
+      message.sourceLanguage,
+      params.translationSettings.defaultLanguage
+    );
+    let translatedBody = String(message.body || '');
+    let provider = 'identity';
+    let status = 'SUCCESS';
+    let detectedLanguage = messageSourceLanguage;
+    try {
+      const translated = await translateTicketingText({
+        text: String(message.body || ''),
+        sourceLanguage: messageSourceLanguage || 'auto',
+        targetLanguage: viewerLanguage,
+      });
+      translatedBody = String(translated.translatedText || message.body || '');
+      provider = String(translated.provider || 'google-translate-web');
+      detectedLanguage = normalizeTicketingLanguage(
+        translated.detectedLanguage || messageSourceLanguage,
+        params.translationSettings.defaultLanguage
+      );
+    } catch {
+      status = 'FAILED';
+      provider = 'fallback';
+      translatedBody = String(message.body || '');
+    }
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "OrderTicketMessageTranslation"
+        ("id","messageId","sourceLanguage","targetLanguage","translatedBody","provider","status","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
+       ON CONFLICT ("messageId","targetLanguage")
+       DO UPDATE SET
+         "sourceLanguage" = EXCLUDED."sourceLanguage",
+         "translatedBody" = EXCLUDED."translatedBody",
+         "provider" = EXCLUDED."provider",
+         "status" = EXCLUDED."status",
+         "updatedAt" = NOW()`,
+      randomUUID(),
+      String(message.id),
+      detectedLanguage,
+      viewerLanguage,
+      translatedBody,
+      provider,
+      status
+    );
+    translationByMessageId.set(String(message.id), {
+      translatedBody,
+      status,
+      sourceLanguage: detectedLanguage,
+    });
+  }
+  const messages = mappedMessages.map((entry) => {
+    const sourceLanguage = normalizeTicketingLanguage(
+      entry.sourceLanguage,
+      params.translationSettings.defaultLanguage
+    );
+    const translation = translationByMessageId.get(String(entry.id));
+    const translatedBody =
+      params.translationSettings.enabled &&
+      translation &&
+      viewerLanguage !== sourceLanguage &&
+      String(translation.translatedBody || '').trim()
+        ? String(translation.translatedBody)
+        : String(entry.body || '');
+    const translated = translatedBody.trim() !== String(entry.body || '').trim();
+    return {
+      ...entry,
+      body: translatedBody,
+      originalBody: String(entry.body || ''),
+      sourceLanguage,
+      translated,
+      translatedToLanguage: viewerLanguage,
+      translationStatus: translation?.status || (translated ? 'SUCCESS' : 'SKIPPED'),
+    };
+  });
+  return {
+    ticket,
+    messages,
+    viewerLanguage,
+  };
+}
+
+router.get(
+  '/admin/ticketing/settings',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (_req, res, next) => {
+    try {
+      const settings = await readOrderTicketingSettings();
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.put(
+  '/admin/ticketing/settings',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (req, res, next) => {
+    try {
+      const payload = orderTicketingSettingsSchema.parse(req.body || {});
+      const settings = await writeOrderTicketingSettings(payload as any, false);
+      res.json({ success: true, data: settings, message: 'Order ticketing settings updated.' });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/admin/ticketing/settings',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (req, res, next) => {
+    try {
+      const payload = orderTicketingSettingsSchema.parse(req.body || {});
+      const settings = await writeOrderTicketingSettings(payload as any, true);
+      res.json({ success: true, data: settings, message: 'Order ticketing settings saved.' });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.get(
+  '/admin/ticketing/translation-settings',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_TICKETING_TRANSLATION_MANAGE),
+  async (_req, res, next) => {
+    try {
+      const settings = await readOrderTicketingTranslationSettings();
+      res.json({
+        success: true,
+        data: {
+          ...settings,
+          supportedLanguages: getTicketingSupportedLanguages(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/admin/ticketing/translation-settings',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_TICKETING_TRANSLATION_MANAGE),
+  async (req, res, next) => {
+    try {
+      const payload = orderTicketingTranslationSettingsSchema.parse(req.body || {});
+      const settings = await writeOrderTicketingTranslationSettings(payload, true);
+      res.json({
+        success: true,
+        data: {
+          ...settings,
+          supportedLanguages: getTicketingSupportedLanguages(),
+        },
+        message: 'Order ticketing translation settings saved.',
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.get('/ticketing/language-preference', requireOrderTicketingModule, async (req, res, next) => {
+  try {
+    const user = req.user!;
+    const userRole = asRoleToken(user.role);
+    if (!userRole) {
+      return res.status(403).json({ success: false, message: 'Unsupported role for ticketing language settings.' });
+    }
+    const translationSettings = await readOrderTicketingTranslationSettings();
+    const language = await readUserTicketingLanguagePreference(user.id, translationSettings.defaultLanguage);
+    res.json({
+      success: true,
+      data: {
+        language,
+        translationEnabled: translationSettings.enabled,
+        defaultLanguage: translationSettings.defaultLanguage,
+        supportedLanguages: getTicketingSupportedLanguages(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/ticketing/language-preference', requireOrderTicketingModule, async (req, res, next) => {
+  try {
+    const user = req.user!;
+    const userRole = asRoleToken(user.role);
+    if (!userRole) {
+      return res.status(403).json({ success: false, message: 'Unsupported role for ticketing language settings.' });
+    }
+    const payload = ticketingLanguagePreferenceSchema.parse(req.body || {});
+    const translationSettings = await readOrderTicketingTranslationSettings();
+    const language = await writeUserTicketingLanguagePreference(user.id, payload.language);
+    res.json({
+      success: true,
+      data: {
+        language,
+        translationEnabled: translationSettings.enabled,
+        defaultLanguage: translationSettings.defaultLanguage,
+        supportedLanguages: getTicketingSupportedLanguages(),
+      },
+      message: 'Ticket language preference saved.',
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+    }
+    next(error);
+  }
+});
+
+router.get(
+  '/admin/tickets',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (req, res, next) => {
+    try {
+      await ensureOrderTicketingSchema();
+      const query = z
+        .object({
+          search: z.string().trim().max(120).optional(),
+          status: z.string().trim().max(30).optional(),
+          assignedRole: z.string().trim().max(96).optional(),
+          escalated: z.union([z.literal('true'), z.literal('false'), z.literal('1'), z.literal('0')]).optional(),
+          page: z.coerce.number().int().min(1).max(500).optional(),
+          limit: z.coerce.number().int().min(1).max(100).optional(),
+        })
+        .parse(req.query || {});
+      const page = Math.max(1, Number(query.page || 1));
+      const limit = Math.max(1, Math.min(100, Number(query.limit || 20)));
+      const offset = (page - 1) * limit;
+      const search = String(query.search || '').trim().toLowerCase();
+      const statusFilter = String(query.status || '').trim().toUpperCase();
+      const assignedRoleFilterRaw = String(query.assignedRole || '').trim();
+      const assignedRoleFilter = assignedRoleFilterRaw
+        ? normalizeAssignmentRoleToken(assignedRoleFilterRaw, assignedRoleFilterRaw)
+        : null;
+      const escalatedFilter =
+        query.escalated === 'true' || query.escalated === '1'
+          ? true
+          : query.escalated === 'false' || query.escalated === '0'
+            ? false
+            : null;
+
+      const whereClauses: string[] = [];
+      const values: unknown[] = [];
+      if (search) {
+        values.push(`%${search}%`);
+        whereClauses.push(
+          `(LOWER(COALESCE(t."subject", '')) LIKE $${values.length}
+            OR LOWER(COALESCE(o."orderNumber", '')) LIKE $${values.length}
+            OR LOWER(COALESCE(c."firstName", '') || ' ' || COALESCE(c."lastName", '')) LIKE $${values.length})`
+        );
+      }
+      if (statusFilter) {
+        values.push(statusFilter);
+        whereClauses.push(`UPPER(COALESCE(t."status", 'OPEN')) = $${values.length}`);
+      }
+      if (assignedRoleFilter) {
+        values.push(assignedRoleFilter);
+        whereClauses.push(`COALESCE(t."assignedToRole", '') = $${values.length}`);
+      }
+      if (escalatedFilter !== null) {
+        whereClauses.push(escalatedFilter ? `t."escalatedAt" IS NOT NULL` : `t."escalatedAt" IS NULL`);
+      }
+      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+      const rows = await prisma.$queryRawUnsafe<
+        Array<{
+          id: string;
+          orderId: string;
+          subject: string | null;
+          status: string;
+          assignedToUserId: string | null;
+          assignedToRole: string | null;
+          dueAt: Date | null;
+          escalatedAt: Date | null;
+          escalationStatus: string | null;
+          updatedAt: Date;
+          createdAt: Date;
+          orderNumber: string | null;
+          orderStatus: string | null;
+          customerName: string | null;
+          messageCount: number;
+        }>
+      >(
+        `SELECT
+          t."id",
+          t."orderId",
+          t."subject",
+          t."status",
+          t."assignedToUserId",
+          t."assignedToRole",
+          t."dueAt",
+          t."escalatedAt",
+          t."escalationStatus",
+          t."updatedAt",
+          t."createdAt",
+          o."orderNumber",
+          o."status" AS "orderStatus",
+          TRIM(COALESCE(c."firstName",'') || ' ' || COALESCE(c."lastName",'')) AS "customerName",
+          COALESCE(COUNT(m."id"), 0)::int AS "messageCount"
+         FROM "OrderTicket" t
+         LEFT JOIN "Order" o ON o."id" = t."orderId"
+         LEFT JOIN "User" c ON c."id" = o."customerId"
+         LEFT JOIN "OrderTicketMessage" m ON m."ticketId" = t."id"
+         ${whereSql}
+         GROUP BY t."id", o."id", c."id"
+         ORDER BY t."updatedAt" DESC
+         LIMIT ${limit} OFFSET ${offset}`,
+        ...values
+      );
+      const countRows = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
+        `SELECT COUNT(1)::int AS "count"
+         FROM "OrderTicket" t
+         LEFT JOIN "Order" o ON o."id" = t."orderId"
+         LEFT JOIN "User" c ON c."id" = o."customerId"
+         ${whereSql}`,
+        ...values
+      );
+      const total = Number(countRows[0]?.count || 0);
+
+      const ticketIds = rows.map((row) => String(row.id || '')).filter(Boolean);
+      const previews = ticketIds.length
+        ? await prisma.$queryRawUnsafe<Array<{ ticketId: string; body: string }>>(
+            `SELECT DISTINCT ON ("ticketId") "ticketId","body"
+             FROM "OrderTicketMessage"
+             WHERE "ticketId" = ANY($1::text[])
+             ORDER BY "ticketId","createdAt" DESC`,
+            ticketIds
+          )
+        : [];
+      const previewMap = new Map(previews.map((row) => [String(row.ticketId || ''), String(row.body || '')]));
+
+      const assigneeIds = Array.from(new Set(rows.map((row) => String(row.assignedToUserId || '')).filter(Boolean)));
+      const assignees = assigneeIds.length
+        ? await prisma.user.findMany({
+            where: { id: { in: assigneeIds } },
+            select: { id: true, firstName: true, lastName: true },
+          })
+        : [];
+      const assigneeMap = new Map(assignees.map((row) => [String(row.id), fullName(row.firstName, row.lastName) || 'Assigned User']));
+
+      res.json({
+        success: true,
+        data: rows.map((row) => ({
+          id: String(row.id),
+          orderId: String(row.orderId),
+          orderNumber: String(row.orderNumber || ''),
+          orderStatus: String(row.orderStatus || ''),
+          subject: row.subject ? String(row.subject) : '',
+          status: String(row.status || 'OPEN').toUpperCase(),
+          assignedToRole: parseStoredAssignmentRoleToken(row.assignedToRole),
+          assignedToUserId: row.assignedToUserId ? String(row.assignedToUserId) : null,
+          assignedToUserName: row.assignedToUserId ? assigneeMap.get(String(row.assignedToUserId)) || '' : '',
+          customerName: String(row.customerName || '').trim() || 'Customer',
+          dueAt: row.dueAt ? new Date(row.dueAt).toISOString() : null,
+          escalatedAt: row.escalatedAt ? new Date(row.escalatedAt).toISOString() : null,
+          escalationStatus: String(row.escalationStatus || 'NONE').toUpperCase(),
+          isOverdue: Boolean(row.dueAt && new Date(row.dueAt).getTime() < Date.now() && !row.escalatedAt),
+          messageCount: Number(row.messageCount || 0),
+          lastMessagePreview: previewMap.get(String(row.id)) || '',
+          updatedAt: new Date(row.updatedAt || Date.now()).toISOString(),
+          createdAt: new Date(row.createdAt || Date.now()).toISOString(),
+        })),
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.max(1, Math.ceil(total / limit)),
+        },
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/admin/tickets/:ticketId/assign',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_MANAGE),
+  async (req, res, next) => {
+    try {
+      await ensureOrderTicketingSchema();
+      const payload = z
+        .object({
+          assignedToRole: z.string().trim().optional(),
+          assignedToUserId: z.string().trim().optional(),
+          dueAt: z.string().trim().optional(),
+        })
+        .strict()
+        .parse(req.body || {});
+      const ticketRows = await prisma.$queryRawUnsafe<
+        Array<{ id: string; orderId: string; assignedToRole: string | null }>
+      >(
+        `SELECT "id","orderId","assignedToRole"
+         FROM "OrderTicket"
+         WHERE "id" = $1
+         LIMIT 1`,
+        String(req.params.ticketId || '')
+      );
+      const ticket = ticketRows[0];
+      if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found.' });
+
+      const context = await resolveOrderAccessContext(String(ticket.orderId), {
+        id: req.user!.id,
+        role: req.user!.role,
+      });
+      const currentRoleToken = parseStoredAssignmentRoleToken(ticket.assignedToRole);
+      const nextRole = payload.assignedToRole
+        ? normalizeAssignmentRoleToken(
+            payload.assignedToRole,
+            currentRoleToken || DEFAULT_ORDER_TICKETING_SETTINGS.autoAssignRole
+          )
+        : currentRoleToken;
+      const eligibleUsers = nextRole
+        ? resolveUsersForAssignmentRoleToken(nextRole, {
+            participantUsersByRole: context.participantUsersByRole,
+            adminUsersByAdminRoleToken: context.adminUsersByAdminRoleToken,
+          })
+        : [];
+      const nextUserId = payload.assignedToUserId
+        ? String(payload.assignedToUserId)
+        : payload.assignedToRole
+          ? eligibleUsers[0]?.id || null
+          : undefined;
+      if (payload.assignedToUserId && nextRole && !eligibleUsers.some((entry) => String(entry.id) === String(payload.assignedToUserId))) {
+        return res.status(400).json({
+          success: false,
+          message: `Assigned user is not valid for role ${roleLabelForToken(nextRole, context.adminRoleNameByToken)}.`,
+        });
+      }
+      const dueAtDate = payload.dueAt ? new Date(payload.dueAt) : null;
+      if (dueAtDate && !Number.isFinite(dueAtDate.getTime())) {
+        return res.status(400).json({ success: false, message: 'Invalid dueAt date value.' });
+      }
+      const dueAtIso = dueAtDate ? dueAtDate.toISOString() : null;
+      await prisma.$executeRawUnsafe(
+        `UPDATE "OrderTicket"
+         SET "assignedToRole" = COALESCE($2, "assignedToRole"),
+             "assignedToUserId" = CASE WHEN $3::text IS NULL THEN "assignedToUserId" ELSE $3 END,
+             "dueAt" = COALESCE($4::timestamp, "dueAt"),
+             "updatedAt" = NOW()
+         WHERE "id" = $1`,
+        String(ticket.id),
+        nextRole || null,
+        nextUserId === undefined ? null : nextUserId,
+        dueAtIso
+      );
+      const refreshed = await getLatestOrderTicket(String(ticket.orderId));
+      res.json({ success: true, data: refreshed, message: 'Ticket assignment updated.' });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.get(
+  '/:id/ticketing',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL),
+  async (req, res, next) => {
+    try {
+      const user = req.user!;
+      const userRole = asRoleToken(user.role);
+      if (!userRole) {
+        return res.status(403).json({ success: false, message: 'Unsupported role for ticketing.' });
+      }
+      const settings = await readOrderTicketingSettings();
+      const translationSettings = await readOrderTicketingTranslationSettings();
+      const viewerLanguage = await readUserTicketingLanguagePreference(user.id, translationSettings.defaultLanguage);
+      const context = await resolveOrderAccessContext(String(req.params.id || ''), { id: user.id, role: user.role });
+      const thread = await readOrderTicketThread({
+        orderId: context.orderId,
+        viewerId: user.id,
+        viewerRole: userRole,
+        orderContext: context,
+        settings,
+        translationSettings,
+        viewerLanguage,
+      });
+      const allowedRecipientRoles = resolveAllowedRecipientRoles(userRole, settings, context.participantUsersByRole);
+      const canPost =
+        settings.enabled &&
+        (userRole !== UserRole.CUSTOMER || settings.allowCustomerToVendorDirect || settings.recipientMatrix[UserRole.CUSTOMER].length > 0);
+      const participants = Object.entries(context.participantUsersByRole).map(([role, users]) => ({
+        role,
+        label: ORDER_TICKETING_ROLE_LABELS[role as OrderTicketingRole],
+        users: (users || []).map((entry) => ({ id: entry.id, name: entry.name })),
+      }));
+      res.json({
+        success: true,
+        data: {
+          orderId: context.orderId,
+          orderNumber: context.orderNumber,
+          ticket: thread.ticket,
+          messages: thread.messages,
+          participants,
+          permissions: {
+            canPost,
+            canManageTicket: userRole === UserRole.ADMINISTRATOR || userRole === UserRole.QA_TEAM,
+            canControlCustomerVisibility: userRole === UserRole.ADMINISTRATOR || userRole === UserRole.QA_TEAM,
+            allowedRecipientRoles,
+          },
+          settings: {
+            enabled: settings.enabled,
+            defaultVisibleToCustomer: settings.defaultVisibleToCustomer,
+            allowVendorToVendorDirect: settings.allowVendorToVendorDirect,
+            autoAssignEnabled: settings.autoAssignEnabled,
+            autoAssignRole: settings.autoAssignRole,
+            slaResponseHours: settings.slaResponseHours,
+            escalationRole: settings.escalationRole,
+            escalationNotifyRoles: settings.escalationNotifyRoles,
+          },
+          language: {
+            viewerPreferredLanguage: thread.viewerLanguage,
+            translationEnabled: translationSettings.enabled,
+            defaultLanguage: translationSettings.defaultLanguage,
+            supportedLanguages: getTicketingSupportedLanguages(),
+          },
+        },
+      });
+    } catch (error: any) {
+      if (error?.status) {
+        return res.status(error.status).json({ success: false, message: error.message || 'Unable to load order ticket.' });
+      }
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/:id/ticketing/messages',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL),
+  async (req, res, next) => {
+    try {
+      const user = req.user!;
+      const userRole = asRoleToken(user.role);
+      if (!userRole) return res.status(403).json({ success: false, message: 'Unsupported role for ticketing.' });
+      const payload = orderTicketMessageSchema.parse(req.body || {});
+      const settings = await readOrderTicketingSettings();
+      const translationSettings = await readOrderTicketingTranslationSettings();
+      const viewerLanguage = await readUserTicketingLanguagePreference(user.id, translationSettings.defaultLanguage);
+      if (!settings.enabled) {
+        return res.status(403).json({ success: false, message: 'Order ticketing is currently disabled by admin.' });
+      }
+      const context = await resolveOrderAccessContext(String(req.params.id || ''), { id: user.id, role: user.role });
+      const allowedRecipientRoles = resolveAllowedRecipientRoles(userRole, settings, context.participantUsersByRole);
+      if (allowedRecipientRoles.length === 0) {
+        return res.status(403).json({ success: false, message: 'No valid recipients are available for this order.' });
+      }
+      const requestedRecipientRoles = dedupeRoleTokens(payload.recipientRoles || []);
+      const recipientRoles =
+        userRole === UserRole.CUSTOMER
+          ? defaultRecipientRolesForSender(userRole, allowedRecipientRoles)
+          : requestedRecipientRoles.length > 0
+            ? requestedRecipientRoles.filter((role) => allowedRecipientRoles.includes(role))
+            : defaultRecipientRolesForSender(userRole, allowedRecipientRoles);
+      if (recipientRoles.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            userRole === UserRole.CUSTOMER
+              ? 'No ticket recipients are configured in admin routing flow for your role.'
+              : `No valid recipients selected. Allowed recipients: ${allowedRecipientRoles.map((role) => ORDER_TICKETING_ROLE_LABELS[role]).join(', ')}`,
+        });
+      }
+
+      let visibleToCustomer = userRole === UserRole.CUSTOMER;
+      if (userRole === UserRole.ADMINISTRATOR || userRole === UserRole.QA_TEAM) {
+        visibleToCustomer =
+          payload.visibleToCustomer === undefined ? settings.defaultVisibleToCustomer : Boolean(payload.visibleToCustomer);
+      } else if (
+        (userRole === UserRole.FABRIC_SELLER || userRole === UserRole.FASHION_DESIGNER) &&
+        settings.allowVendorToCustomerDirect &&
+        recipientRoles.includes(UserRole.CUSTOMER)
+      ) {
+        visibleToCustomer = true;
+      }
+      if (visibleToCustomer && !recipientRoles.includes(UserRole.CUSTOMER) && (context.participantUsersByRole[UserRole.CUSTOMER] || []).length > 0) {
+        recipientRoles.push(UserRole.CUSTOMER);
+      }
+      const requestedSourceLanguage = normalizeTicketingLanguage(payload.sourceLanguage || 'auto', 'auto');
+      let sourceLanguage = requestedSourceLanguage;
+      if (sourceLanguage === 'auto') {
+        sourceLanguage = await detectTicketingLanguage({
+          text: payload.body.trim(),
+          fallbackLanguage: viewerLanguage || translationSettings.defaultLanguage,
+        });
+      }
+      sourceLanguage = normalizeTicketingLanguage(
+        sourceLanguage,
+        viewerLanguage || translationSettings.defaultLanguage
+      );
+      const hasExplicitSourceLanguage =
+        Boolean(String(payload.sourceLanguage || '').trim()) &&
+        normalizeTicketingLanguage(payload.sourceLanguage, 'auto') !== 'auto';
+      if (hasExplicitSourceLanguage) {
+        await writeUserTicketingLanguagePreference(user.id, sourceLanguage).catch(() => undefined);
+      }
+
+      const threadBefore = await readOrderTicketThread({
+        orderId: context.orderId,
+        viewerId: user.id,
+        viewerRole: userRole,
+        orderContext: context,
+        createIfMissing: true,
+        ticketSubject: payload.subject,
+        settings,
+        translationSettings,
+        viewerLanguage,
+      });
+      const ticket = threadBefore.ticket;
+      if (!ticket) {
+        return res.status(500).json({ success: false, message: 'Unable to initialize order ticket.' });
+      }
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "OrderTicketMessage"
+          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","attachments","sourceLanguage","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10::jsonb,$11,NOW())`,
+        randomUUID(),
+        ticket.id,
+        context.orderId,
+        user.id,
+        userRole,
+        payload.body.trim(),
+        JSON.stringify(recipientRoles),
+        visibleToCustomer,
+        !visibleToCustomer,
+        JSON.stringify(normalizeAttachmentUrls(payload.attachments || [])),
+        sourceLanguage
+      );
+      await prisma.$executeRawUnsafe(
+        `UPDATE "OrderTicket"
+         SET "updatedAt" = NOW(),
+             "lastMessageAt" = NOW(),
+             "subject" = COALESCE("subject", $2),
+             "dueAt" = (NOW() + ($3 || ' hours')::interval),
+             "escalationStatus" = CASE WHEN "escalatedAt" IS NULL THEN "escalationStatus" ELSE 'RESPONDED' END
+         WHERE "id" = $1`,
+        ticket.id,
+        payload.subject ? String(payload.subject).trim().slice(0, 240) : null,
+        String(Math.max(1, Number(settings.slaResponseHours || 24)))
+      );
+
+      const recipientUsers = recipientRoles.flatMap((role) => context.participantUsersByRole[role] || []);
+      const uniqueRecipientIds = Array.from(
+        new Set(recipientUsers.map((entry) => String(entry.id || '')).filter((id) => id && id !== String(user.id)))
+      );
+      await Promise.all(
+        uniqueRecipientIds.map((targetUserId) =>
+          prisma.notification
+            .create({
+              data: {
+                userId: targetUserId,
+                type: 'NEW_MESSAGE' as any,
+                title: `Order Ticket • ${context.orderNumber}`,
+                message: payload.body.trim().slice(0, 240),
+                relatedId: context.orderId,
+                relatedType: 'ORDER',
+              },
+            })
+            .catch(() => undefined)
+        )
+      );
+
+      const threadAfter = await readOrderTicketThread({
+        orderId: context.orderId,
+        viewerId: user.id,
+        viewerRole: userRole,
+        orderContext: context,
+        settings,
+        translationSettings,
+        viewerLanguage,
+      });
+      res.status(201).json({
+        success: true,
+        message: 'Ticket message sent.',
+        data: {
+          orderId: context.orderId,
+          orderNumber: context.orderNumber,
+          ticket: threadAfter.ticket,
+          messages: threadAfter.messages,
+        },
+      });
+    } catch (error: any) {
+      if (error?.status) {
+        return res.status(error.status).json({ success: false, message: error.message || 'Unable to send ticket message.' });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/:id/ticketing/status',
+  requireOrderTicketingModule,
+  authorizePermissions(Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL, Permissions.ORDERS_UPDATE_ASSIGNED, Permissions.ORDERS_UPDATE_ALL),
+  async (req, res, next) => {
+    try {
+      const user = req.user!;
+      const roleToken = asRoleToken(user.role);
+      if (!roleToken || (roleToken !== UserRole.ADMINISTRATOR && roleToken !== UserRole.QA_TEAM)) {
+        return res.status(403).json({ success: false, message: 'Only Admin/QA can update ticket status.' });
+      }
+      const payload = ticketStatusUpdateSchema.parse(req.body || {});
+      const context = await resolveOrderAccessContext(String(req.params.id || ''), { id: user.id, role: user.role });
+      const ticket = await getLatestOrderTicket(context.orderId);
+      if (!ticket) {
+        return res.status(404).json({ success: false, message: 'Order ticket not found.' });
+      }
+      await prisma.$executeRawUnsafe(
+        `UPDATE "OrderTicket"
+         SET "status" = $2,
+             "updatedAt" = NOW(),
+             "escalationStatus" = CASE WHEN $2 IN ('RESOLVED','CLOSED') THEN 'RESOLVED' ELSE COALESCE("escalationStatus",'NONE') END
+         WHERE "id" = $1`,
+        ticket.id,
+        payload.status
+      );
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "OrderTicketMessage"
+          ("id","ticketId","orderId","senderUserId","senderRole","body","recipientRoles","visibleToCustomer","isInternal","attachments","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,'[]'::jsonb,NOW())`,
+        randomUUID(),
+        ticket.id,
+        context.orderId,
+        user.id,
+        roleToken,
+        `Ticket status changed to ${payload.status}.`,
+        JSON.stringify([UserRole.ADMINISTRATOR, UserRole.QA_TEAM]),
+        false,
+        true
+      );
+      const updatedTicket = await getLatestOrderTicket(context.orderId);
+      res.json({ success: true, data: updatedTicket, message: 'Ticket status updated.' });
+    } catch (error: any) {
+      if (error?.status) {
+        return res.status(error.status).json({ success: false, message: error.message || 'Unable to update ticket status.' });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation failed', issues: error.issues });
+      }
+      next(error);
+    }
+  }
+);
+
 // Get order by ID (with role-based access)
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', authorizePermissions(Permissions.ORDERS_READ_SELF, Permissions.ORDERS_READ_ASSIGNED, Permissions.ORDERS_READ_ALL), async (req, res, next) => {
   try {
     const { id } = req.params;
     const user = req.user!;
@@ -85,6 +2820,27 @@ router.get('/:id', async (req, res, next) => {
       hasAccess = true;
     } else if (user.role === UserRole.CUSTOMER && order.customerId === user.id) {
       hasAccess = true;
+    } else if (user.role === UserRole.FABRIC_SELLER && order.fabricOrder) {
+      const sellerProfile = await prisma.fabricSellerProfile.findFirst({
+        where: { userId: user.id },
+      });
+      if (sellerProfile && order.fabricOrder.sellerId === sellerProfile.id) {
+        hasAccess = true;
+      }
+    } else if (user.role === UserRole.FASHION_DESIGNER) {
+      const designerProfile = await prisma.designerProfile.findFirst({
+        where: { userId: user.id },
+      });
+      const ownsDesignOrder = Boolean(designerProfile && order.designOrder && order.designOrder.designerId === designerProfile.id);
+      const ownsReadyToWearOrder = Boolean(
+        designerProfile &&
+          (order.readyToWearItems || []).some(
+            (item) => String(item.readyToWear?.designerId || '') === String(designerProfile.id)
+          )
+      );
+      if (ownsDesignOrder || ownsReadyToWearOrder) {
+        hasAccess = true;
+      }
     } else if (user.role === UserRole.QA_TEAM && order.qaId) {
       const qaProfile = await prisma.qAProfile.findFirst({
         where: { userId: user.id },
@@ -101,9 +2857,33 @@ router.get('/:id', async (req, res, next) => {
       });
     }
 
+    const pricingBreakdown = readOrderPricingBreakdown(order.shippingAddress);
+    const safeOrder =
+      user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER
+        ? {
+            ...order,
+            customer: {
+              firstName: String(order.customer?.firstName || ''),
+              lastName: String(order.customer?.lastName || ''),
+              email: '',
+            },
+            shippingAddress: redactShippingAddressForVendor(order.shippingAddress),
+            checkoutPricingLabel: pricingBreakdown.checkoutPricingLabel,
+            checkoutPricingAdjustmentUsd: pricingBreakdown.checkoutPricingAdjustmentUsd,
+            discountUsd: pricingBreakdown.discountUsd,
+            promoCode: pricingBreakdown.promoCode || null,
+          }
+        : {
+            ...order,
+            checkoutPricingLabel: pricingBreakdown.checkoutPricingLabel,
+            checkoutPricingAdjustmentUsd: pricingBreakdown.checkoutPricingAdjustmentUsd,
+            discountUsd: pricingBreakdown.discountUsd,
+            promoCode: pricingBreakdown.promoCode || null,
+          };
+
     res.json({
       success: true,
-      data: order,
+      data: safeOrder,
     });
   } catch (error) {
     next(error);
@@ -111,98 +2891,415 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // Create custom design order
-router.post('/custom-design', async (req, res, next) => {
+router.post('/custom-design', authorizePermissions(Permissions.ORDERS_CREATE), async (req, res, next) => {
   try {
     const schema = z.object({
       designId: z.string().uuid(),
-      fabricId: z.string().uuid(),
-      yards: z.number().min(1),
+      fabricId: z.string().uuid().optional(),
+      yards: z.number().min(1).optional(),
+      fabricSelectionMode: z.enum(['CUSTOMER_SELECTED', 'DESIGNER_DECIDES']).default('CUSTOMER_SELECTED'),
+      fabricPreferenceNotes: z.string().max(2000).optional(),
       measurements: z.record(z.number()),
       shippingAddressId: z.string().uuid(),
       paymentMethod: z.string(),
+      paymentIntentId: z.string().min(1).optional(),
+      shippingCostUsd: z.number().min(0).optional(),
+      shippingQuoteId: z.string().min(1).optional(),
+      shippingProviderKey: z.string().min(1).optional(),
+      shippingProviderName: z.string().min(1).optional(),
+      shippingServiceName: z.string().min(1).optional(),
+      shippingEtaMinDays: z.number().min(0).optional(),
+      shippingEtaMaxDays: z.number().min(0).optional(),
+      promoCode: z.string().trim().max(30).optional(),
+      discountUsd: z.number().min(0).optional(),
+      checkoutPricingAdjustmentUsd: z.number().optional(),
     });
 
     const data = schema.parse(req.body);
+    const checkoutPricingSettings = await readCheckoutPricingSettings();
     const customerId = req.user!.id;
+    const wantsDesignerToChooseFabric =
+      data.fabricSelectionMode === 'DESIGNER_DECIDES' || !data.fabricId;
+    const hasCustomerSelectedFabric = !wantsDesignerToChooseFabric;
+    let mergeIntoOrderId: string | null = null;
 
-    // Get design and fabric details
-    const [design, fabric, address] = await Promise.all([
-      prisma.design.findUnique({
-        where: { id: data.designId },
+    const customerProfile = await prisma.customerProfile.findUnique({
+      where: { userId: customerId },
+      select: { id: true },
+    });
+
+    if (!customerProfile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer profile not found.',
+      });
+    }
+
+    const workflowSettings = await readOrderWorkflowSettings();
+    const maxCustomToWearItemsPerCheckout = Math.max(
+      1,
+      Number(workflowSettings.orderLimits?.maxCustomToWearItemsPerCheckout || 3)
+    );
+    if (data.paymentIntentId) {
+      const existingOrders = await prisma.order.findMany({
+        where: {
+          customerId,
+          type: OrderType.CUSTOM_DESIGN,
+          paymentIntentId: data.paymentIntentId,
+        },
+        select: {
+          id: true,
+          shippingAddress: true,
+          designOrder: {
+            select: { designId: true },
+          },
+          fabricOrder: {
+            select: { fabricId: true },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      const existingItemCount = existingOrders.reduce(
+        (sum, row) => sum + readOrderCategoryBundleCount(row.shippingAddress, 'CUSTOM_DESIGN', 1),
+        0
+      );
+      if (existingItemCount >= maxCustomToWearItemsPerCheckout) {
+        return res.status(400).json({
+          success: false,
+          message: `A maximum of ${maxCustomToWearItemsPerCheckout} Custom To Wear product(s) is allowed in one checkout.`,
+        });
+      }
+      const requestedDesignId = String(data.designId || '').trim();
+      const requestedFabricId = String(data.fabricId || '').trim();
+      const mergeCandidate = existingOrders.find((row) => {
+        const existingDesignId = String(row.designOrder?.designId || '').trim();
+        if (!existingDesignId || existingDesignId !== requestedDesignId) return false;
+        const existingFabricId = String(row.fabricOrder?.fabricId || '').trim();
+        if (wantsDesignerToChooseFabric) {
+          return !existingFabricId;
+        }
+        if (!requestedFabricId) return false;
+        return existingFabricId === requestedFabricId;
+      });
+      mergeIntoOrderId = mergeCandidate?.id || null;
+    }
+    const selectedYards = Number(data.yards || 0);
+    if (hasCustomerSelectedFabric && (!data.fabricId || selectedYards < 1)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fabric and yards are required when customer selects fabric.',
+      });
+    }
+
+    // Get design, optional fabric, and address details
+    const [design, address, fabric] = await Promise.all([
+      prisma.design.findFirst({
+        where: {
+          id: data.designId,
+          status: ProductStatus.APPROVED,
+          isAvailable: true,
+        },
         include: {
           designer: true,
-          suitableFabrics: { where: { fabricId: data.fabricId } },
+          suitableFabrics: true,
+          measurementVariables: {
+            select: {
+              name: true,
+              isRequired: true,
+            },
+          },
         },
       }),
-      prisma.fabric.findUnique({
-        where: { id: data.fabricId },
-        include: { seller: true },
+      prisma.address.findFirst({
+        where: { id: data.shippingAddressId, customerProfileId: customerProfile.id },
       }),
-      prisma.address.findUnique({
-        where: { id: data.shippingAddressId },
-      }),
+      hasCustomerSelectedFabric && data.fabricId
+        ? prisma.fabric.findFirst({
+            where: {
+              id: data.fabricId,
+              status: ProductStatus.APPROVED,
+              isAvailable: true,
+            },
+            include: { seller: true },
+          })
+        : Promise.resolve(null),
     ]);
 
     if (!design) {
       return res.status(404).json({ success: false, message: 'Design not found.' });
     }
-    if (!fabric) {
-      return res.status(404).json({ success: false, message: 'Fabric not found.' });
-    }
     if (!address) {
       return res.status(404).json({ success: false, message: 'Shipping address not found.' });
     }
+    if (hasCustomerSelectedFabric && !fabric) {
+      return res.status(404).json({ success: false, message: 'Fabric not found.' });
+    }
 
-    // Check if fabric is suitable for design
-    if (design.suitableFabrics.length === 0) {
+    const hasConfiguredSuitableFabrics =
+      Array.isArray(design.suitableFabrics) && design.suitableFabrics.length > 0;
+    // Check if selected fabric is suitable for design. If the design has no configured suitable fabrics,
+    // allow any approved/available same-country fabric to keep CTW checkout functional.
+    if (
+      hasCustomerSelectedFabric &&
+      hasConfiguredSuitableFabrics &&
+      !design.suitableFabrics.some((row) => String(row.fabricId || '') === String(data.fabricId || ''))
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Selected fabric is not suitable for this design.',
       });
     }
 
-    // Check if fabric and designer are in same country
-    if (fabric.seller.country !== design.designer.country) {
+    // Check if selected fabric and designer are in same country
+    if (hasCustomerSelectedFabric && fabric && fabric.seller.country !== design.designer.country) {
       return res.status(400).json({
         success: false,
         message: 'Fabric seller and designer must be in the same country for standard processing.',
       });
     }
 
-    // Check fabric stock
-    if (fabric.stockYards < data.yards) {
+    // Check selected fabric stock
+    if (hasCustomerSelectedFabric && fabric && fabric.stockYards < selectedYards) {
       return res.status(400).json({
         success: false,
         message: `Not enough fabric in stock. Available: ${fabric.stockYards} yards`,
       });
     }
 
+    const designMeasurementRows = Array.isArray((design as any).measurementVariables)
+      ? ((design as any).measurementVariables as Array<{ name?: string; isRequired?: boolean }>)
+      : [];
+    const requiredMeasurementNames: string[] = Array.from(
+      new Set(
+        designMeasurementRows
+          .filter((entry) => entry?.isRequired !== false)
+          .map((entry) => String(entry?.name || '').trim())
+          .filter((entry) => entry.length > 0)
+      )
+    );
+    if (requiredMeasurementNames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This CTW design is missing required measurement setup. Please contact support.',
+      });
+    }
+    const missingMeasurements = requiredMeasurementNames.filter((name) => {
+      const value = Number((data.measurements as Record<string, number>)[name]);
+      return !Number.isFinite(value) || value <= 0;
+    });
+    if (missingMeasurements.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required measurement(s): ${missingMeasurements.join(', ')}`,
+      });
+    }
+
     // Calculate prices
-    const fabricPrice = fabric.finalPrice * data.yards;
-    const designPrice = design.finalPrice;
-    const subtotal = fabricPrice + designPrice;
-    const shippingCost = 25; // Fixed for now
+    const fabricPrice = hasCustomerSelectedFabric && fabric ? Number(fabric.finalPrice) * selectedYards : 0;
+    const designPrice = Number(design.finalPrice);
+    const subtotalBeforeDiscount = fabricPrice + designPrice;
+    const checkoutPricingAdjustmentUsd = Number.isFinite(Number(data.checkoutPricingAdjustmentUsd))
+      ? Number(data.checkoutPricingAdjustmentUsd)
+      : 0;
+    const subtotalAfterCheckoutPricing = Math.max(0, subtotalBeforeDiscount + checkoutPricingAdjustmentUsd);
+    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalAfterCheckoutPricing));
+    const subtotal = subtotalAfterCheckoutPricing - discountUsd;
+    const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 25;
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shippingCost + tax;
+    const ctwBundleItem: Record<string, unknown> = {
+      designId: String(data.designId),
+      designName: String(design.name || 'Custom Design'),
+      designerId: String(design.designerId),
+      fabricSelectionMode: wantsDesignerToChooseFabric ? 'DESIGNER_DECIDES' : 'CUSTOMER_SELECTED',
+      fabricId: hasCustomerSelectedFabric ? String(data.fabricId || '') : null,
+      fabricName: hasCustomerSelectedFabric ? String(fabric?.name || '') : null,
+      yards: hasCustomerSelectedFabric ? selectedYards : 0,
+      designPrice,
+      fabricPrice,
+      subtotalBeforeDiscount,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      subtotal,
+      paymentIntentId: String(data.paymentIntentId || ''),
+      capturedAt: new Date().toISOString(),
+    };
+    const isPaymentConfirmed = Boolean(data.paymentIntentId);
+    const autoProcessingEligible = canAutoProcessOrder({
+      processingMode: workflowSettings.processingMode,
+      criteria: workflowSettings.autoProcessCriteria,
+      isPaymentConfirmed,
+      hasShippingProvider: Boolean(data.shippingProviderKey || data.shippingProviderName),
+      hasShippingAddress: Boolean(address.id),
+      hasItems: true,
+    });
+    const effectiveWorkflowSettings = {
+      ...workflowSettings,
+      processingMode: autoProcessingEligible ? workflowSettings.processingMode : 'MANUAL',
+    } as typeof workflowSettings;
+    const initialStatus = determinePostPaymentStatus({
+      isPaymentConfirmed,
+      orderType: OrderType.CUSTOM_DESIGN,
+      hasFabricOrder: hasCustomerSelectedFabric,
+      settings: effectiveWorkflowSettings,
+    });
 
-    // Generate order number
-    const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
+    const orderNumber = mergeIntoOrderId
+      ? null
+      : await generateManagedOrderNumber({
+          orderType: OrderType.CUSTOM_DESIGN,
+          customerId,
+          paymentIntentId: data.paymentIntentId,
+          workflowSettings,
+        });
+
+    const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
+      shippingAddress: {
+        ...address,
+        shippingQuoteId: data.shippingQuoteId || null,
+        shippingProviderKey: data.shippingProviderKey || null,
+        shippingProviderName: data.shippingProviderName || null,
+        shippingServiceName: data.shippingServiceName || null,
+        shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
+        shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+        checkoutPricingAdjustmentUsd,
+      },
+      settings: effectiveWorkflowSettings,
+      status: initialStatus,
+      note: wantsDesignerToChooseFabric
+        ? 'Customer requested designer-selected fabric.'
+        : 'Customer selected fabric.',
+    });
+    const shippingSnapshotWithPricing = withOrderPricingBreakdown(shippingSnapshot, {
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      promoCode: data.promoCode || undefined,
+    });
+    const shippingSnapshotWithCategoryBundle = appendOrderCategoryBundleItem(
+      shippingSnapshotWithPricing,
+      'CUSTOM_DESIGN',
+      ctwBundleItem
+    );
 
     // Create order with all components
     const order = await prisma.$transaction(async (tx) => {
+      if (mergeIntoOrderId) {
+        const existing = await tx.order.findFirst({
+          where: {
+            id: mergeIntoOrderId,
+            customerId,
+            type: OrderType.CUSTOM_DESIGN,
+          },
+          include: {
+            designOrder: true,
+            fabricOrder: true,
+          },
+        });
+        if (!existing || !existing.designOrder) {
+          throw new Error('Existing custom order could not be merged.');
+        }
+        const mergedCustomBundleItems = [
+          ...readOrderCategoryBundleItems(existing.shippingAddress, 'CUSTOM_DESIGN'),
+          ctwBundleItem,
+        ];
+        const mergedShippingSnapshot = withOrderCategoryBundleItems(
+          shippingSnapshotWithPricing,
+          'CUSTOM_DESIGN',
+          mergedCustomBundleItems
+        );
+        const existingPricing = readOrderPricingBreakdown(
+          existing.shippingAddress,
+          checkoutPricingSettings.settings.label
+        );
+        const mergedShippingSnapshotWithPricing = withOrderPricingBreakdown(mergedShippingSnapshot, {
+          checkoutPricingLabel: checkoutPricingSettings.settings.label,
+          checkoutPricingAdjustmentUsd: Number(existingPricing.checkoutPricingAdjustmentUsd || 0) + checkoutPricingAdjustmentUsd,
+          discountUsd: Number(existingPricing.discountUsd || 0) + discountUsd,
+          promoCode: data.promoCode || existingPricing.promoCode || undefined,
+        });
+        await tx.order.update({
+          where: { id: existing.id },
+          data: {
+            shippingAddress: mergedShippingSnapshotWithPricing as any,
+            subtotal: { increment: subtotal },
+            shippingCost: { increment: shippingCost },
+            tax: { increment: tax },
+            total: { increment: total },
+            paymentMethod: data.paymentMethod,
+            paymentStatus: isPaymentConfirmed ? PaymentStatus.COMPLETED : existing.paymentStatus,
+            paidAt: isPaymentConfirmed ? new Date() : existing.paidAt,
+            timeline: {
+              create: {
+                status: initialStatus,
+                notes: `Merged additional custom design quantity into existing order${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}.`,
+                updatedById: customerId,
+                updatedByRole: UserRole.CUSTOMER,
+              },
+            },
+          },
+        });
+        await tx.designOrderItem.update({
+          where: { id: existing.designOrder.id },
+          data: {
+            price: { increment: designPrice },
+          },
+        });
+        if (hasCustomerSelectedFabric && fabric && existing.fabricOrder) {
+          await tx.fabricOrderItem.update({
+            where: { id: existing.fabricOrder.id },
+            data: {
+              yards: { increment: selectedYards },
+              totalPrice: { increment: fabricPrice },
+            },
+          });
+        } else if (hasCustomerSelectedFabric && fabric && !existing.fabricOrder) {
+          await tx.fabricOrderItem.create({
+            data: {
+              orderId: existing.id,
+              fabricId: data.fabricId!,
+              sellerId: fabric.sellerId,
+              yards: selectedYards,
+              pricePerYard: fabric.finalPrice,
+              totalPrice: fabricPrice,
+              status: 'PENDING',
+            },
+          });
+        }
+        if (isPaymentConfirmed && hasCustomerSelectedFabric && data.fabricId) {
+          await tx.fabric.update({
+            where: { id: data.fabricId },
+            data: { stockYards: { decrement: selectedYards } },
+          });
+        }
+        const merged = await tx.order.findUnique({
+          where: { id: existing.id },
+          include: {
+            designOrder: true,
+            fabricOrder: true,
+          },
+        });
+        if (!merged) {
+          throw new Error('Failed to load merged custom-design order.');
+        }
+        return merged;
+      }
       // Create main order
       const newOrder = await tx.order.create({
         data: {
-          orderNumber,
+          orderNumber: String(orderNumber || ''),
           type: OrderType.CUSTOM_DESIGN,
           customerId,
-          shippingAddress: address,
+          shippingAddress: shippingSnapshotWithCategoryBundle as any,
           subtotal,
           shippingCost,
           tax,
           total,
           paymentMethod: data.paymentMethod,
-          status: OrderStatus.PENDING_PAYMENT,
+          paymentIntentId: data.paymentIntentId,
+          paymentStatus: isPaymentConfirmed ? PaymentStatus.COMPLETED : PaymentStatus.PENDING,
+          paidAt: isPaymentConfirmed ? new Date() : null,
+          status: initialStatus,
           // Create design order item
           designOrder: {
             create: {
@@ -210,25 +3307,38 @@ router.post('/custom-design', async (req, res, next) => {
               designerId: design.designerId,
               measurements: data.measurements,
               price: designPrice,
-              status: 'PENDING',
+              status: initialStatus === OrderStatus.IN_PRODUCTION ? 'IN_PRODUCTION' : 'PENDING',
+              productionNotes: wantsDesignerToChooseFabric
+                ? String(data.fabricPreferenceNotes || '').trim() ||
+                  'Customer requested designer-selected fabric.'
+                : null,
             },
           },
-          // Create fabric order item
-          fabricOrder: {
-            create: {
-              fabricId: data.fabricId,
-              sellerId: fabric.sellerId,
-              yards: data.yards,
-              pricePerYard: fabric.finalPrice,
-              totalPrice: fabricPrice,
-              status: 'PENDING',
-            },
-          },
+          ...(hasCustomerSelectedFabric && fabric
+            ? {
+                fabricOrder: {
+                  create: {
+                    fabricId: data.fabricId!,
+                    sellerId: fabric.sellerId,
+                    yards: selectedYards,
+                    pricePerYard: fabric.finalPrice,
+                    totalPrice: fabricPrice,
+                    status: 'PENDING',
+                  },
+                },
+              }
+            : {}),
           // Create timeline entry
           timeline: {
             create: {
-              status: OrderStatus.PENDING_PAYMENT,
-              notes: 'Order created, awaiting payment',
+              status: initialStatus,
+              notes: isPaymentConfirmed
+                ? `Order created and payment confirmed${
+                    wantsDesignerToChooseFabric ? ' (Designer will select fabric)' : ''
+                  }${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`
+                : `Order created, awaiting payment${
+                    wantsDesignerToChooseFabric ? ' (Designer will select fabric)' : ''
+                  }${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`,
               updatedById: customerId,
               updatedByRole: UserRole.CUSTOMER,
             },
@@ -240,19 +3350,105 @@ router.post('/custom-design', async (req, res, next) => {
         },
       });
 
-      // Reserve fabric stock
-      await tx.fabric.update({
-        where: { id: data.fabricId },
-        data: { stockYards: { decrement: data.yards } },
-      });
+      // Only decrement inventory for paid orders.
+      if (isPaymentConfirmed && hasCustomerSelectedFabric && data.fabricId) {
+        await tx.fabric.update({
+          where: { id: data.fabricId },
+          data: { stockYards: { decrement: selectedYards } },
+        });
+      }
 
       return newOrder;
     });
+    if (isPaymentConfirmed && hasCustomerSelectedFabric && data.fabricId) {
+      await syncFabricAvailabilityById(data.fabricId, { notifyVendor: true });
+    }
+    if (isPaymentConfirmed) {
+      void recordReferralCommissionsForOrder({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        vendorSales: [
+          {
+            vendorUserId: String(design.designer.userId || ''),
+            vendorRole: 'FASHION_DESIGNER',
+            baseAmountUsd: Number(designPrice || 0),
+          },
+          ...(hasCustomerSelectedFabric && fabric
+            ? [
+                {
+                  vendorUserId: String(fabric.seller.userId || ''),
+                  vendorRole: 'FABRIC_SELLER' as const,
+                  baseAmountUsd: Number(fabricPrice || 0),
+                },
+              ]
+            : []),
+        ],
+        customerSale: {
+          customerUserId: customerId,
+          baseAmountUsd: Number(designPrice || 0) + Number(fabricPrice || 0),
+        },
+        metadata: {
+          orderType: 'CUSTOM_DESIGN',
+        },
+      }).catch(() => undefined);
+    }
 
     res.status(201).json({
       success: true,
       message: 'Order created successfully. Please complete payment.',
       data: order,
+    });
+    void sendOrderConfirmationEmail({
+      to: req.user!.email,
+      orderNumber: order.orderNumber,
+      orderType: 'Custom Design',
+      total,
+      itemCount: 1,
+      subtotalUsd: subtotal,
+      taxUsd: tax,
+      paymentMethod: data.paymentMethod,
+      shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
+      promoCode: data.promoCode || undefined,
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      shippingCostUsd: shippingCost,
+      itemRows: [
+        {
+          label: design.name,
+          meta: 'Custom To Wear Design',
+          quantity: 1,
+          unitPriceUsd: designPrice,
+          lineTotalUsd: designPrice,
+        },
+        ...(hasCustomerSelectedFabric && fabric
+          ? [
+              {
+                label: fabric.name,
+                meta: 'Selected Fabric',
+                quantity: selectedYards,
+                unitPriceUsd: Number(fabric.finalPrice || 0),
+                lineTotalUsd: fabricPrice,
+              },
+            ]
+          : []),
+      ],
+      itemLines: [
+        `Design: ${design.name}`,
+        wantsDesignerToChooseFabric
+          ? 'Fabric: Designer decides'
+          : `Fabric: ${fabric?.name || 'Selected fabric'} (${selectedYards} yards)`,
+      ],
+    }).catch((error) => {
+      console.error('Failed to send custom-design order confirmation email:', error);
+    });
+    void notifyOrderLifecycle({
+      orderId: order.id,
+      status: initialStatus,
+      notes: wantsDesignerToChooseFabric
+        ? 'Customer selected designer-decides-fabric mode.'
+        : 'Customer selected fabric and measurements.',
+      actorRole: UserRole.CUSTOMER,
     });
   } catch (error) {
     next(error);
@@ -260,31 +3456,101 @@ router.post('/custom-design', async (req, res, next) => {
 });
 
 // Create ready-to-wear order
-router.post('/ready-to-wear', async (req, res, next) => {
+router.post('/ready-to-wear', authorizePermissions(Permissions.ORDERS_CREATE), async (req, res, next) => {
   try {
+    type ValidatedReadyToWearItem = {
+      readyToWearId: string;
+      size: string;
+      color: string;
+      quantity: number;
+      price: number;
+      sizeVariationId: string;
+      vendorUserId: string;
+      lineTotal: number;
+    };
+
     const schema = z.object({
       items: z.array(z.object({
         readyToWearId: z.string().uuid(),
         size: z.string(),
+        color: z.string().optional(),
         quantity: z.number().min(1),
       })),
       shippingAddressId: z.string().uuid(),
       paymentMethod: z.string(),
+      paymentIntentId: z.string().min(1).optional(),
+      shippingCostUsd: z.number().min(0).optional(),
+      shippingQuoteId: z.string().min(1).optional(),
+      shippingProviderKey: z.string().min(1).optional(),
+      shippingProviderName: z.string().min(1).optional(),
+      shippingServiceName: z.string().min(1).optional(),
+      shippingEtaMinDays: z.number().min(0).optional(),
+      shippingEtaMaxDays: z.number().min(0).optional(),
+      promoCode: z.string().trim().max(30).optional(),
+      discountUsd: z.number().min(0).optional(),
+      checkoutPricingAdjustmentUsd: z.number().optional(),
     });
 
     const data = schema.parse(req.body);
+    const checkoutPricingSettings = await readCheckoutPricingSettings();
     const customerId = req.user!.id;
+    const workflowSettings = await readOrderWorkflowSettings();
+    const maxReadyToWearUnitsPerOrder = Math.max(
+      1,
+      Number(workflowSettings.orderLimits?.maxReadyToWearUnitsPerOrder || 3)
+    );
+    const totalReadyToWearUnits = (Array.isArray(data.items) ? data.items : []).reduce(
+      (sum: number, item: { quantity: number }) => sum + Math.max(0, Number(item.quantity || 0)),
+      0
+    );
+    if (totalReadyToWearUnits > maxReadyToWearUnitsPerOrder) {
+      return res.status(400).json({
+        success: false,
+        message: `A maximum of ${maxReadyToWearUnitsPerOrder} Ready To Wear unit(s) is allowed per order.`,
+      });
+    }
+
+    const customerProfile = await prisma.customerProfile.findUnique({
+      where: { userId: customerId },
+      select: { id: true },
+    });
+
+    if (!customerProfile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer profile not found.',
+      });
+    }
 
     // Validate items and calculate total
     let subtotal = 0;
-    const validatedItems = [];
+    const validatedItems: ValidatedReadyToWearItem[] = [];
+    const readyItemLines: string[] = [];
+    const readyInvoiceRows: Array<{
+      label: string;
+      meta: string;
+      quantity: number;
+      unitPriceUsd: number;
+      lineTotalUsd: number;
+    }> = [];
 
     for (const item of data.items) {
-      const product = await prisma.readyToWear.findUnique({
-        where: { id: item.readyToWearId },
+      const requestedSize = normalizeReadyToWearSize(item.size);
+      const hasRequestedColor = String(item.color || '').trim().length > 0;
+      const requestedColor = normalizeReadyToWearColor(item.color);
+      const requestedVariantKey = encodeReadyToWearVariantKey(requestedSize, requestedColor);
+      const product = await prisma.readyToWear.findFirst({
+        where: {
+          id: item.readyToWearId,
+          status: ProductStatus.APPROVED,
+          isAvailable: true,
+        },
         include: {
-          sizeVariations: {
-            where: { size: item.size },
+          sizeVariations: true,
+          designer: {
+            select: {
+              userId: true,
+            },
           },
         },
       });
@@ -296,34 +3562,88 @@ router.post('/ready-to-wear', async (req, res, next) => {
         });
       }
 
-      if (product.sizeVariations.length === 0) {
+      const decodedVariants = product.sizeVariations.map((row) => ({
+        row,
+        decoded: decodeReadyToWearVariantKey(row.size),
+      }));
+      const exactVariant =
+        decodedVariants.find((entry) => String(entry.row.size || '').trim().toUpperCase() === requestedVariantKey)?.row ||
+        decodedVariants.find(
+          (entry) => entry.decoded.size === requestedSize && entry.decoded.color === requestedColor
+        )?.row ||
+        null;
+      const defaultColorVariant =
+        decodedVariants.find(
+          (entry) =>
+            entry.decoded.size === requestedSize && entry.decoded.color === DEFAULT_READY_TO_WEAR_COLOR
+        )?.row || null;
+      const sizeFallbackVariant =
+        decodedVariants.find((entry) => entry.decoded.size === requestedSize)?.row || null;
+      const availableColorsForSize = new Set(
+        decodedVariants
+          .filter((entry) => entry.decoded.size === requestedSize)
+          .map((entry) => entry.decoded.color)
+      );
+      const canFallbackToSizeOnly =
+        !hasRequestedColor ||
+        requestedColor === DEFAULT_READY_TO_WEAR_COLOR ||
+        availableColorsForSize.size === 0 ||
+        (availableColorsForSize.size === 1 && availableColorsForSize.has(DEFAULT_READY_TO_WEAR_COLOR));
+      const matchingVariant = exactVariant || (canFallbackToSizeOnly ? defaultColorVariant || sizeFallbackVariant : null);
+      if (!matchingVariant) {
+        const availableColorLabels = Array.from(availableColorsForSize).filter(
+          (color) => color !== DEFAULT_READY_TO_WEAR_COLOR
+        );
+        const availabilityHint = availableColorLabels.length > 0
+          ? ` Available colors for size ${requestedSize}: ${availableColorLabels.join(', ')}.`
+          : '';
         return res.status(400).json({
           success: false,
-          message: `Size ${item.size} not available for ${product.name}`,
+          message: `Variant ${requestedSize}/${requestedColor} not available for ${product.name}.${availabilityHint}`,
         });
       }
 
-      const sizeVar = product.sizeVariations[0];
+      const sizeVar = matchingVariant;
+      const selectedVariant = decodeReadyToWearVariantKey(sizeVar.size);
       if (sizeVar.stock < item.quantity) {
         return res.status(400).json({
           success: false,
-          message: `Not enough stock for ${product.name} in size ${item.size}. Available: ${sizeVar.stock}`,
+          message: `Not enough stock for ${product.name} in ${selectedVariant.size}/${selectedVariant.color}. Available: ${sizeVar.stock}`,
         });
       }
 
-      const itemTotal = sizeVar.price * item.quantity;
+      const itemTotal = Number(sizeVar.price) * item.quantity;
       subtotal += itemTotal;
 
       validatedItems.push({
-        ...item,
-        price: sizeVar.price,
+        readyToWearId: item.readyToWearId,
+        size: selectedVariant.size,
+        color: selectedVariant.color,
+        quantity: item.quantity,
+        price: Number(sizeVar.price),
         sizeVariationId: sizeVar.id,
+        vendorUserId: String(product.designer?.userId || ''),
+        lineTotal: itemTotal,
+      });
+      readyItemLines.push(
+        `${product.name} — ${selectedVariant.size}${
+          selectedVariant.color !== DEFAULT_READY_TO_WEAR_COLOR ? ` / ${selectedVariant.color}` : ''
+        } × ${item.quantity}`
+      );
+      readyInvoiceRows.push({
+        label: product.name,
+        meta: `${selectedVariant.size}${
+          selectedVariant.color !== DEFAULT_READY_TO_WEAR_COLOR ? ` / ${selectedVariant.color}` : ''
+        }`,
+        quantity: item.quantity,
+        unitPriceUsd: Number(sizeVar.price || 0),
+        lineTotalUsd: itemTotal,
       });
     }
 
     // Get shipping address
-    const address = await prisma.address.findUnique({
-      where: { id: data.shippingAddressId },
+    const address = await prisma.address.findFirst({
+      where: { id: data.shippingAddressId, customerProfileId: customerProfile.id },
     });
 
     if (!address) {
@@ -334,12 +3654,64 @@ router.post('/ready-to-wear', async (req, res, next) => {
     }
 
     // Calculate totals
-    const shippingCost = 15;
+    const checkoutPricingAdjustmentUsd = Number.isFinite(Number(data.checkoutPricingAdjustmentUsd))
+      ? Number(data.checkoutPricingAdjustmentUsd)
+      : 0;
+    const subtotalAfterCheckoutPricing = Math.max(0, subtotal + checkoutPricingAdjustmentUsd);
+    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalAfterCheckoutPricing));
+    subtotal = subtotalAfterCheckoutPricing - discountUsd;
+    const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 15;
     const tax = subtotal * 0.08;
     const total = subtotal + shippingCost + tax;
+    const isPaymentConfirmed = Boolean(data.paymentIntentId);
+    const autoProcessingEligible = canAutoProcessOrder({
+      processingMode: workflowSettings.processingMode,
+      criteria: workflowSettings.autoProcessCriteria,
+      isPaymentConfirmed,
+      hasShippingProvider: Boolean(data.shippingProviderKey || data.shippingProviderName),
+      hasShippingAddress: Boolean(address.id),
+      hasItems: validatedItems.length > 0,
+    });
+    const effectiveWorkflowSettings = {
+      ...workflowSettings,
+      processingMode: autoProcessingEligible ? workflowSettings.processingMode : 'MANUAL',
+    } as typeof workflowSettings;
+    const initialStatus = determinePostPaymentStatus({
+      isPaymentConfirmed,
+      orderType: OrderType.READY_TO_WEAR,
+      hasFabricOrder: false,
+      settings: effectiveWorkflowSettings,
+    });
 
     // Generate order number
-    const orderNumber = `AF-${Date.now().toString(36).toUpperCase()}`;
+    const orderNumber = await generateManagedOrderNumber({
+      orderType: OrderType.READY_TO_WEAR,
+      customerId,
+      paymentIntentId: data.paymentIntentId,
+      workflowSettings,
+    });
+
+    const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
+      shippingAddress: {
+        ...address,
+        shippingQuoteId: data.shippingQuoteId || null,
+        shippingProviderKey: data.shippingProviderKey || null,
+        shippingProviderName: data.shippingProviderName || null,
+        shippingServiceName: data.shippingServiceName || null,
+        shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
+        shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+        checkoutPricingAdjustmentUsd,
+      },
+      settings: effectiveWorkflowSettings,
+      status: initialStatus,
+      note: 'Ready-to-wear order queued for fulfillment.',
+    });
+    const shippingSnapshotWithPricing = withOrderPricingBreakdown(shippingSnapshot, {
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      promoCode: data.promoCode || undefined,
+    });
 
     // Create order
     const order = await prisma.$transaction(async (tx) => {
@@ -348,25 +3720,30 @@ router.post('/ready-to-wear', async (req, res, next) => {
           orderNumber,
           type: OrderType.READY_TO_WEAR,
           customerId,
-          shippingAddress: address,
+          shippingAddress: shippingSnapshotWithPricing as any,
           subtotal,
           shippingCost,
           tax,
           total,
           paymentMethod: data.paymentMethod,
-          status: OrderStatus.PENDING_PAYMENT,
+          paymentIntentId: data.paymentIntentId,
+          paymentStatus: isPaymentConfirmed ? PaymentStatus.COMPLETED : PaymentStatus.PENDING,
+          paidAt: isPaymentConfirmed ? new Date() : null,
+          status: initialStatus,
           readyToWearItems: {
             create: validatedItems.map((item) => ({
               readyToWearId: item.readyToWearId,
-              size: item.size,
+              size: item.color === DEFAULT_READY_TO_WEAR_COLOR ? item.size : `${item.size} / ${item.color}`,
               price: item.price,
               quantity: item.quantity,
             })),
           },
           timeline: {
             create: {
-              status: OrderStatus.PENDING_PAYMENT,
-              notes: 'Ready-to-wear order created, awaiting payment',
+              status: initialStatus,
+              notes: isPaymentConfirmed
+                ? `Ready-to-wear order created and payment confirmed${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`
+                : `Ready-to-wear order created, awaiting payment${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`,
               updatedById: customerId,
               updatedByRole: UserRole.CUSTOMER,
             },
@@ -377,21 +3754,459 @@ router.post('/ready-to-wear', async (req, res, next) => {
         },
       });
 
-      // Deduct stock
-      for (const item of validatedItems) {
-        await tx.readyToWearSize.update({
-          where: { id: item.sizeVariationId },
-          data: { stock: { decrement: item.quantity } },
-        });
+      // Only decrement inventory for paid orders.
+      if (isPaymentConfirmed) {
+        for (const item of validatedItems) {
+          await tx.readyToWearSize.update({
+            where: { id: item.sizeVariationId },
+            data: { stock: { decrement: item.quantity } },
+          });
+        }
       }
 
       return newOrder;
     });
+    if (isPaymentConfirmed) {
+      const productIds = Array.from(new Set(validatedItems.map((item) => String(item.readyToWearId || '').trim()).filter(Boolean)));
+      for (const productId of productIds) {
+        await syncReadyToWearAvailabilityById(productId, { notifyVendor: true });
+      }
+      void recordReferralCommissionsForOrder({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        vendorSales: validatedItems.map((item) => ({
+          vendorUserId: String(item.vendorUserId || ''),
+          vendorRole: 'FASHION_DESIGNER' as const,
+          baseAmountUsd: Number(item.lineTotal || 0),
+        })),
+        customerSale: {
+          customerUserId: customerId,
+          baseAmountUsd: validatedItems.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0),
+        },
+        metadata: {
+          orderType: 'READY_TO_WEAR',
+        },
+      }).catch(() => undefined);
+    }
 
     res.status(201).json({
       success: true,
       message: 'Order created successfully. Please complete payment.',
       data: order,
+    });
+    void sendOrderConfirmationEmail({
+      to: req.user!.email,
+      orderNumber: order.orderNumber,
+      orderType: 'Ready To Wear',
+      total,
+      itemCount: validatedItems.reduce((count, item) => count + Number(item.quantity || 0), 0),
+      subtotalUsd: subtotal,
+      taxUsd: tax,
+      paymentMethod: data.paymentMethod,
+      shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
+      promoCode: data.promoCode || undefined,
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      shippingCostUsd: shippingCost,
+      itemRows: readyInvoiceRows,
+      itemLines: readyItemLines,
+    }).catch((error) => {
+      console.error('Failed to send ready-to-wear order confirmation email:', error);
+    });
+    void notifyOrderLifecycle({
+      orderId: order.id,
+      status: initialStatus,
+      notes: 'Ready-to-wear order submitted.',
+      actorRole: UserRole.CUSTOMER,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Create fabric-only order
+router.post('/fabric-only', authorizePermissions(Permissions.ORDERS_CREATE), async (req, res, next) => {
+  try {
+    const schema = z.object({
+      fabricId: z.string().uuid(),
+      yards: z.number().int().min(1),
+      shippingAddressId: z.string().uuid(),
+      paymentMethod: z.string(),
+      paymentIntentId: z.string().min(1).optional(),
+      shippingCostUsd: z.number().min(0).optional(),
+      shippingQuoteId: z.string().min(1).optional(),
+      shippingProviderKey: z.string().min(1).optional(),
+      shippingProviderName: z.string().min(1).optional(),
+      shippingServiceName: z.string().min(1).optional(),
+      shippingEtaMinDays: z.number().min(0).optional(),
+      shippingEtaMaxDays: z.number().min(0).optional(),
+      promoCode: z.string().trim().max(30).optional(),
+      discountUsd: z.number().min(0).optional(),
+      checkoutPricingAdjustmentUsd: z.number().optional(),
+    });
+
+    const data = schema.parse(req.body);
+    const checkoutPricingSettings = await readCheckoutPricingSettings();
+    const customerId = req.user!.id;
+    const workflowSettings = await readOrderWorkflowSettings();
+    const minFabricYardsPerOrder = Math.max(1, Number(workflowSettings.orderLimits?.minFabricYardsPerOrder || 3));
+    const maxFabricYardsPerOrder = Math.max(
+      minFabricYardsPerOrder,
+      Number(workflowSettings.orderLimits?.maxFabricYardsPerOrder || 200)
+    );
+    let mergeIntoOrderId: string | null = null;
+    if (Number(data.yards || 0) > maxFabricYardsPerOrder) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum Fabric To Buy order is ${maxFabricYardsPerOrder} yards.`,
+      });
+    }
+    if (data.paymentIntentId) {
+      const existingOrders = await prisma.order.findMany({
+        where: {
+          customerId,
+          type: OrderType.FABRIC_ONLY,
+          paymentIntentId: data.paymentIntentId,
+        },
+        select: {
+          id: true,
+          shippingAddress: true,
+          fabricOrder: {
+            select: { yards: true, fabricId: true },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      const alreadyOrderedYards = existingOrders.reduce(
+        (sum, order) => sum + Math.max(0, Number(order.fabricOrder?.yards || 0)),
+        0
+      );
+      const requestedFabricId = String(data.fabricId || '').trim();
+      mergeIntoOrderId =
+        existingOrders.find((order) => String(order.fabricOrder?.fabricId || '').trim() === requestedFabricId)?.id ||
+        null;
+      if (alreadyOrderedYards + Number(data.yards || 0) > maxFabricYardsPerOrder) {
+        return res.status(400).json({
+          success: false,
+          message: `Maximum Fabric To Buy yards per checkout is ${maxFabricYardsPerOrder}.`,
+        });
+      }
+    }
+
+    const customerProfile = await prisma.customerProfile.findUnique({
+      where: { userId: customerId },
+      select: { id: true },
+    });
+
+    if (!customerProfile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer profile not found.',
+      });
+    }
+
+    const [fabric, address] = await Promise.all([
+      prisma.fabric.findFirst({
+        where: {
+          id: data.fabricId,
+          status: ProductStatus.APPROVED,
+          isAvailable: true,
+        },
+        include: { seller: true },
+      }),
+      prisma.address.findFirst({
+        where: { id: data.shippingAddressId, customerProfileId: customerProfile.id },
+      }),
+    ]);
+
+    if (!fabric) {
+      return res.status(404).json({ success: false, message: 'Fabric not found.' });
+    }
+    if (!address) {
+      return res.status(404).json({ success: false, message: 'Shipping address not found.' });
+    }
+    const effectiveMinYards = Math.max(minFabricYardsPerOrder, Number(fabric.minYards || 3));
+    if (Number(data.yards || 0) < effectiveMinYards) {
+      return res.status(400).json({
+        success: false,
+        message: `Minimum order for this fabric is ${effectiveMinYards} yards.`,
+      });
+    }
+    if (fabric.stockYards < data.yards) {
+      return res.status(400).json({
+        success: false,
+        message: `Not enough fabric in stock. Available: ${fabric.stockYards} yards`,
+      });
+    }
+
+    const subtotalBeforeDiscount = Number(fabric.finalPrice) * data.yards;
+    const checkoutPricingAdjustmentUsd = Number.isFinite(Number(data.checkoutPricingAdjustmentUsd))
+      ? Number(data.checkoutPricingAdjustmentUsd)
+      : 0;
+    const subtotalAfterCheckoutPricing = Math.max(0, subtotalBeforeDiscount + checkoutPricingAdjustmentUsd);
+    const discountUsd = Math.max(0, Math.min(Number(data.discountUsd || 0), subtotalAfterCheckoutPricing));
+    const subtotal = subtotalAfterCheckoutPricing - discountUsd;
+    const shippingCost = Number.isFinite(Number(data.shippingCostUsd)) ? Number(data.shippingCostUsd) : 15;
+    const tax = subtotal * 0.08;
+    const total = subtotal + shippingCost + tax;
+    const fabricBundleItem: Record<string, unknown> = {
+      fabricId: String(data.fabricId),
+      fabricName: String(fabric.name || 'Fabric'),
+      sellerId: String(fabric.sellerId),
+      yards: Number(data.yards || 0),
+      pricePerYard: Number(fabric.finalPrice || 0),
+      subtotalBeforeDiscount,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      subtotal,
+      paymentIntentId: String(data.paymentIntentId || ''),
+      capturedAt: new Date().toISOString(),
+    };
+    const isPaymentConfirmed = Boolean(data.paymentIntentId);
+    const autoProcessingEligible = canAutoProcessOrder({
+      processingMode: workflowSettings.processingMode,
+      criteria: workflowSettings.autoProcessCriteria,
+      isPaymentConfirmed,
+      hasShippingProvider: Boolean(data.shippingProviderKey || data.shippingProviderName),
+      hasShippingAddress: Boolean(address.id),
+      hasItems: Number(data.yards || 0) > 0,
+    });
+    const effectiveWorkflowSettings = {
+      ...workflowSettings,
+      processingMode: autoProcessingEligible ? workflowSettings.processingMode : 'MANUAL',
+    } as typeof workflowSettings;
+    const initialStatus = determinePostPaymentStatus({
+      isPaymentConfirmed,
+      orderType: OrderType.FABRIC_ONLY,
+      hasFabricOrder: true,
+      settings: effectiveWorkflowSettings,
+    });
+    const orderNumber = mergeIntoOrderId
+      ? null
+      : await generateManagedOrderNumber({
+          orderType: OrderType.FABRIC_ONLY,
+          customerId,
+          paymentIntentId: data.paymentIntentId,
+          workflowSettings,
+        });
+
+    const shippingSnapshot = appendWorkflowMetadataToShippingAddress({
+      shippingAddress: {
+        ...address,
+        shippingQuoteId: data.shippingQuoteId || null,
+        shippingProviderKey: data.shippingProviderKey || null,
+        shippingProviderName: data.shippingProviderName || null,
+        shippingServiceName: data.shippingServiceName || null,
+        shippingEtaMinDays: Number.isFinite(Number(data.shippingEtaMinDays)) ? Number(data.shippingEtaMinDays) : null,
+        shippingEtaMaxDays: Number.isFinite(Number(data.shippingEtaMaxDays)) ? Number(data.shippingEtaMaxDays) : null,
+        checkoutPricingAdjustmentUsd,
+      },
+      settings: effectiveWorkflowSettings,
+      status: initialStatus,
+      note: 'Fabric order queued for seller fulfillment.',
+    });
+    const shippingSnapshotWithPricing = withOrderPricingBreakdown(shippingSnapshot, {
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      promoCode: data.promoCode || undefined,
+    });
+    const shippingSnapshotWithCategoryBundle = appendOrderCategoryBundleItem(
+      shippingSnapshotWithPricing,
+      'FABRIC_ONLY',
+      fabricBundleItem
+    );
+
+    const order = await prisma.$transaction(async (tx) => {
+      if (mergeIntoOrderId) {
+        const existing = await tx.order.findFirst({
+          where: {
+            id: mergeIntoOrderId,
+            customerId,
+            type: OrderType.FABRIC_ONLY,
+          },
+          include: {
+            fabricOrder: true,
+          },
+        });
+        if (!existing || !existing.fabricOrder) {
+          throw new Error('Existing fabric order could not be merged.');
+        }
+        const mergedFabricBundleItems = [
+          ...readOrderCategoryBundleItems(existing.shippingAddress, 'FABRIC_ONLY'),
+          fabricBundleItem,
+        ];
+        const mergedShippingSnapshot = withOrderCategoryBundleItems(
+          shippingSnapshotWithPricing,
+          'FABRIC_ONLY',
+          mergedFabricBundleItems
+        );
+        const existingPricing = readOrderPricingBreakdown(
+          existing.shippingAddress,
+          checkoutPricingSettings.settings.label
+        );
+        const mergedShippingSnapshotWithPricing = withOrderPricingBreakdown(mergedShippingSnapshot, {
+          checkoutPricingLabel: checkoutPricingSettings.settings.label,
+          checkoutPricingAdjustmentUsd: Number(existingPricing.checkoutPricingAdjustmentUsd || 0) + checkoutPricingAdjustmentUsd,
+          discountUsd: Number(existingPricing.discountUsd || 0) + discountUsd,
+          promoCode: data.promoCode || existingPricing.promoCode || undefined,
+        });
+        await tx.order.update({
+          where: { id: existing.id },
+          data: {
+            shippingAddress: mergedShippingSnapshotWithPricing as any,
+            subtotal: { increment: subtotal },
+            shippingCost: { increment: shippingCost },
+            tax: { increment: tax },
+            total: { increment: total },
+            paymentMethod: data.paymentMethod,
+            paymentStatus: isPaymentConfirmed ? PaymentStatus.COMPLETED : existing.paymentStatus,
+            paidAt: isPaymentConfirmed ? new Date() : existing.paidAt,
+            timeline: {
+              create: {
+                status: initialStatus,
+                notes: `Merged additional fabric quantity into existing order${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}.`,
+                updatedById: customerId,
+                updatedByRole: UserRole.CUSTOMER,
+              },
+            },
+          },
+        });
+        await tx.fabricOrderItem.update({
+          where: { id: existing.fabricOrder.id },
+          data: {
+            yards: { increment: data.yards },
+            totalPrice: { increment: subtotal },
+          },
+        });
+        if (isPaymentConfirmed) {
+          await tx.fabric.update({
+            where: { id: data.fabricId },
+            data: { stockYards: { decrement: data.yards } },
+          });
+        }
+        const merged = await tx.order.findUnique({
+          where: { id: existing.id },
+          include: {
+            fabricOrder: true,
+          },
+        });
+        if (!merged) {
+          throw new Error('Failed to load merged fabric order.');
+        }
+        return merged;
+      }
+      const newOrder = await tx.order.create({
+        data: {
+          orderNumber: String(orderNumber || ''),
+          type: OrderType.FABRIC_ONLY,
+          customerId,
+          shippingAddress: shippingSnapshotWithCategoryBundle as any,
+          subtotal,
+          shippingCost,
+          tax,
+          total,
+          paymentMethod: data.paymentMethod,
+          paymentIntentId: data.paymentIntentId,
+          paymentStatus: isPaymentConfirmed ? PaymentStatus.COMPLETED : PaymentStatus.PENDING,
+          paidAt: isPaymentConfirmed ? new Date() : null,
+          status: initialStatus,
+          fabricOrder: {
+            create: {
+              fabricId: data.fabricId,
+              sellerId: fabric.sellerId,
+              yards: data.yards,
+              pricePerYard: fabric.finalPrice,
+              totalPrice: subtotal,
+              status: 'PENDING',
+            },
+          },
+          timeline: {
+            create: {
+              status: initialStatus,
+              notes: isPaymentConfirmed
+                ? `Fabric-only order created and payment confirmed${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`
+                : `Fabric-only order created, awaiting payment${discountUsd > 0 ? ` (Promo ${String(data.promoCode || 'DISCOUNT').toUpperCase()}: -$${discountUsd.toFixed(2)})` : ''}`,
+              updatedById: customerId,
+              updatedByRole: UserRole.CUSTOMER,
+            },
+          },
+        },
+        include: {
+          fabricOrder: true,
+        },
+      });
+
+      if (isPaymentConfirmed) {
+        await tx.fabric.update({
+          where: { id: data.fabricId },
+          data: { stockYards: { decrement: data.yards } },
+        });
+      }
+
+      return newOrder;
+    });
+    if (isPaymentConfirmed) {
+      await syncFabricAvailabilityById(data.fabricId, { notifyVendor: true });
+      void recordReferralCommissionsForOrder({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        vendorSales: [
+          {
+            vendorUserId: String(fabric.seller.userId || ''),
+            vendorRole: 'FABRIC_SELLER',
+            baseAmountUsd: Number(subtotalBeforeDiscount || 0),
+          },
+        ],
+        customerSale: {
+          customerUserId: customerId,
+          baseAmountUsd: Number(subtotalBeforeDiscount || 0),
+        },
+        metadata: {
+          orderType: 'FABRIC_ONLY',
+        },
+      }).catch(() => undefined);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Fabric order created successfully. Please complete payment.',
+      data: order,
+    });
+    void sendOrderConfirmationEmail({
+      to: req.user!.email,
+      orderNumber: order.orderNumber,
+      orderType: 'Fabric To Buy',
+      total,
+      itemCount: data.yards,
+      subtotalUsd: subtotal,
+      taxUsd: tax,
+      paymentMethod: data.paymentMethod,
+      shippingAddress: [address.address, address.city, address.country].filter(Boolean).join(', '),
+      promoCode: data.promoCode || undefined,
+      checkoutPricingLabel: checkoutPricingSettings.settings.label,
+      checkoutPricingAdjustmentUsd,
+      discountUsd,
+      shippingCostUsd: shippingCost,
+      itemRows: [
+        {
+          label: fabric.name,
+          meta: 'Fabric To Buy',
+          quantity: data.yards,
+          unitPriceUsd: Number(fabric.finalPrice || 0),
+          lineTotalUsd: subtotalBeforeDiscount,
+        },
+      ],
+      itemLines: [`Fabric: ${fabric.name} (${data.yards} yards)`],
+    }).catch((error) => {
+      console.error('Failed to send fabric-only order confirmation email:', error);
+    });
+    void notifyOrderLifecycle({
+      orderId: order.id,
+      status: initialStatus,
+      notes: 'Fabric-only order submitted.',
+      actorRole: UserRole.CUSTOMER,
     });
   } catch (error) {
     next(error);
@@ -399,11 +4214,41 @@ router.post('/ready-to-wear', async (req, res, next) => {
 });
 
 // Update order status (for all parties)
-router.patch('/:id/status', async (req, res, next) => {
+router.patch('/:id/status', authorizePermissions(Permissions.ORDERS_UPDATE_SELF, Permissions.ORDERS_UPDATE_ASSIGNED, Permissions.ORDERS_UPDATE_ALL), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status, notes } = req.body;
+    const schema = z.object({
+      status: z.string().min(1),
+      notes: z.string().optional(),
+    });
+    const { status, notes } = schema.parse(req.body);
     const user = req.user!;
+
+    if (user.role === UserRole.FABRIC_SELLER || user.role === UserRole.FASHION_DESIGNER) {
+      const submissionRows = await prisma
+        .$queryRawUnsafe<Array<any>>(
+          `SELECT "profileStatus","rejectionType"
+           FROM "VendorProfileSubmission"
+           WHERE "role"::text = $1 AND "userId" = $2
+           ORDER BY COALESCE("updatedAt","profileReviewedAt","profileSubmittedAt") DESC NULLS LAST
+           LIMIT 1`,
+          user.role,
+          user.id
+        )
+        .catch(() => []);
+      const submission = Array.isArray(submissionRows) && submissionRows.length > 0 ? submissionRows[0] : null;
+      const profileStatus = String(submission?.profileStatus || '').toUpperCase();
+      const rejectionType = String(submission?.rejectionType || '').toUpperCase();
+      if (profileStatus === 'REJECTED') {
+        return res.status(403).json({
+          success: false,
+          message:
+            rejectionType === 'PERMANENT'
+              ? 'Your vendor account is permanently rejected. Contact the administrator.'
+              : 'Your profile is temporarily rejected. Please correct your profile and resubmit before taking further actions.',
+        });
+      }
+    }
 
     // Get current order
     const order = await prisma.order.findUnique({
@@ -411,6 +4256,13 @@ router.patch('/:id/status', async (req, res, next) => {
       include: {
         designOrder: true,
         fabricOrder: true,
+        readyToWearItems: {
+          include: {
+            readyToWear: {
+              select: { designerId: true },
+            },
+          },
+        },
       },
     });
 
@@ -424,18 +4276,32 @@ router.patch('/:id/status', async (req, res, next) => {
     // Validate status transition based on user role
     let canUpdate = false;
     let updateData: any = {};
+    let timelineStatus: OrderStatus = order.status;
 
     if (user.role === UserRole.ADMINISTRATOR) {
-      canUpdate = true;
+      const orderStatus = z.nativeEnum(OrderStatus).safeParse(status);
+      if (orderStatus.success) {
+        canUpdate = true;
+        timelineStatus = orderStatus.data;
+        updateData.status = orderStatus.data;
+      }
     } else if (user.role === UserRole.FABRIC_SELLER && order.fabricOrder) {
       const sellerProfile = await prisma.fabricSellerProfile.findFirst({
         where: { userId: user.id },
       });
       if (sellerProfile && order.fabricOrder.sellerId === sellerProfile.id) {
         // Fabric seller can only update fabric portion
-        const fabricStatuses = ['PENDING', 'CONFIRMED', 'SHIPPED_TO_DESIGNER', 'DELIVERED'];
-        if (fabricStatuses.includes(status)) {
+        const fabricStatuses = ['PENDING', 'CONFIRMED', 'SHIPPED_TO_DESIGNER', 'DELIVERED'] as const;
+        const fabricToOrderStatus: Record<(typeof fabricStatuses)[number], OrderStatus> = {
+          PENDING: OrderStatus.FABRIC_PENDING,
+          CONFIRMED: OrderStatus.FABRIC_CONFIRMED,
+          SHIPPED_TO_DESIGNER: OrderStatus.FABRIC_SHIPPED,
+          DELIVERED: OrderStatus.FABRIC_RECEIVED,
+        };
+        if ((fabricStatuses as readonly string[]).includes(status)) {
           canUpdate = true;
+          timelineStatus = fabricToOrderStatus[status as (typeof fabricStatuses)[number]];
+          updateData.status = timelineStatus;
           updateData.fabricOrder = {
             update: {
               status,
@@ -446,18 +4312,48 @@ router.patch('/:id/status', async (req, res, next) => {
           };
         }
       }
-    } else if (user.role === UserRole.FASHION_DESIGNER && order.designOrder) {
+    } else if (user.role === UserRole.FASHION_DESIGNER) {
       const designerProfile = await prisma.designerProfile.findFirst({
         where: { userId: user.id },
       });
-      if (designerProfile && order.designOrder.designerId === designerProfile.id) {
+      const ownsDesignOrder = Boolean(designerProfile && order.designOrder && order.designOrder.designerId === designerProfile.id);
+      const ownsReadyToWearOrder = Boolean(
+        designerProfile &&
+          (order.readyToWearItems || []).some(
+            (item) => String(item.readyToWear?.designerId || '') === String(designerProfile.id)
+          )
+      );
+      if (designerProfile && ownsDesignOrder) {
         // Designer can only update design portion
-        const designStatuses = ['PENDING', 'CONFIRMED', 'FABRIC_RECEIVED', 'IN_PRODUCTION', 'COMPLETED'];
-        if (designStatuses.includes(status)) {
+        const designStatuses = ['PENDING', 'CONFIRMED', 'FABRIC_RECEIVED', 'IN_PRODUCTION', 'COMPLETED'] as const;
+        const designToOrderStatus: Record<(typeof designStatuses)[number], OrderStatus> = {
+          PENDING: OrderStatus.PAYMENT_CONFIRMED,
+          CONFIRMED: OrderStatus.PAYMENT_CONFIRMED,
+          FABRIC_RECEIVED: OrderStatus.FABRIC_RECEIVED,
+          IN_PRODUCTION: OrderStatus.IN_PRODUCTION,
+          COMPLETED: OrderStatus.PRODUCTION_COMPLETE,
+        };
+        if ((designStatuses as readonly string[]).includes(status)) {
           canUpdate = true;
+          timelineStatus = designToOrderStatus[status as (typeof designStatuses)[number]];
+          updateData.status = timelineStatus;
           updateData.designOrder = {
             update: { status },
           };
+        }
+      }
+      if (designerProfile && ownsReadyToWearOrder) {
+        const readyStatuses = ['CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'QA_PENDING'] as const;
+        const readyToOrderStatus: Record<(typeof readyStatuses)[number], OrderStatus> = {
+          CONFIRMED: OrderStatus.PAYMENT_CONFIRMED,
+          IN_PRODUCTION: OrderStatus.IN_PRODUCTION,
+          COMPLETED: OrderStatus.PRODUCTION_COMPLETE,
+          QA_PENDING: OrderStatus.QA_PENDING,
+        };
+        if ((readyStatuses as readonly string[]).includes(status)) {
+          canUpdate = true;
+          timelineStatus = readyToOrderStatus[status as (typeof readyStatuses)[number]];
+          updateData.status = timelineStatus;
         }
       }
     } else if (user.role === UserRole.QA_TEAM) {
@@ -465,11 +4361,19 @@ router.patch('/:id/status', async (req, res, next) => {
         where: { userId: user.id },
       });
       if (qaProfile && order.qaId === qaProfile.id) {
-        const qaStatuses = ['QA_PENDING', 'QA_INSPECTING', 'QA_APPROVED', 'QA_REJECTED', 'SHIPPED'];
-        if (qaStatuses.includes(status)) {
+        const qaStatuses: OrderStatus[] = [
+          OrderStatus.QA_PENDING,
+          OrderStatus.QA_INSPECTING,
+          OrderStatus.QA_APPROVED,
+          OrderStatus.QA_REJECTED,
+          OrderStatus.SHIPPED,
+        ];
+        const parsedStatus = z.nativeEnum(OrderStatus).safeParse(status);
+        if (parsedStatus.success && qaStatuses.includes(parsedStatus.data)) {
           canUpdate = true;
-          updateData.status = status;
-          if (status === 'SHIPPED') {
+          updateData.status = parsedStatus.data;
+          timelineStatus = parsedStatus.data;
+          if (parsedStatus.data === OrderStatus.SHIPPED) {
             updateData.shippedAt = new Date();
           }
         }
@@ -483,21 +4387,37 @@ router.patch('/:id/status', async (req, res, next) => {
       });
     }
 
-    // Update order
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: updateData,
-    });
+    const workflowSettings = await readOrderWorkflowSettings();
+    updateData.shippingAddress = appendWorkflowMetadataToShippingAddress({
+      shippingAddress: order.shippingAddress,
+      settings: workflowSettings,
+      status: timelineStatus,
+      note: notes || `Status updated to ${status}`,
+    }) as any;
+    if (timelineStatus === OrderStatus.DELIVERED) {
+      updateData.deliveredAt = new Date();
+    }
 
-    // Add timeline entry
-    await prisma.orderTimeline.create({
-      data: {
-        orderId: id,
-        status,
-        notes: notes || `Status updated to ${status}`,
-        updatedById: user.id,
-        updatedByRole: user.role,
-      },
+    const [updatedOrder] = await prisma.$transaction([
+      prisma.order.update({
+        where: { id },
+        data: updateData,
+      }),
+      prisma.orderTimeline.create({
+        data: {
+          orderId: id,
+          status: timelineStatus,
+          notes: notes || `Status updated to ${status}`,
+          updatedById: user.id,
+          updatedByRole: user.role,
+        },
+      }),
+    ]);
+    void notifyOrderLifecycle({
+      orderId: id,
+      status: timelineStatus,
+      notes,
+      actorRole: user.role,
     });
 
     res.json({
@@ -511,7 +4431,7 @@ router.patch('/:id/status', async (req, res, next) => {
 });
 
 // Add tracking number (QA only)
-router.patch('/:id/tracking', async (req, res, next) => {
+router.patch('/:id/tracking', authorizePermissions(Permissions.ORDERS_UPDATE_ASSIGNED), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { trackingNumber } = req.body;

@@ -17,8 +17,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['@stripe/stripe-js', '@stripe/react-stripe-js', 'lucide-react'],
-          three: ['three', '@react-three/fiber', '@react-three/drei'],
         },
       },
     },

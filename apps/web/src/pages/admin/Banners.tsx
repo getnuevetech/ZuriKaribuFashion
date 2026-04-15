@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Plus, 
   Edit2, 
@@ -14,7 +14,7 @@ import {
   CheckCircle,
   RefreshCw
 } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, resolveAssetUrl } from '../../services/api';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 
@@ -33,6 +33,20 @@ interface Banner {
   updatedAt: string;
 }
 
+interface PromoBadgeSettings {
+  valueText: string;
+  labelText: string;
+}
+
+const PROMO_BADGE_FALLBACK_SECTION = 'PROMO_BADGE';
+const BLOG_STORY_FALLBACK_SECTION = 'BLOG_STORY';
+const PROMO_BADGE_DEFAULTS: PromoBadgeSettings = {
+  valueText: '50+',
+  labelText: 'New Arrivals',
+};
+const PROMO_BADGE_FALLBACK_IMAGE =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+
 const SECTIONS = [
   { value: 'BANNER_1', label: 'Banner 1 (After Featured Designs)' },
   { value: 'BANNER_2', label: 'Banner 2 (After Featured Ready To Wear)' },
@@ -48,6 +62,9 @@ export default function AdminBanners() {
   const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [promoBadge, setPromoBadge] = useState<PromoBadgeSettings>({
+    ...PROMO_BADGE_DEFAULTS,
+  });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -66,12 +83,75 @@ export default function AdminBanners() {
     fetchBanners();
   }, []);
 
+  const visibleBanners = useMemo(
+    () =>
+      banners.filter((banner) => {
+        const section = String(banner.section || '').toUpperCase();
+        return section !== PROMO_BADGE_FALLBACK_SECTION && section !== BLOG_STORY_FALLBACK_SECTION;
+      }),
+    [banners]
+  );
+
+  const isRetryableRouteError = (error: unknown) => {
+    const status = Number((error as any)?.response?.status || 0);
+    const message = String((error as any)?.response?.data?.message || (error as any)?.message || '').toLowerCase();
+    return status === 404 || status === 405 || message.includes('route not found') || message.includes('not found');
+  };
+
+  const upsertPromoBadgeFallbackBanner = async () => {
+    const existing = banners.find(
+      (banner) => String(banner.section || '').toUpperCase() === PROMO_BADGE_FALLBACK_SECTION
+    );
+    const payload = {
+      name: existing?.name || 'Promo Badge Settings',
+      section: PROMO_BADGE_FALLBACK_SECTION,
+      title: promoBadge.valueText || PROMO_BADGE_DEFAULTS.valueText,
+      subtitle: promoBadge.labelText || PROMO_BADGE_DEFAULTS.labelText,
+      ctaText: '',
+      ctaLink: '',
+      images: existing?.images?.length ? existing.images : [PROMO_BADGE_FALLBACK_IMAGE],
+      isActive: true,
+      displayOrder: typeof existing?.displayOrder === 'number' ? existing.displayOrder : 0,
+    };
+    if (existing) {
+      await api.admin.updateBanner(existing.id, payload);
+      return;
+    }
+    await api.admin.createBanner(payload);
+  };
+
   const fetchBanners = async () => {
     try {
       setLoading(true);
-      const response = await api.admin.getBanners();
-      if (response.success) {
-        setBanners(response.data);
+      const [bannersResponse, promoBadgeResponse] = await Promise.all([
+        api.admin.getBanners(),
+        api.admin.getPromoBadgeSettings().catch(() => null),
+      ]);
+      if (bannersResponse.success) {
+        setBanners(bannersResponse.data);
+      }
+      const fallbackBanner = Array.isArray(bannersResponse.data)
+        ? bannersResponse.data.find(
+            (banner: Banner) => String(banner.section || '').toUpperCase() === PROMO_BADGE_FALLBACK_SECTION
+          )
+        : null;
+      const fallbackBadge: PromoBadgeSettings | null = fallbackBanner
+        ? {
+            valueText: fallbackBanner.title || PROMO_BADGE_DEFAULTS.valueText,
+            labelText: fallbackBanner.subtitle || PROMO_BADGE_DEFAULTS.labelText,
+          }
+        : null;
+      if (promoBadgeResponse && promoBadgeResponse.success && promoBadgeResponse.data) {
+        const responseValue = promoBadgeResponse.data.valueText || PROMO_BADGE_DEFAULTS.valueText;
+        const responseLabel = promoBadgeResponse.data.labelText || PROMO_BADGE_DEFAULTS.labelText;
+        const responseLooksDefault =
+          responseValue === PROMO_BADGE_DEFAULTS.valueText && responseLabel === PROMO_BADGE_DEFAULTS.labelText;
+        setPromoBadge({
+          valueText: fallbackBadge && responseLooksDefault ? fallbackBadge.valueText : responseValue,
+          labelText: fallbackBadge && responseLooksDefault ? fallbackBadge.labelText : responseLabel,
+        });
+      } else if (fallbackBadge) {
+        setPromoBadge(fallbackBadge);
       }
     } catch (error) {
       console.error('Failed to fetch banners:', error);
@@ -147,22 +227,49 @@ export default function AdminBanners() {
     }
 
     try {
+      let bannerSaved = false;
       if (editingBanner) {
         const response = await api.admin.updateBanner(editingBanner.id, formData);
         if (response.success) {
           setBanners(banners.map(b => 
             b.id === editingBanner.id ? response.data : b
           ));
+          bannerSaved = true;
         }
       } else {
         const response = await api.admin.createBanner(formData);
         if (response.success) {
           setBanners([...banners, response.data]);
+          bannerSaved = true;
         }
       }
+
+      if (formData.section === 'PROMO' && bannerSaved) {
+        try {
+          await api.admin.updatePromoBadgeSettings({
+            valueText: promoBadge.valueText,
+            labelText: promoBadge.labelText,
+          });
+        } catch (promoBadgeError) {
+          if (isRetryableRouteError(promoBadgeError)) {
+            try {
+              await upsertPromoBadgeFallbackBanner();
+            } catch (fallbackSaveError) {
+              console.error('Failed to save promo badge fallback banner:', fallbackSaveError);
+              window.alert('Promotional banner was saved, but promo badge text could not be saved.');
+            }
+          } else {
+            console.error('Failed to save promo badge settings:', promoBadgeError);
+            window.alert((promoBadgeError as any)?.response?.data?.message || 'Promotional banner was saved, but promo badge text could not be saved.');
+          }
+        }
+      }
+
       setShowModal(false);
+      await fetchBanners();
     } catch (error) {
       console.error('Failed to save banner:', error);
+      window.alert((error as any)?.response?.data?.message || (error as any)?.message || 'Failed to save banner.');
     }
   };
 
@@ -247,7 +354,7 @@ export default function AdminBanners() {
 
       {/* Banners Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {banners.map((banner) => (
+        {visibleBanners.map((banner) => (
           <div 
             key={banner.id} 
             className={`bg-white rounded-xl border overflow-hidden ${
@@ -258,7 +365,7 @@ export default function AdminBanners() {
             <div className="relative h-48 bg-gray-100">
               {banner.images.length > 0 ? (
                 <img
-                  src={banner.images[0]}
+                  src={resolveAssetUrl(banner.images[0])}
                   alt={banner.name}
                   className="w-full h-full object-cover"
                 />
@@ -351,7 +458,7 @@ export default function AdminBanners() {
         ))}
       </div>
 
-      {banners.length === 0 && (
+      {visibleBanners.length === 0 && (
         <div className="text-center py-16 bg-gray-50 rounded-xl">
           <ImageIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No banners yet</h3>
@@ -365,8 +472,8 @@ export default function AdminBanners() {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+          <div className="mx-auto w-full max-w-4xl rounded-2xl bg-white max-h-[92vh] overflow-hidden">
             <div className="p-6 border-b flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">
                 {editingBanner ? 'Edit Banner' : 'Create Banner'}
@@ -379,7 +486,8 @@ export default function AdminBanners() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="flex h-[calc(92vh-88px)] flex-col">
+              <div className="space-y-6 overflow-y-auto p-6">
               {/* Banner Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -442,6 +550,35 @@ export default function AdminBanners() {
                 </div>
               </div>
 
+              {formData.section === 'PROMO' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Promo Badge Value
+                    </label>
+                    <input
+                      type="text"
+                      value={promoBadge.valueText}
+                      onChange={(e) => setPromoBadge((prev) => ({ ...prev, valueText: e.target.value }))}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-transparent"
+                      placeholder="50+"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Promo Badge Label
+                    </label>
+                    <input
+                      type="text"
+                      value={promoBadge.labelText}
+                      onChange={(e) => setPromoBadge((prev) => ({ ...prev, labelText: e.target.value }))}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-transparent"
+                      placeholder="New Arrivals"
+                    />
+                  </div>
+                </div>
+              ) : null}
+
               {/* CTA */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -465,7 +602,7 @@ export default function AdminBanners() {
                     value={formData.ctaLink}
                     onChange={(e) => setFormData({ ...formData, ctaLink: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-transparent"
-                    placeholder="e.g., /designs"
+                    placeholder="e.g., /custom"
                   />
                 </div>
               </div>
@@ -482,7 +619,7 @@ export default function AdminBanners() {
                     {formData.images.map((image, index) => (
                       <div key={index} className="relative aspect-video">
                         <img
-                          src={image}
+                          src={resolveAssetUrl(image)}
                           alt={`Banner ${index + 1}`}
                           className="w-full h-full object-cover"
                         />
@@ -556,8 +693,9 @@ export default function AdminBanners() {
                 </label>
               </div>
 
+              </div>
               {/* Actions */}
-              <div className="flex gap-3 pt-4 border-t">
+              <div className="sticky bottom-0 flex gap-3 border-t bg-white px-6 py-4">
                 <Button
                   type="button"
                   variant="outline"

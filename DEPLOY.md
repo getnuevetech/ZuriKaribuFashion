@@ -36,6 +36,29 @@ After deployment (~5 minutes), you'll get:
 5. Set environment variables
 6. Deploy!
 
+### Railway reliability guardrails (recommended)
+
+Use these settings on the API service to avoid "route missing" drift:
+
+- **Root Directory:** `apps/api`
+- **Build Command:** `npm ci && npm run build`
+- **Start Command:** `npm run start`
+- After changing settings: **Clear Build Cache** and redeploy.
+
+After each deploy, run a route smoke check from repo root:
+
+```bash
+npm run smoke:api:routes -- --base="https://YOUR-RAILWAY-API-DOMAIN/api" --token="YOUR_JWT_TOKEN"
+```
+
+Expected behavior:
+- `200/400/401/403` = route exists
+- `404` = route missing in deployed runtime
+
+You can also inspect runtime route fingerprint endpoints:
+- `https://YOUR-RAILWAY-API-DOMAIN/health/routes`
+- `https://YOUR-RAILWAY-API-DOMAIN/api/health/routes`
+
 ---
 
 ## Option 3: Deploy to Heroku
@@ -49,6 +72,24 @@ heroku config:set JWT_SECRET=your-secret
 heroku config:set STRIPE_SECRET_KEY=sk_...
 git push heroku main
 ```
+
+---
+
+## Option 4: Deploy to AWS (Production Recommended)
+
+AWS migration assets are now included in this repository:
+
+- `deploy/aws/README.md` (full migration runbook)
+- `apps/api/Dockerfile` (ECS-ready API image)
+- `apps/web/Dockerfile` + `apps/web/nginx.conf` (containerized web option)
+- `apps/api/.env.aws.example`
+- `apps/web/.env.aws.example`
+
+Recommended AWS target:
+- Frontend: **S3 + CloudFront**
+- API: **ECS Fargate + ALB**
+- DB: **RDS PostgreSQL**
+- Uploads: **S3** (`AWS_UPLOADS_ENABLED=true`, `AWS_UPLOADS_REQUIRE_S3=true`)
 
 ---
 

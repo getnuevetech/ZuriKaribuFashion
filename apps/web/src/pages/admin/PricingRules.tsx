@@ -16,6 +16,7 @@ import Badge from '../../components/ui/Badge';
 interface PricingRule {
   id: string;
   name: string;
+  pricingScope?: 'CATALOG' | 'CHECKOUT';
   type: 'MARKUP' | 'MARKDOWN';
   targetType: 'PRODUCT_TYPE' | 'COUNTRY' | 'DATE_RANGE';
   targetValue: string;
@@ -27,10 +28,16 @@ interface PricingRule {
 }
 
 export default function AdminPricingRules() {
+  const [activeScope, setActiveScope] = useState<'CATALOG' | 'CHECKOUT'>('CATALOG');
   const [rules, setRules] = useState<PricingRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingRule, setEditingRule] = useState<PricingRule | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [checkoutPricingLabel, setCheckoutPricingLabel] = useState('Checkout Pricing');
+  const [checkoutPricingLabelLoading, setCheckoutPricingLabelLoading] = useState(false);
+  const [checkoutPricingLabelSaving, setCheckoutPricingLabelSaving] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -45,37 +52,175 @@ export default function AdminPricingRules() {
   });
 
   useEffect(() => {
-    fetchRules();
-  }, []);
+    void fetchRules(activeScope);
+  }, [activeScope]);
 
-  const fetchRules = async () => {
+  useEffect(() => {
+    if (activeScope !== 'CHECKOUT') return;
+    void fetchCheckoutPricingLabel();
+  }, [activeScope]);
+
+  const fetchRules = async (scope: 'CATALOG' | 'CHECKOUT') => {
     try {
       setLoading(true);
-      const response = await api.admin.getPricingRules();
+      setError('');
+      const response = await api.admin.getPricingRules(scope);
       if (response.success) {
-        setRules(response.data);
+        const mapped = (response.data || []).map((item: any): PricingRule => {
+          const targetType: PricingRule['targetType'] =
+            item.ruleType === 'COUNTRY_MARKUP'
+              ? 'COUNTRY'
+              : item.ruleType === 'DATE_BASED'
+                ? 'DATE_RANGE'
+                : 'PRODUCT_TYPE';
+          const type: PricingRule['type'] =
+            item.adjustmentType === 'PERCENTAGE_DISCOUNT' || item.adjustmentType === 'FIXED_DISCOUNT'
+              ? 'MARKDOWN'
+              : 'MARKUP';
+          return {
+            id: item.id,
+            name: item.name,
+            pricingScope: String(item.pricingScope || scope).toUpperCase() === 'CHECKOUT' ? 'CHECKOUT' : 'CATALOG',
+            type,
+            targetType,
+            targetValue:
+              targetType === 'PRODUCT_TYPE'
+                ? item.productType || ''
+                : targetType === 'COUNTRY'
+                  ? item.country || ''
+                  : item.description || '',
+            percentage:
+              item.adjustmentType === 'PERCENTAGE_MARKUP' || item.adjustmentType === 'PERCENTAGE_DISCOUNT'
+                ? Number(item.value || 0)
+                : 0,
+            fixedAmount:
+              item.adjustmentType === 'FIXED_MARKUP' || item.adjustmentType === 'FIXED_DISCOUNT'
+                ? Number(item.value || 0)
+                : 0,
+            startDate: item.startDate || undefined,
+            endDate: item.endDate || undefined,
+            isActive: Boolean(item.isActive),
+          };
+        });
+        setRules(mapped);
       }
     } catch (error) {
       console.error('Failed to fetch pricing rules:', error);
+      setError('Failed to fetch pricing rules.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCheckoutPricingLabel = async () => {
+    try {
+      setCheckoutPricingLabelLoading(true);
+      const response = await api.admin.getCheckoutPricingSettings();
+      if (response.success) {
+        setCheckoutPricingLabel(String(response.data?.label || 'Checkout Pricing'));
+      }
+    } catch (err) {
+      console.error('Failed to fetch checkout pricing settings:', err);
+    } finally {
+      setCheckoutPricingLabelLoading(false);
+    }
+  };
+
+  const handleSaveCheckoutPricingLabel = async () => {
+    const normalized = String(checkoutPricingLabel || '').trim();
+    if (!normalized) {
+      setError('Checkout pricing label cannot be empty.');
+      return;
+    }
+    try {
+      setCheckoutPricingLabelSaving(true);
+      setError('');
+      setSuccess('');
+      const response = await api.admin.updateCheckoutPricingSettings({ label: normalized });
+      if (response.success) {
+        setCheckoutPricingLabel(String(response.data?.label || normalized));
+        setSuccess('Checkout pricing label updated successfully.');
+      }
+    } catch (err) {
+      console.error('Failed to save checkout pricing settings:', err);
+      setError('Failed to save checkout pricing label.');
+    } finally {
+      setCheckoutPricingLabelSaving(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setError('');
+      setSuccess('');
+      const numericPercentage = Number(formData.percentage) || 0;
+      const numericFixedAmount = Number(formData.fixedAmount) || 0;
+      const chosenValue = numericFixedAmount > 0 ? numericFixedAmount : numericPercentage;
+      if (chosenValue <= 0) {
+        setError('Enter a positive percentage or fixed amount.');
+        return;
+      }
+      if (
+        formData.targetType === 'DATE_RANGE' &&
+        formData.startDate &&
+        formData.endDate &&
+        new Date(formData.startDate).getTime() > new Date(formData.endDate).getTime()
+      ) {
+        setError('End date must be on or after start date.');
+        return;
+      }
+      const adjustmentType =
+        numericFixedAmount > 0
+          ? formData.type === 'MARKDOWN'
+            ? 'FIXED_DISCOUNT'
+            : 'FIXED_MARKUP'
+          : formData.type === 'MARKDOWN'
+            ? 'PERCENTAGE_DISCOUNT'
+            : 'PERCENTAGE_MARKUP';
+      const payload = {
+        name: formData.name,
+        pricingScope: activeScope,
+        description: formData.targetType === 'DATE_RANGE' ? formData.targetValue || formData.name : undefined,
+        ruleType:
+          formData.targetType === 'COUNTRY'
+            ? 'COUNTRY_MARKUP'
+            : formData.targetType === 'DATE_RANGE'
+              ? 'DATE_BASED'
+              : 'CATEGORY_MARKUP',
+        productType: formData.targetType === 'PRODUCT_TYPE' ? formData.targetValue || undefined : undefined,
+        country: formData.targetType === 'COUNTRY' ? formData.targetValue || undefined : undefined,
+        startDate:
+          formData.targetType === 'DATE_RANGE' && formData.startDate
+            ? new Date(`${formData.startDate}T00:00:00.000Z`).toISOString()
+            : undefined,
+        endDate:
+          formData.targetType === 'DATE_RANGE' && formData.endDate
+            ? new Date(`${formData.endDate}T23:59:59.000Z`).toISOString()
+            : undefined,
+        isSale: formData.type === 'MARKDOWN',
+        adjustmentType,
+        value: chosenValue,
+        priority: 0,
+        isActive: formData.isActive,
+      };
       if (editingRule) {
-        await api.admin.updatePricingRule(editingRule.id, formData);
+        await api.admin.updatePricingRule(editingRule.id, payload);
       } else {
-        await api.admin.createPricingRule(formData);
+        await api.admin.createPricingRule(payload);
       }
       setShowForm(false);
       setEditingRule(null);
       resetForm();
-      fetchRules();
+      setSuccess(
+        editingRule
+          ? `${activeScope === 'CHECKOUT' ? 'Checkout pricing' : 'Pricing'} rule updated successfully.`
+          : `${activeScope === 'CHECKOUT' ? 'Checkout pricing' : 'Pricing'} rule created successfully.`
+      );
+      fetchRules(activeScope);
     } catch (error) {
       console.error('Failed to save pricing rule:', error);
+      setError('Failed to save pricing rule.');
     }
   };
 
@@ -83,9 +228,11 @@ export default function AdminPricingRules() {
     if (!confirm('Are you sure you want to delete this pricing rule?')) return;
     try {
       await api.admin.deletePricingRule(id);
-      fetchRules();
+      setSuccess('Pricing rule deleted successfully.');
+      fetchRules(activeScope);
     } catch (error) {
       console.error('Failed to delete pricing rule:', error);
+      setError('Failed to delete pricing rule.');
     }
   };
 
@@ -98,8 +245,8 @@ export default function AdminPricingRules() {
       targetValue: rule.targetValue,
       percentage: rule.percentage,
       fixedAmount: rule.fixedAmount || 0,
-      startDate: rule.startDate || '',
-      endDate: rule.endDate || '',
+      startDate: rule.startDate ? String(rule.startDate).slice(0, 10) : '',
+      endDate: rule.endDate ? String(rule.endDate).slice(0, 10) : '',
       isActive: rule.isActive,
     });
     setShowForm(true);
@@ -141,13 +288,77 @@ export default function AdminPricingRules() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Pricing Rules</h1>
-          <p className="text-gray-500 mt-1">Manage dynamic pricing for products and regions</p>
+          <p className="text-gray-500 mt-1">
+            {activeScope === 'CHECKOUT'
+              ? 'Manage checkout-only pricing adjustments shown in checkout breakdown.'
+              : 'Manage dynamic catalog pricing for products and regions.'}
+          </p>
         </div>
         <Button onClick={() => { resetForm(); setShowForm(true); }}>
           <Plus className="w-4 h-4 mr-2" />
           Add Rule
         </Button>
       </div>
+      {(error || success) && (
+        <div className={`rounded-lg border px-3 py-2 text-sm ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+          {error || success}
+        </div>
+      )}
+      <div className="inline-flex rounded-lg border bg-white p-1">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveScope('CATALOG');
+            setShowForm(false);
+            setEditingRule(null);
+          }}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+            activeScope === 'CATALOG' ? 'bg-black text-white' : 'text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          Price Rule
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveScope('CHECKOUT');
+            setShowForm(false);
+            setEditingRule(null);
+          }}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+            activeScope === 'CHECKOUT' ? 'bg-black text-white' : 'text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          Checkout Pricing
+        </button>
+      </div>
+
+      {activeScope === 'CHECKOUT' ? (
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-900">Checkout Pricing Label</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            This text is shown at checkout for checkout pricing adjustments.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              value={checkoutPricingLabel}
+              onChange={(event) => setCheckoutPricingLabel(event.target.value)}
+              disabled={checkoutPricingLabelLoading || checkoutPricingLabelSaving}
+              maxLength={80}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="e.g., Service Adjustment"
+            />
+            <Button
+              type="button"
+              onClick={handleSaveCheckoutPricingLabel}
+              disabled={checkoutPricingLabelLoading || checkoutPricingLabelSaving}
+            >
+              {checkoutPricingLabelSaving ? 'Saving...' : 'Save Label'}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Form */}
       {showForm && (
@@ -251,7 +462,7 @@ export default function AdminPricingRules() {
                     type="number"
                     step="0.01"
                     value={formData.percentage}
-                    onChange={(e) => setFormData({ ...formData, percentage: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, percentage: Number(e.target.value) || 0 })}
                     className="w-full pl-10 pr-4 py-2 border rounded-lg"
                   />
                 </div>
@@ -266,7 +477,7 @@ export default function AdminPricingRules() {
                     type="number"
                     step="0.01"
                     value={formData.fixedAmount}
-                    onChange={(e) => setFormData({ ...formData, fixedAmount: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, fixedAmount: Number(e.target.value) || 0 })}
                     className="w-full pl-10 pr-4 py-2 border rounded-lg"
                   />
                 </div>
