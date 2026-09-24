@@ -1,5 +1,30 @@
 # 🚀 Deploy to Cloud (No Local Setup Required)
 
+## Lightsail server with Docker
+
+This runs Postgres, the API, and the web app on one Ubuntu Lightsail instance. It creates a new database and does not use the old Railway database. The checked-in Prisma migrations do not create the full schema, so the API container applies `apps/api/prisma/schema.prisma` with `prisma db push` on startup.
+
+1. Create an Ubuntu Lightsail instance and attach a static IP.
+2. In the Lightsail networking firewall, allow TCP port 80.
+3. SSH in, clone this repo, and start the stack:
+
+```bash
+git clone <this-repo-url>
+cd <repo>
+bash scripts/lightsail-up.sh
+```
+
+The script installs Docker if needed, writes a `.env` with generated `POSTGRES_PASSWORD` and `JWT_SECRET`, then runs `docker compose up -d --build`. The site is served on port 80. Nginx proxies `/api`, `/uploads`, and `/health` to the API.
+
+After the first boot:
+
+- Admin: `admin@africanfashion.com` / `Admin123!`
+- Customer: `customer@example.com` / `Customer123!`
+
+Set `FRONTEND_URL` in `.env` to the static IP or domain before rebuilding if the detected address is wrong. Leave Stripe variables empty until payments are configured. To redeploy: `docker compose up -d --build`.
+
+
+
 ## Option 1: Deploy to Render.com (Recommended - FREE)
 
 ### Step 1: Connect GitHub to Render
